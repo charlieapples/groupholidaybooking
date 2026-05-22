@@ -1,0 +1,27 @@
+people:
+  - name: Alice
+    home: "SW1A 1AA"   # London
+  - name: Bob
+    home: "M1 1AE"     # Manchester
+  - name: Carol
+    home: "EH1 1YZ"    # Edinburgh
+  - name: Dave
+    home: "B1 1BB"     # Birmingham
+
+destinations:
+  - AMS   # Amsterdam
+  - BCN   # Barcelona
+  - DUB   # Dublin
+  - LIS   # Lisbon
+  - PRG   # Prague
+
+date_window:
+  earliest_outbound: "2026-08-01"
+  latest_inbound: "2026-09-14"   # allow return dates a bit beyond max_nights
+  min_nights: 4
+  max_nights: 7
+
+budget_cap_per_person: 500   # optional; remove line to disable
+
+# Max one-way ground travel time to airport (hours)
+max_ground_hours: 3
