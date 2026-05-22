@@ -63,6 +63,39 @@ def _months_in_window(date_from: date, date_to: date) -> list[str]:
     return months
 
 
+def _fetch_route_bucket(
+    origin: str,
+    destination: Optional[str],
+    month: str,
+    currency: str,
+) -> dict:
+    """
+    Query Travelpayouts for cheapest round-trip fares for a given origin/month.
+    If destination is None, returns ALL destinations from that origin (broader cache).
+    Returns the raw data dict keyed by destination IATA code.
+    """
+    cache_key = f"bucket:{origin}:{destination or 'ALL'}:{month}:{currency}"
+    if cache_key in _CACHE:
+        return _CACHE[cache_key]
+
+    params: dict = {"origin": origin, "depart_date": month, "currency": currency}
+    if destination:
+        params["destination"] = destination
+
+    try:
+        data = _get("/v1/prices/cheap", params)
+        result = data.get("data") or {}
+        # When destination specified, API returns {destination: {idx: info}}
+        # When no destination, API returns {dest1: {idx: info}, dest2: ...}
+        if destination:
+            result = {destination: result.get(destination, {})}
+    except httpx.HTTPStatusError:
+        result = {}
+
+    _CACHE.set(cache_key, result, expire=3600)
+    return result
+
+
 def cheapest_return_pair(
     origin: str,
     destination: str,
@@ -96,18 +129,13 @@ def cheapest_return_pair(
     latest_viable_out = latest_inbound - timedelta(days=min_nights)
 
     for month in _months_in_window(earliest_outbound, latest_inbound):
-        try:
-            data = _get("/v1/prices/cheap", {
-                "origin": origin,
-                "destination": destination,
-                "depart_date": month,
-                "currency": currency,
-                # No one_way flag → round-trip results with return_at included
-            })
-        except httpx.HTTPStatusError:
-            continue
+        # Primary query: specific route
+        dest_bucket = _fetch_route_bucket(origin, destination, month, currency)
 
-        dest_bucket = (data.get("data") or {}).get(destination, {})
+        # Fallback: if no data for specific route, query all destinations from
+        # this origin and pick our target — catches sparse-cache routes (e.g. MAN)
+        if not dest_bucket:
+            dest_bucket = _fetch_route_bucket(origin, None, month, currency).get(destination, {})
 
         for info in dest_bucket.values():
             dep_str = info.get("departure_at", "")

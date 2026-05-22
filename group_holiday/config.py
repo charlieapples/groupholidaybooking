@@ -33,7 +33,8 @@ class Config(BaseModel):
     destinations: list[str] = Field(min_length=1)
     date_window: DateWindow
     budget_cap_per_person: Optional[float] = None
-    max_ground_hours: float = 3.0
+    max_ground_hours: Optional[float] = None   # None = no limit
+    time_value_per_hour: float = 0.0           # £/hr — cost of travel time
 
 
 def load_config(path: str | Path) -> Config:

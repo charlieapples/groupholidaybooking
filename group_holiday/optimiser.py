@@ -17,13 +17,18 @@ class PersonResult:
     ground_leg: Optional[GroundLeg]
     outbound: Optional[Fare]
     inbound: Optional[Fare]
-    total_cost_gbp: float
+    total_cost_gbp: float        # includes time value if configured
+    flight_plus_ground_gbp: float  # raw money cost only (no time value)
     viable: bool
     note: str = ""
 
     @property
     def ground_cost(self) -> float:
         return self.ground_leg.estimated_cost_gbp if self.ground_leg else 0.0
+
+    @property
+    def ground_hours(self) -> float:
+        return self.ground_leg.duration_hours if self.ground_leg else 0.0
 
     @property
     def outbound_cost(self) -> float:
@@ -46,6 +51,11 @@ class DestinationResult:
         return sum(p.total_cost_gbp for p in self.person_results if p.viable)
 
     @property
+    def total_group_money_cost(self) -> float:
+        """Raw money cost — no time value included."""
+        return sum(p.flight_plus_ground_gbp for p in self.person_results if p.viable)
+
+    @property
     def viable_count(self) -> int:
         return sum(1 for p in self.person_results if p.viable)
 
@@ -61,7 +71,6 @@ class DestinationResult:
 
     @property
     def fairness_ratio(self) -> float:
-        """max / avg — 1.0 means perfectly equal."""
         avg = self.avg_individual_cost
         return self.max_individual_cost / avg if avg else 1.0
 
@@ -81,8 +90,9 @@ def _best_option_for_person(
             outbound=None,
             inbound=None,
             total_cost_gbp=0.0,
+            flight_plus_ground_gbp=0.0,
             viable=False,
-            note="No airports within travel limit",
+            note="No airports reachable",
         )
 
     dw = config.date_window
@@ -98,14 +108,16 @@ def _best_option_for_person(
             max_nights=dw.max_nights,
         )
 
-        if outbound is None:
-            continue
-        if inbound is None:
+        if outbound is None or inbound is None:
             continue
 
-        total = ground.estimated_cost_gbp + outbound.price_gbp + inbound.price_gbp
+        money_cost = ground.estimated_cost_gbp + outbound.price_gbp + inbound.price_gbp
 
-        if config.budget_cap_per_person and total > config.budget_cap_per_person:
+        # Time value: charge for ground travel time both ways
+        time_cost = ground.duration_hours * 2 * config.time_value_per_hour
+        total = money_cost + time_cost
+
+        if config.budget_cap_per_person and money_cost > config.budget_cap_per_person:
             continue
 
         if best is None or total < best.total_cost_gbp:
@@ -116,6 +128,7 @@ def _best_option_for_person(
                 outbound=outbound,
                 inbound=inbound,
                 total_cost_gbp=round(total, 2),
+                flight_plus_ground_gbp=round(money_cost, 2),
                 viable=True,
             )
 
@@ -127,8 +140,9 @@ def _best_option_for_person(
             outbound=None,
             inbound=None,
             total_cost_gbp=0.0,
+            flight_plus_ground_gbp=0.0,
             viable=False,
-            note="No viable flights found within budget",
+            note="No viable flights found",
         )
 
     return best
@@ -144,15 +158,16 @@ def optimise(config: Config) -> list[DestinationResult]:
             pr = _best_option_for_person(person, destination, config)
             dest_result.person_results.append(pr)
 
-        # Mark destination non-viable if anyone has no route.
         non_viable = [p for p in dest_result.person_results if not p.viable]
         if non_viable:
             names = ", ".join(p.person_name for p in non_viable)
-            dest_result.note = f"No viable route for: {names}"
-            # Still include it in results but flag it.
+            dest_result.note = f"No flight data for: {names}"
 
         results.append(dest_result)
 
-    # Sort: fully viable destinations first, then by group cost.
-    results.sort(key=lambda d: (not all(p.viable for p in d.person_results), d.total_group_cost))
+    # Sort: fully viable first, then by total group cost (includes time value)
+    results.sort(key=lambda d: (
+        not all(p.viable for p in d.person_results),
+        d.total_group_cost,
+    ))
     return results

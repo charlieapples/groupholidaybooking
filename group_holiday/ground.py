@@ -97,16 +97,21 @@ def ground_leg(
     return result
 
 
-def nearest_airports(home: str, candidates: list[str], max_hours: float = 3.0) -> list[tuple[str, GroundLeg]]:
+def nearest_airports(
+    home: str,
+    candidates: list[str],
+    max_hours: Optional[float] = None,
+) -> list[tuple[str, GroundLeg]]:
     """
-    Filter candidate airport codes to those reachable within max_hours by transit.
-    Returns list of (airport_code, GroundLeg) sorted by duration.
+    Return candidate airports reachable from home, sorted by travel duration.
+    If max_hours is None (no limit), all reachable airports are returned.
     """
     reachable = []
     for airport in candidates:
-        # Google Maps resolves IATA codes like "MAN airport" or "LHR airport"
         leg = ground_leg(home, f"{airport} airport")
-        if leg and leg.duration_hours <= max_hours:
+        if leg is None:
+            continue
+        if max_hours is None or leg.duration_hours <= max_hours:
             reachable.append((airport, leg))
     reachable.sort(key=lambda x: x[1].duration_hours)
     return reachable
