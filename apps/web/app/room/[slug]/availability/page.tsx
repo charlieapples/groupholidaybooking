@@ -25,6 +25,7 @@ import {
 import { parseIcal, parseRoughWindow, getMonthsInRange } from "@/lib/ical";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useToast, errorMessage } from "@/components/Toast";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -406,6 +407,7 @@ export default function AvailabilityPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = useMemo(() => createClient(), []);
+  const { toast } = useToast();
 
   const [token, setToken] = useState<string | null>(null);
   const [providerToken, setProviderToken] = useState<string | null>(null);
@@ -516,7 +518,7 @@ export default function AvailabilityPage() {
       await advanceStep(token, slug);
       router.push(`/room/${slug}/preferences`);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to lock in window");
+      toast.error(errorMessage(e, "Failed to lock in window"));
       setLockingWindow(null);
     }
   }
@@ -539,7 +541,7 @@ export default function AvailabilityPage() {
         setWindows(w);
       }
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to submit");
+      toast.error(errorMessage(e, "Failed to submit"));
     } finally {
       setSubmitting(false);
     }

@@ -14,6 +14,7 @@ import {
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useToast, errorMessage } from "@/components/Toast";
 
 // Lazy-load the chat widget so it doesn't block initial render
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
@@ -40,6 +41,7 @@ export default function RoomPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+  const { toast } = useToast();
 
   const [token, setToken] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
@@ -92,7 +94,7 @@ export default function RoomPage() {
       setMembers(m);
       setShowPostcodeEdit(false);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to update postcode");
+      toast.error(errorMessage(e, "Failed to update postcode"));
     } finally {
       setSavingPostcode(false);
     }
@@ -105,17 +107,34 @@ export default function RoomPage() {
       const updated = await advanceStep(token, slug);
       setRoom(updated);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Could not advance step");
+      toast.error(errorMessage(e, "Could not advance step"));
     } finally {
       setAdvancing(false);
     }
   }
 
-  function shareLink() {
+  async function shareLink() {
     const url = `${window.location.origin}/room/${slug}/join`;
-    navigator.clipboard.writeText(url).then(() => {
-      alert("Invite link copied to clipboard!");
-    });
+    const shareText = `Join my holiday planning room "${room?.name ?? slug}" on Group Holiday`;
+
+    // Use Web Share API on supported devices (mobile gets a native share sheet)
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: "Group Holiday invite", text: shareText, url });
+        return;
+      } catch (err) {
+        // User cancelled — only fall through to clipboard if it wasn't a cancellation
+        if (err instanceof Error && err.name === "AbortError") return;
+      }
+    }
+
+    // Fallback: copy to clipboard
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Invite link copied to clipboard");
+    } catch {
+      toast.error("Could not copy link — try again");
+    }
   }
 
   if (loading) return (

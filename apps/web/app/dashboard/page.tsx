@@ -4,11 +4,13 @@ import { createClient } from "@/lib/supabase/client";
 import { createRoom, joinRoom, listRooms, type Room } from "@/lib/api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useToast, errorMessage } from "@/components/Toast";
 
 export default function Dashboard() {
   // Stable client — don't recreate on every render
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
+  const { toast } = useToast();
   const nameInputRef = useRef<HTMLInputElement>(null);
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<{ email?: string; name?: string } | null>(null);
@@ -87,7 +89,7 @@ export default function Dashboard() {
       resetWindow();
       router.push(`/room/${room.slug}`);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to create room");
+      toast.error(errorMessage(e, "Failed to create room"));
     } finally {
       setCreating(false);
     }
@@ -101,7 +103,7 @@ export default function Dashboard() {
       await joinRoom(token, slug, joinPostcode || undefined);
       router.push(`/room/${slug}`);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Room not found or you're not allowed to join");
+      toast.error(errorMessage(e, "Room not found or you're not allowed to join"));
     } finally {
       setJoining(false);
     }

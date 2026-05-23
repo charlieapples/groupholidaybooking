@@ -15,6 +15,7 @@ import {
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useToast, errorMessage } from "@/components/Toast";
 
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
@@ -45,6 +46,7 @@ export default function DestinationsPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+  const { toast } = useToast();
 
   const [token, setToken] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
@@ -101,7 +103,7 @@ export default function DestinationsPage() {
       setQuestSaved(true);
       setTimeout(() => setQuestSaved(false), 3000);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to save questionnaire");
+      toast.error(errorMessage(e, "Failed to save questionnaire"));
     } finally {
       setQuestSaving(false);
     }
@@ -114,7 +116,7 @@ export default function DestinationsPage() {
       const results = await suggestDestinations(token, slug, 6);
       setCandidates(results);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to get suggestions");
+      toast.error(errorMessage(e, "Failed to get suggestions"));
     } finally {
       setSuggesting(false);
     }
@@ -130,7 +132,7 @@ export default function DestinationsPage() {
       setProposeSearch("");
       setShowProposeDropdown(false);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to propose destination");
+      toast.error(errorMessage(e, "Failed to propose destination"));
     } finally {
       setProposing(false);
     }
@@ -143,7 +145,7 @@ export default function DestinationsPage() {
       const c = await listDestinations(token, slug);
       setCandidates(c);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to vote");
+      toast.error(errorMessage(e, "Failed to vote"));
     }
   }
 
@@ -154,7 +156,7 @@ export default function DestinationsPage() {
       await advanceStep(token, slug);
       router.push(`/room/${slug}/flights`);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to advance");
+      toast.error(errorMessage(e, "Failed to advance"));
       setAdvancing(false);
     }
   }

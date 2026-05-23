@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { ToastProvider } from "@/components/Toast";
 
 export const metadata: Metadata = {
   title: {
@@ -13,6 +14,15 @@ export const metadata: Metadata = {
     description: "Find when everyone is free, pick a destination together, and book the cheapest flights.",
     type: "website",
   },
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+  },
+};
+
+// Next.js 15 — themeColor belongs in viewport, not metadata
+export const viewport: Viewport = {
   themeColor: "#2563eb",
 };
 
@@ -23,7 +33,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen antialiased bg-gray-50">{children}</body>
+      <body className="min-h-screen antialiased bg-gray-50">
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

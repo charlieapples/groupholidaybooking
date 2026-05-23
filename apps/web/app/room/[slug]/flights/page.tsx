@@ -13,6 +13,7 @@ import {
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useToast, errorMessage } from "@/components/Toast";
 
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
@@ -20,6 +21,7 @@ export default function FlightsPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+  const { toast } = useToast();
 
   const [token, setToken] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
@@ -70,7 +72,7 @@ export default function FlightsPage() {
       await advanceStep(token, slug);
       router.push(`/room/${slug}`);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to choose destination");
+      toast.error(errorMessage(e, "Failed to choose destination"));
       setChoosingDest(null);
     }
   }

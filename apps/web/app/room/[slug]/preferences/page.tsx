@@ -12,11 +12,13 @@ import {
 } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useToast, errorMessage } from "@/components/Toast";
 
 export default function PreferencesPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+  const { toast } = useToast();
 
   const [token, setToken] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
@@ -70,7 +72,7 @@ export default function PreferencesPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to save");
+      toast.error(errorMessage(e, "Failed to save"));
     } finally {
       setSaving(false);
     }
@@ -79,7 +81,7 @@ export default function PreferencesPage() {
   async function handleAdvance() {
     if (!token || !room?.is_admin) return;
     if (!agreedMin || !agreedMax) {
-      alert("Please set agreed min and max nights before advancing.");
+      toast.error("Please set agreed min and max nights before advancing.");
       return;
     }
     setAdvancing(true);
@@ -97,7 +99,7 @@ export default function PreferencesPage() {
       }
       router.push(`/room/${slug}/destinations`);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to advance");
+      toast.error(errorMessage(e, "Failed to advance"));
       setAdvancing(false);
     }
   }

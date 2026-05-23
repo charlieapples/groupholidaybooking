@@ -13,6 +13,7 @@ import {
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useToast, errorMessage } from "@/components/Toast";
 
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
@@ -46,6 +47,7 @@ export default function BookingPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+  const { toast } = useToast();
 
   const [token, setToken] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
@@ -83,16 +85,20 @@ export default function BookingPage() {
       await advanceStep(token, slug);
       router.push(`/room/${slug}`);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to mark as done");
+      toast.error(errorMessage(e, "Failed to mark as done"));
       setMarkingDone(false);
     }
   }
 
   function copyLink(url: string, key: string) {
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(key);
-      setTimeout(() => setCopied(null), 2000);
-    });
+    navigator.clipboard.writeText(url).then(
+      () => {
+        setCopied(key);
+        toast.success("Link copied");
+        setTimeout(() => setCopied(null), 2000);
+      },
+      () => toast.error("Could not copy link"),
+    );
   }
 
   if (loading) return (

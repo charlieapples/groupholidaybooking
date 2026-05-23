@@ -16,6 +16,10 @@ __pycache__/
 .turbo/
 .vercel/
 
+# Generated TypeScript / Next.js (auto-recreated on build)
+next-env.d.ts
+*.tsbuildinfo
+
 # Node
 node_modules/
 .pnpm-store/
