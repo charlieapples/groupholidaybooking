@@ -180,7 +180,7 @@ def cheapest_return_pair(
                 deep = (
                     f"https://www.aviasales.com/search/"
                     f"{origin}{dep_date.strftime('%d%m')}"
-                    f"{destination}{ret_date.strftime('%d%m')}2"
+                    f"{destination}{ret_date.strftime('%d%m')}1"
                     f"?marker={_token()}"
                 )
                 best_out = Fare(
