@@ -119,8 +119,8 @@ function MonthGrid({
                   ? "bg-red-500 text-white hover:bg-red-600"
                   : isPast || outOfWindow
                   ? "text-gray-300 cursor-not-allowed"
-                  // Free, in-window, clickable: light green so the "I'm free" state is visually obvious
-                  : "bg-green-50 text-green-800 hover:bg-red-100 hover:text-red-700",
+                  // Free, in-window, clickable: bold green so it's obvious at a glance
+                  : "bg-green-300 text-green-900 hover:bg-red-200 hover:text-red-800",
               ].join(" ")}
             >
               {day}
@@ -609,7 +609,7 @@ export default function AvailabilityPage() {
               </p>
               <div className="flex items-center gap-4 text-sm">
                 <span className="flex items-center gap-1.5">
-                  <span className="h-5 w-5 rounded bg-green-50 border border-green-200 inline-block" />
+                  <span className="h-5 w-5 rounded bg-green-300 inline-block" />
                   <span className="text-gray-600">Free</span>
                 </span>
                 <span className="flex items-center gap-1.5">

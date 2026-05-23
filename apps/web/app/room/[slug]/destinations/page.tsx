@@ -79,28 +79,32 @@ export default function DestinationsPage() {
       if (!s.session) { router.replace("/"); return; }
       const t = s.session.access_token;
       setToken(t);
+      // Load room first — if THIS fails we know they shouldn't be here.
+      // Then load candidates + preferences separately; failures on those
+      // don't kick the user out, they just leave the questionnaire blank.
       try {
-        const [r, c, prefs] = await Promise.all([
-          getRoom(t, slug),
-          listDestinations(t, slug),
-          getMyDestinationPreferences(t, slug).catch(() => null),
-        ]);
+        const r = await getRoom(t, slug);
         setRoom(r);
-        setCandidates(c);
-        // Pre-fill questionnaire from saved answers if any exist
-        if (prefs) {
-          if (prefs.climate) setClimate(prefs.climate);
-          if (prefs.setting) setSetting(prefs.setting);
-          if (prefs.activity_level) setActivityLevel(prefs.activity_level);
-          if (prefs.must_have && prefs.must_have.length) setMustHave(prefs.must_have);
-          if (prefs.avoid && prefs.avoid.length) setAvoid(prefs.avoid);
-        }
-      } catch {
+      } catch (e: unknown) {
+        toast.error(errorMessage(e, "Couldn't load this Holiday"));
         router.replace("/dashboard");
+        return;
+      }
+      const [c, prefs] = await Promise.all([
+        listDestinations(t, slug).catch(() => [] as DestinationCandidate[]),
+        getMyDestinationPreferences(t, slug).catch(() => null),
+      ]);
+      setCandidates(c);
+      if (prefs) {
+        if (prefs.climate) setClimate(prefs.climate);
+        if (prefs.setting) setSetting(prefs.setting);
+        if (prefs.activity_level) setActivityLevel(prefs.activity_level);
+        if (prefs.must_have && prefs.must_have.length) setMustHave(prefs.must_have);
+        if (prefs.avoid && prefs.avoid.length) setAvoid(prefs.avoid);
       }
       setLoading(false);
     });
-  }, [slug, router, supabase]);
+  }, [slug, router, supabase, toast]);
 
   async function handleSaveQuestionnaire() {
     if (!token) return;

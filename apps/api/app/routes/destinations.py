@@ -252,15 +252,22 @@ def list_candidates(slug: str, user: UserInfo = Depends(current_user)):
         .eq("room_id", room["id"])
         .execute()
     )
-    votes_res = (
-        db.table("destination_votes")
-        .select("candidate_id, user_id, vote_value")
-        .in_("candidate_id", [c["id"] for c in candidates_res.data] or ["none"])
-        .execute()
-    )
+    # Skip the votes query entirely when there are no candidates — calling
+    # .in_("candidate_id", ["none"]) sends a non-UUID value to Supabase
+    # which errors out and breaks the whole page on a fresh Holiday.
+    candidate_ids = [c["id"] for c in candidates_res.data]
+    votes_data: list[dict] = []
+    if candidate_ids:
+        votes_res = (
+            db.table("destination_votes")
+            .select("candidate_id, user_id, vote_value")
+            .in_("candidate_id", candidate_ids)
+            .execute()
+        )
+        votes_data = votes_res.data
 
     results = [
-        _candidate_to_dto(c, user.id, votes_res.data)
+        _candidate_to_dto(c, user.id, votes_data)
         for c in candidates_res.data
     ]
     results.sort(key=lambda x: -x.vote_count)
@@ -404,22 +411,26 @@ def suggest_destinations(
             on_conflict="room_id,iata_code",
         ).execute()
 
-    # Return the full updated candidate list
+    # Return the full updated candidate list (same empty-list guard as list_candidates)
     candidates_res = (
         db.table("destination_candidates")
         .select("*")
         .eq("room_id", room["id"])
         .execute()
     )
-    votes_res = (
-        db.table("destination_votes")
-        .select("candidate_id, user_id, vote_value")
-        .in_("candidate_id", [c["id"] for c in candidates_res.data] or ["none"])
-        .execute()
-    )
+    candidate_ids = [c["id"] for c in candidates_res.data]
+    votes_data: list[dict] = []
+    if candidate_ids:
+        votes_res = (
+            db.table("destination_votes")
+            .select("candidate_id, user_id, vote_value")
+            .in_("candidate_id", candidate_ids)
+            .execute()
+        )
+        votes_data = votes_res.data
 
     results = [
-        _candidate_to_dto(c, user.id, votes_res.data)
+        _candidate_to_dto(c, user.id, votes_data)
         for c in candidates_res.data
     ]
     results.sort(key=lambda x: -x.vote_count)
