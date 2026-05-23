@@ -16,6 +16,8 @@ import {
   getSubmissionStatus,
   getFreeWindows,
   getRoom,
+  updateRoom,
+  advanceStep,
   type Room,
   type SubmissionStatus,
   type FreeWindow,
@@ -470,6 +472,7 @@ export default function AvailabilityPage() {
   }, [searchParams, providerToken, loading]);
 
   const [autoSync, setAutoSync] = useState(false);
+  const [lockingWindow, setLockingWindow] = useState<number | null>(null);
 
   // Derive the month range from the room's rough_window
   const { windowStart, windowEnd, months } = useMemo(() => {
@@ -500,6 +503,22 @@ export default function AvailabilityPage() {
       dates.forEach((d) => next.add(d));
       return next;
     });
+  }
+
+  async function handleLockWindow(window: FreeWindow, idx: number) {
+    if (!token || !room?.is_admin) return;
+    setLockingWindow(idx);
+    try {
+      await updateRoom(token, slug, {
+        agreed_start: window.start_date,
+        agreed_end: window.end_date,
+      });
+      await advanceStep(token, slug);
+      router.push(`/room/${slug}/preferences`);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Failed to lock in window");
+      setLockingWindow(null);
+    }
   }
 
   async function handleSubmit() {
@@ -658,18 +677,23 @@ export default function AvailabilityPage() {
         {/* Free windows — shown once everyone submits */}
         {windows && windows.length > 0 && (
           <div className="rounded-xl border bg-white p-6 shadow-sm">
-            <h2 className="mb-4 font-semibold text-gray-900">🗓 Free windows for everyone</h2>
+            <h2 className="mb-1 font-semibold text-gray-900">🗓 Free windows for everyone</h2>
+            {room?.is_admin && (
+              <p className="mb-4 text-sm text-blue-700">
+                As admin, click <strong>Use these dates</strong> to lock in a window and move to the next step.
+              </p>
+            )}
             <div className="space-y-3">
               {windows.map((w, i) => (
                 <div
                   key={i}
-                  className={`flex items-center justify-between rounded-xl px-5 py-3 ${
+                  className={`flex items-center justify-between rounded-xl px-5 py-3 gap-4 ${
                     i === 0
                       ? "bg-green-50 border border-green-200"
                       : "bg-gray-50 border border-gray-100"
                   }`}
                 >
-                  <div>
+                  <div className="flex-1">
                     <p className="font-semibold text-gray-900">
                       {new Date(w.start_date).toLocaleDateString("en-GB", {
                         day: "numeric", month: "short",
@@ -681,11 +705,22 @@ export default function AvailabilityPage() {
                     </p>
                     <p className="text-sm text-gray-500">{w.days} days free</p>
                   </div>
-                  {i === 0 && (
-                    <span className="rounded-full bg-green-600 px-3 py-1 text-xs font-bold text-white">
-                      Best window
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {i === 0 && (
+                      <span className="rounded-full bg-green-600 px-3 py-1 text-xs font-bold text-white whitespace-nowrap">
+                        Best window
+                      </span>
+                    )}
+                    {room?.is_admin && (
+                      <button
+                        onClick={() => handleLockWindow(w, i)}
+                        disabled={lockingWindow !== null}
+                        className="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {lockingWindow === i ? "Locking…" : "Use these dates →"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

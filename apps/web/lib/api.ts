@@ -103,6 +103,14 @@ export function advanceStep(token: string, slug: string) {
   return apiFetch<Room>(`/rooms/${slug}/advance`, token, { method: "POST" });
 }
 
+export function updateMyPostcode(token: string, slug: string, home_postcode: string) {
+  return apiFetch<{ ok: boolean }>(
+    `/rooms/${slug}/join?home_postcode=${encodeURIComponent(home_postcode)}`,
+    token,
+    { method: "PATCH" }
+  );
+}
+
 export interface Member {
   user_id: string;
   display_name: string | null;

@@ -12,8 +12,11 @@ import {
   type Room,
   type DestinationCandidate,
 } from "@/lib/api";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+
+const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
 const MUST_HAVE_OPTIONS = [
   "nightlife", "culture", "food", "beach", "nature",
@@ -404,7 +407,7 @@ export default function DestinationsPage() {
           )}
         </div>
 
-        {/* Admin advance */}
+          {/* Admin advance */}
         {room.is_admin && candidates.length > 0 && (
           <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-6">
             <h2 className="text-lg font-bold text-blue-900 mb-2">Ready to find flights?</h2>
@@ -422,6 +425,8 @@ export default function DestinationsPage() {
           </div>
         )}
       </div>
+
+      {token && <ChatWidget token={token} roomSlug={slug} />}
     </main>
   );
 }

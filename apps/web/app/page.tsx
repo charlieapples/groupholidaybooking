@@ -1,28 +1,40 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function LandingPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (searchParams.get("error") === "auth_failed") {
+      setError("Sign-in failed. Please try again.");
+      setLoading(false);
+      return;
+    }
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) router.replace("/dashboard");
-      else setLoading(false);
+      if (data.user) {
+        const next = searchParams.get("next") || "/dashboard";
+        router.replace(next);
+      } else {
+        setLoading(false);
+      }
     });
-  }, []);
+  }, [supabase, router, searchParams]);
 
   async function signInWithGoogle() {
     setSigningIn(true);
+    const next = searchParams.get("next") || "/dashboard";
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         scopes: "email profile openid",
       },
     });
@@ -59,6 +71,12 @@ export default function LandingPage() {
             </li>
           ))}
         </ul>
+
+        {error && (
+          <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
         <button
           onClick={signInWithGoogle}

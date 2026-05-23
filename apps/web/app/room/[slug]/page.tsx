@@ -6,6 +6,7 @@ import {
   listMembers,
   getSubmissionStatus,
   advanceStep,
+  updateMyPostcode,
   type Room,
   type Member,
   type SubmissionStatus,
@@ -46,12 +47,17 @@ export default function RoomPage() {
   const [submissionStatus, setSubmissionStatus] = useState<SubmissionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [advancing, setAdvancing] = useState(false);
+  const [myPostcode, setMyPostcode] = useState("");
+  const [savingPostcode, setSavingPostcode] = useState(false);
+  const [showPostcodeEdit, setShowPostcodeEdit] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) { router.replace("/"); return; }
       const t = data.session.access_token;
       setToken(t);
+      setUserId(data.session.user.id);
       try {
         const [r, m] = await Promise.all([
           getRoom(t, slug),
@@ -59,6 +65,9 @@ export default function RoomPage() {
         ]);
         setRoom(r);
         setMembers(m);
+        // Pre-fill postcode from my membership
+        const myMembership = m.find(mb => mb.user_id === data.session!.user.id);
+        if (myMembership?.home_postcode) setMyPostcode(myMembership.home_postcode);
 
         // Load availability submission status if on that step
         if (r.current_step === "availability") {
@@ -72,6 +81,22 @@ export default function RoomPage() {
       }
     });
   }, [slug, router, supabase]);
+
+  async function handleSavePostcode() {
+    if (!token || !myPostcode.trim()) return;
+    setSavingPostcode(true);
+    try {
+      await updateMyPostcode(token, slug, myPostcode.trim());
+      // Refresh members list
+      const m = await listMembers(token, slug);
+      setMembers(m);
+      setShowPostcodeEdit(false);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Failed to update postcode");
+    } finally {
+      setSavingPostcode(false);
+    }
+  }
 
   async function handleAdvanceStep() {
     if (!token || !room?.is_admin) return;
@@ -361,6 +386,43 @@ export default function RoomPage() {
                   </li>
                 ))}
               </ul>
+            </div>
+
+            {/* Postcode update */}
+            <div className="rounded-xl border bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-900">Your postcode</h3>
+                <button
+                  onClick={() => setShowPostcodeEdit(!showPostcodeEdit)}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  {showPostcodeEdit ? "Cancel" : "Edit"}
+                </button>
+              </div>
+              {showPostcodeEdit ? (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. M1 1AE"
+                    value={myPostcode}
+                    onChange={(e) => setMyPostcode(e.target.value)}
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={handleSavePostcode}
+                    disabled={savingPostcode || !myPostcode.trim()}
+                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {savingPostcode ? "…" : "Save"}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600">
+                  {members.find(m => m.user_id === userId)?.home_postcode || (
+                    <span className="text-amber-600">Not set — needed for flight search ⚠️</span>
+                  )}
+                </p>
+              )}
             </div>
 
             {/* Share card */}

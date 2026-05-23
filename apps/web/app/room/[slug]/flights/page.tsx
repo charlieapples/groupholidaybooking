@@ -9,8 +9,11 @@ import {
   type Room,
   type FlightResult,
 } from "@/lib/api";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+
+const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
 export default function FlightsPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -277,6 +280,8 @@ export default function FlightsPage() {
           </div>
         )}
       </div>
+
+      {token && <ChatWidget token={token} roomSlug={slug} />}
     </main>
   );
 }

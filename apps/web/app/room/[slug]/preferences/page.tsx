@@ -89,7 +89,12 @@ export default function PreferencesPage() {
         max_nights: Number(agreedMax),
         ...(agreedBudget ? { budget_gbp: Number(agreedBudget) } : {}),
       });
-      await advanceStep(token, slug);
+      // Advance through BOTH duration + budget steps into destination
+      // (the preferences page handles both steps together)
+      let updated = await advanceStep(token, slug);
+      if (updated.current_step === "budget") {
+        updated = await advanceStep(token, slug); // budget → destination
+      }
       router.push(`/room/${slug}/destinations`);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "Failed to advance");
