@@ -1,91 +1,82 @@
-# Group Holiday Finder
+# Group Holiday Booking
 
-Find the cheapest holiday destination for a group of friends flying from different UK cities.
+Multi-user platform for planning a group holiday end-to-end: when everyone's
+free, where to go, how to get there, where to stay — optimised for total group cost.
 
-When 4–12 people from different parts of the UK want to fly somewhere together, the cheapest *destination* for the group as a whole isn't obvious — it depends on flight prices from every person's nearest airport, the ground transport cost to get them there, and how those numbers stack up across the group.
-
-This tool figures that out.
-
-## Live app
-
-👉 **[groupholidaybooking.streamlit.app](https://groupholidaybooking.streamlit.app)**
+**Live MVP:** [groupholidaybooking.streamlit.app](https://groupholidaybooking.streamlit.app) (single-user, flights only)
+**v2 (in build):** multi-user collaborative platform — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md)
 
 ## What it does
 
-1. You enter your group (names + home postcodes) and a date window
-2. For each candidate destination, it works out:
-   - Which UK airport each person should fly from (based on ground travel cost + time)
-   - The cheapest flight prices for those airports
-   - The total cost per person, and for the whole group
-3. It ranks destinations cheapest-first, with a fairness flag if one person is being stung more than the others
-4. You click through to book — same price you'd pay direct
+When 4–12 friends from different parts of the UK want to plan a holiday together, every part of it is messy: when are we all free? Where? How does each person get there cheaply? Where do we stay?
 
-## How it works under the hood
+This platform walks the group through the whole flow:
 
-| Component  | Source |
-| ---------- | ------ |
-| Flight prices | [Aviasales](https://www.aviasales.com) via [Travelpayouts API](https://travelpayouts.github.io/slate/) |
-| Ground transport routing | [Google Maps Directions API](https://developers.google.com/maps/documentation/directions) |
-| Ground transport price | Estimated (£0.15/km transit, £0.25/km driving) |
-| Booking | Aviasales affiliate links — same price as booking direct, earns the project a small commission |
+1. **Availability** — calendar import or manual block-out, blind submission, ranked free windows
+2. **Duration + budget** — agreed by the group
+3. **Destination** — questionnaire-driven suggestions, propose-and-vote, or random pick
+4. **Flights** — cheapest combo from everyone's nearest airport, same dates for the whole group
+5. **Accommodation** — Booking.com search, group-sized
+6. **Total cost** — flights + ground + hotels + daily living per destination
 
-Flight prices come from Aviasales' cache (refreshed roughly daily). Ground transport routes and times are real Google Maps data; the £ cost is an estimate because there's no free UK API for live train/bus prices.
+## Repository layout (monorepo)
 
-## Two trip modes
-
-- **Group flies on same dates** (default) — picks one outbound and return date for the whole group, so you're actually on the same trip
-- **Individual optima** — each person picks their own cheapest dates (faster, but the group may not coincide)
-
-## Tech stack
-
-- Python 3.11+
-- Streamlit (web UI) + Click-style CLI
-- Pydantic for config validation
-- httpx + tenacity for resilient API calls
-- diskcache so repeated runs are free
-- Deployed on Streamlit Cloud (free tier)
-
-## Run locally
-
-```bash
-git clone https://github.com/charlieapples/groupholidaybooking
-cd groupholidaybooking
-python -m venv .venv
-.venv/Scripts/pip install -r requirements.txt    # Windows
-# .venv/bin/pip install -r requirements.txt      # Linux/Mac
-
-cp .env.example .env
-# add your TRAVELPAYOUTS_TOKEN and GOOGLE_MAPS_API_KEY
-
-streamlit run app.py                              # web app
-python -m group_holiday.main example_config.yaml  # CLI
+```
+apps/
+├── streamlit-legacy/   The current MVP (Streamlit, single-user) — stays deployed
+├── api/                v2 backend (FastAPI + Supabase + diskcache)
+└── web/                v2 frontend (Next.js 15 + Tailwind + Supabase client) — coming soon
+infra/
+└── supabase/           Database schema migrations
+docs/
+├── ARCHITECTURE.md     System design
+└── ROADMAP.md          Phased build plan
 ```
 
-### Get your API keys
+## Quick start
 
-- **Travelpayouts** — sign up free at [travelpayouts.com](https://www.travelpayouts.com), join the Aviasales programme, your token appears in your profile
-- **Google Maps** — Google Cloud Console → enable Directions API → create an API key ($200/month free credit, plenty for this)
+### Streamlit MVP (works today)
 
-## Roadmap
+```bash
+cd apps/streamlit-legacy
+pip install -r requirements.txt
+cp ../../.env.example .env       # add TRAVELPAYOUTS_TOKEN + GOOGLE_MAPS_API_KEY
+streamlit run app.py
+```
 
-- [x] CLI + Streamlit web app
-- [x] Affiliate booking links
-- [x] Shared group dates mode
-- [x] Time value of travel option
-- [ ] Real train ticket prices (Trainline partner API or scraper)
-- [ ] Sharable results URLs
-- [ ] Calendar view of cheap weekends
-- [ ] Accommodation comparison (Booking.com affiliate)
-- [ ] Cost-of-living lookup for spending money estimates
-- [ ] Mixed-airline cheapest-pair search
-- [ ] Mobile-first UI rebuild
+### FastAPI backend (v2, in progress)
 
-## Contributing
+```bash
+cd apps/api
+pip install -r requirements.txt
+cp .env.example .env             # add Supabase URL + service key + Gemini key
+uvicorn app.main:app --reload
+```
 
-Issues and PRs welcome. The interesting problems are:
-- Better ground transport pricing without paying for an enterprise API
-- Smarter shared-dates algorithm when route data is sparse
-- A mobile-friendly UI (Streamlit's sidebar isn't great on small screens)
+API docs auto-generated at http://localhost:8000/docs.
+
+### Next.js frontend (v2)
+
+Not scaffolded yet — see [ROADMAP.md](docs/ROADMAP.md) Phase 1.
+
+## Stack
+
+| | MVP | v2 |
+|---|---|---|
+| Frontend | Streamlit | Next.js 15 (Vercel) |
+| Backend | (Streamlit serves) | FastAPI (Railway) |
+| DB / Auth | (none) | Supabase (Postgres + Google OAuth + Realtime) |
+| AI | (none) | Gemini 2.5 Flash |
+| Flights | Travelpayouts/Aviasales | same |
+| Ground | Google Maps Directions | same + Trainline (via Awin) |
+| Hotels | — | Booking.com Affiliate API |
+
+## Revenue model
+
+Affiliate commissions, no fees to users:
+- Flights → Travelpayouts/Aviasales (already live)
+- Hotels → Booking.com (coming)
+- Trains → Trainline via Awin (coming)
 
 ## Licence
 
