@@ -6,10 +6,14 @@ destination shortlist), runs the optimiser, and caches results.
 from __future__ import annotations
 
 import json
+import logging
+import traceback
 from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+
+log = logging.getLogger("flights")
 from pydantic import BaseModel
 
 from ..core.config import Config, DateWindow, Person
@@ -171,22 +175,43 @@ def run_optimiser(slug: str, user: UserInfo = Depends(current_user)):
         shared_dates=True,
     )
 
-    results = optimise(config)
-    dtos = [_serialise(r) for r in results]
+    # Surface optimiser failures with a useful message instead of generic 500.
+    # Common causes: Travelpayouts token missing/quota exhausted, Google Maps
+    # geocoding failed on a postcode, no flights found for the date window.
+    try:
+        results = optimise(config)
+    except Exception as exc:
+        log.exception("Flight optimiser failed for room %s", slug)
+        raise HTTPException(
+            502,
+            f"Flight search failed: {type(exc).__name__}: {exc}. "
+            "Check that all postcodes are valid UK postcodes and that "
+            "the date window has enough days for the trip length.",
+        ) from exc
 
-    # Cache results in DB — one row per destination
+    try:
+        dtos = [_serialise(r) for r in results]
+    except Exception as exc:
+        log.exception("Failed to serialise optimiser results: %s", traceback.format_exc())
+        raise HTTPException(500, f"Couldn't format flight results: {exc}") from exc
+
+    # Cache results in DB — one row per destination. Don't let a cache failure
+    # break the response; just log and return.
     for dto in dtos:
-        db.table("flight_results").upsert(
-            {
-                "room_id": room["id"],
-                "destination_iata": dto.destination,
-                "shared_out_date": dto.shared_out_date,
-                "shared_return_date": dto.shared_return_date,
-                "total_group_cost_gbp": dto.total_group_cost,
-                "per_person_results": json.dumps([p.model_dump() for p in dto.people]),
-            },
-            on_conflict="room_id,destination_iata",
-        ).execute()
+        try:
+            db.table("flight_results").upsert(
+                {
+                    "room_id": room["id"],
+                    "destination_iata": dto.destination,
+                    "shared_out_date": dto.shared_out_date,
+                    "shared_return_date": dto.shared_return_date,
+                    "total_group_cost_gbp": dto.total_group_cost,
+                    "per_person_results": json.dumps([p.model_dump() for p in dto.people]),
+                },
+                on_conflict="room_id,destination_iata",
+            ).execute()
+        except Exception:
+            log.warning("Failed to cache flight result for %s (continuing)", dto.destination)
 
     return dtos
 

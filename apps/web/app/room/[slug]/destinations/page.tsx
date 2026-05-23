@@ -157,12 +157,33 @@ export default function DestinationsPage() {
 
   async function handleVote(candidateId: string, value: number) {
     if (!token) return;
+    // Optimistic update — adjust the UI immediately so taps feel instant.
+    // If the request fails we revert and toast the error.
+    const prev = candidates;
+    setCandidates((cs) =>
+      cs.map((c) => {
+        if (c.id !== candidateId) return c;
+        const oldVote = c.my_vote || 0;
+        const newVote = value === oldVote ? 0 : value; // toggle off if same value clicked again
+        return {
+          ...c,
+          my_vote: newVote,
+          vote_count: c.vote_count - oldVote + newVote,
+        };
+      })
+    );
     try {
-      await voteDestination(token, slug, candidateId, value);
-      const c = await listDestinations(token, slug);
-      setCandidates(c);
+      // Find what we set above so we send the same value to the API
+      const target = candidates.find((c) => c.id === candidateId);
+      const oldVote = target?.my_vote || 0;
+      const newVote = value === oldVote ? 0 : value;
+      await voteDestination(token, slug, candidateId, newVote);
+      // Refetch in the background to stay in sync with other voters
+      listDestinations(token, slug).then(setCandidates).catch(() => {});
     } catch (e: unknown) {
+      setCandidates(prev); // revert
       toast.error(errorMessage(e, "Failed to vote"));
+      return;
     }
   }
 
@@ -185,12 +206,24 @@ export default function DestinationsPage() {
     setAvoid(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
   }
 
-  const filteredDests = proposeSearch.length >= 2
+  // Search the curated destination list. If nothing matches but the user typed
+  // a valid-looking 3-letter IATA code, offer to propose it as a custom code
+  // (the backend accepts any iata_code, we just don't have the city name yet).
+  const searchLower = proposeSearch.toLowerCase().trim();
+  const curatedMatches: [string, string][] = proposeSearch.length >= 2
     ? Object.entries(DEST_NAMES).filter(([iata, name]) =>
-        name.toLowerCase().includes(proposeSearch.toLowerCase()) ||
-        iata.toLowerCase().includes(proposeSearch.toLowerCase())
+        name.toLowerCase().includes(searchLower) ||
+        iata.toLowerCase().includes(searchLower)
       ).slice(0, 8)
     : [];
+  // If no curated matches but the user typed exactly 3 letters, show a "use as custom code" option
+  const customCode = /^[a-z]{3}$/i.test(proposeSearch.trim())
+    ? proposeSearch.trim().toUpperCase()
+    : null;
+  const showCustomOption = customCode && !curatedMatches.some(([iata]) => iata === customCode);
+  const filteredDests: [string, string][] = showCustomOption
+    ? [...curatedMatches, [customCode!, `${customCode} (custom airport code)`] as [string, string]]
+    : curatedMatches;
 
   if (loading) return (
     <div className="flex min-h-screen items-center justify-center">
@@ -327,13 +360,6 @@ export default function DestinationsPage() {
             >
               {questSaving ? "Saving…" : questSaved ? "✓ Saved!" : "Save my answers"}
             </button>
-            <button
-              onClick={handleSuggest}
-              disabled={suggesting}
-              className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {suggesting ? "Finding matches…" : "✨ Get AI suggestions"}
-            </button>
           </div>
         </div>
 
@@ -369,15 +395,27 @@ export default function DestinationsPage() {
 
         {/* Candidates list */}
         <div className="rounded-xl border bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">
-            Destination candidates
-            {candidates.length > 0 && <span className="ml-2 text-sm font-normal text-gray-500">({candidates.length})</span>}
-          </h2>
+          <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+            <h2 className="text-lg font-bold text-gray-900">
+              Destination candidates
+              {candidates.length > 0 && <span className="ml-2 text-sm font-normal text-gray-500">({candidates.length})</span>}
+            </h2>
+            <button
+              onClick={handleSuggest}
+              disabled={suggesting}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {suggesting ? "Finding matches…" : candidates.length > 0 ? "✨ Refresh suggestions" : "✨ Get suggestions"}
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            Suggestions are matched to the group&apos;s questionnaire answers. Tap 👍 or 👎 to vote — votes update live for everyone.
+          </p>
 
           {candidates.length === 0 ? (
             <div className="py-10 text-center text-gray-500">
               <div className="text-3xl mb-2">🌍</div>
-              <p>No destinations yet. Get AI suggestions or propose one above.</p>
+              <p>No destinations yet. Click <strong>Get suggestions</strong> above or propose one.</p>
             </div>
           ) : (
             <div className="space-y-3">
