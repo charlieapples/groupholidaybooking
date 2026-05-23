@@ -78,19 +78,40 @@ def _load_room_context(slug: str) -> str:
 
         lines = [
             f"Room: {room['name']} (step: {room['current_step']})",
-            f"Members: {', '.join(members) or 'none'}",
-            f"Time window: {room.get('rough_window') or 'not set'}",
+            f"Members ({len(members)}): {', '.join(members) or 'none'}",
+            f"Target window: {room.get('rough_window') or 'not set'}",
         ]
         if room.get("agreed_start"):
-            lines.append(
-                f"Agreed dates: {room['agreed_start']} → {room.get('agreed_end')}"
-            )
+            lines.append(f"Agreed dates: {room['agreed_start']} to {room.get('agreed_end')}")
+        if room.get("min_nights"):
+            lines.append(f"Trip length: {room['min_nights']}–{room.get('max_nights')} nights")
         if room.get("budget_gbp"):
             lines.append(f"Budget cap: £{room['budget_gbp']:.0f}/person")
         if candidates:
             lines.append(f"Destination candidates: {', '.join(candidates)}")
         if room.get("destination_iata"):
             lines.append(f"Chosen destination: {room['destination_iata']}")
+
+        # Include availability submission status if in that step
+        if room.get("current_step") == "availability":
+            try:
+                members_res2 = (
+                    db.table("room_members")
+                    .select("user_id", count="exact")
+                    .eq("room_id", room["id"])
+                    .execute()
+                )
+                submitted_res = (
+                    db.table("availability_submissions")
+                    .select("user_id", count="exact")
+                    .eq("room_id", room["id"])
+                    .execute()
+                )
+                total = members_res2.count or 0
+                submitted = submitted_res.count or 0
+                lines.append(f"Availability: {submitted}/{total} members submitted")
+            except Exception:
+                pass
 
         return "\n".join(lines)
     except Exception as exc:

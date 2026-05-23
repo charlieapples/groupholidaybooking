@@ -340,21 +340,37 @@ export default function RoomPage() {
 
             {/* Room info */}
             <div className="grid grid-cols-2 gap-4">
-              {room.rough_window && (
+              {room.rough_window && !room.agreed_start && (
                 <div className="rounded-xl border bg-white p-4 shadow-sm">
-                  <h3 className="text-xs font-medium text-gray-500 mb-1">Time window</h3>
+                  <h3 className="text-xs font-medium text-gray-500 mb-1">Target window</h3>
                   <p className="font-semibold text-gray-900 text-sm">{room.rough_window}</p>
+                </div>
+              )}
+              {room.agreed_start && (
+                <div className="rounded-xl border bg-white p-4 shadow-sm">
+                  <h3 className="text-xs font-medium text-gray-500 mb-1">Agreed dates</h3>
+                  <p className="font-semibold text-gray-900 text-sm">
+                    {new Date(room.agreed_start).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                    {" – "}
+                    {new Date(room.agreed_end!).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
                 </div>
               )}
               {(room.min_nights || room.budget_gbp) && (
                 <div className="rounded-xl border bg-white p-4 shadow-sm">
-                  <h3 className="text-xs font-medium text-gray-500 mb-1">Agreed preferences</h3>
+                  <h3 className="text-xs font-medium text-gray-500 mb-1">Trip details</h3>
                   {room.min_nights && (
                     <p className="text-sm font-semibold text-gray-900">{room.min_nights}–{room.max_nights} nights</p>
                   )}
                   {room.budget_gbp && (
                     <p className="text-sm text-gray-600">£{room.budget_gbp.toLocaleString()} budget pp</p>
                   )}
+                </div>
+              )}
+              {room.destination_iata && (
+                <div className="rounded-xl border bg-green-50 p-4 shadow-sm">
+                  <h3 className="text-xs font-medium text-green-600 mb-1">Chosen destination</h3>
+                  <p className="font-semibold text-green-900 text-sm">{room.destination_iata}</p>
                 </div>
               )}
             </div>
