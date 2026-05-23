@@ -8,6 +8,7 @@ import {
   proposeDestination,
   voteDestination,
   submitDestinationPreferences,
+  getMyDestinationPreferences,
   advanceStep,
   type Room,
   type DestinationCandidate,
@@ -79,9 +80,21 @@ export default function DestinationsPage() {
       const t = s.session.access_token;
       setToken(t);
       try {
-        const [r, c] = await Promise.all([getRoom(t, slug), listDestinations(t, slug)]);
+        const [r, c, prefs] = await Promise.all([
+          getRoom(t, slug),
+          listDestinations(t, slug),
+          getMyDestinationPreferences(t, slug).catch(() => null),
+        ]);
         setRoom(r);
         setCandidates(c);
+        // Pre-fill questionnaire from saved answers if any exist
+        if (prefs) {
+          if (prefs.climate) setClimate(prefs.climate);
+          if (prefs.setting) setSetting(prefs.setting);
+          if (prefs.activity_level) setActivityLevel(prefs.activity_level);
+          if (prefs.must_have && prefs.must_have.length) setMustHave(prefs.must_have);
+          if (prefs.avoid && prefs.avoid.length) setAvoid(prefs.avoid);
+        }
       } catch {
         router.replace("/dashboard");
       }

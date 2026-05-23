@@ -200,22 +200,32 @@ export function voteDestination(
   );
 }
 
+export interface DestinationPreferences {
+  climate?: string | null;
+  setting?: string | null;
+  activity_level?: string | null;
+  must_have?: string[];
+  avoid?: string[];
+  max_total_per_person_gbp?: number | null;
+}
+
 export function submitDestinationPreferences(
   token: string,
   slug: string,
-  body: {
-    climate?: string;
-    setting?: string;
-    activity_level?: string;
-    must_have?: string[];
-    avoid?: string[];
-    max_total_per_person_gbp?: number;
-  }
+  body: DestinationPreferences
 ) {
   return apiFetch(`/rooms/${slug}/destinations/preferences`, token, {
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+/** Fetch the calling user's saved questionnaire answers (for pre-filling on revisit). */
+export function getMyDestinationPreferences(token: string, slug: string) {
+  return apiFetch<DestinationPreferences>(
+    `/rooms/${slug}/destinations/preferences`,
+    token
+  );
 }
 
 export interface DurationBudgetAggregate {

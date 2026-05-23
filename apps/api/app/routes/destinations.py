@@ -164,6 +164,48 @@ def get_duration_budget(slug: str, user: UserInfo = Depends(current_user)):
     return {"members_total": members_count, "responses": rows}
 
 
+@router.get("/preferences", response_model=DestinationPreferences)
+def get_my_preferences(slug: str, user: UserInfo = Depends(current_user)):
+    """Return the calling user's saved destination questionnaire answers.
+
+    Used to pre-fill the questionnaire when the user revisits the page.
+    Returns an empty DestinationPreferences object if nothing's been saved.
+    """
+    import json as _json
+
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+
+    res = (
+        db.table("trip_preferences")
+        .select("pref_destination_answers, pref_budget_gbp")
+        .eq("room_id", room["id"])
+        .eq("user_id", user.id)
+        .execute()
+    )
+    if not res.data:
+        return DestinationPreferences()
+
+    row = res.data[0]
+    raw = row.get("pref_destination_answers")
+    if isinstance(raw, str):
+        try:
+            raw = _json.loads(raw)
+        except Exception:
+            raw = {}
+    raw = raw or {}
+
+    return DestinationPreferences(
+        climate=raw.get("climate"),
+        setting=raw.get("setting"),
+        activity_level=raw.get("activity_level"),
+        must_have=raw.get("must_have") or [],
+        avoid=raw.get("avoid") or [],
+        max_total_per_person_gbp=row.get("pref_budget_gbp"),
+    )
+
+
 @router.post("/preferences")
 def submit_preferences(
     slug: str,
