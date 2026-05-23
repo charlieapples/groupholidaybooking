@@ -22,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-from .routes import availability, chat, destinations, flights, health, rooms
+from .routes import availability, chat, destinations, flights, health, optimise, rooms
 
 
 @asynccontextmanager
@@ -57,6 +57,7 @@ app.add_middleware(
 
 # Route registration
 app.include_router(health.router, tags=["health"])
+app.include_router(optimise.router, prefix="/api/optimise", tags=["optimise"])
 app.include_router(rooms.router, prefix="/api/rooms", tags=["rooms"])
 app.include_router(availability.router, prefix="/api/rooms/{slug}/availability", tags=["availability"])
 app.include_router(destinations.router, prefix="/api/rooms/{slug}/destinations", tags=["destinations"])
