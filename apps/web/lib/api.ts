@@ -26,7 +26,33 @@ async function apiFetch<T>(
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `API error ${res.status}`);
   }
+  // 204 No Content responses (e.g. DELETE) have no body to parse
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+// ── Profile ───────────────────────────────────────────────────────────────────
+
+export interface Profile {
+  id: string;
+  email: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  default_home_postcode: string | null;
+}
+
+export function getMyProfile(token: string) {
+  return apiFetch<Profile>("/profile", token);
+}
+
+export function updateMyProfile(
+  token: string,
+  body: { default_home_postcode?: string; display_name?: string }
+) {
+  return apiFetch<Profile>("/profile", token, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
 }
 
 // ── Rooms ─────────────────────────────────────────────────────────────────────
@@ -101,6 +127,10 @@ export function updateRoom(
 
 export function advanceStep(token: string, slug: string) {
   return apiFetch<Room>(`/rooms/${slug}/advance`, token, { method: "POST" });
+}
+
+export function deleteRoom(token: string, slug: string) {
+  return apiFetch<void>(`/rooms/${slug}`, token, { method: "DELETE" });
 }
 
 export function updateMyPostcode(token: string, slug: string, home_postcode: string) {

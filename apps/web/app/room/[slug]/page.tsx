@@ -5,8 +5,8 @@ import {
   getRoom,
   listMembers,
   getSubmissionStatus,
-  advanceStep,
   updateMyPostcode,
+  deleteRoom,
   type Room,
   type Member,
   type SubmissionStatus,
@@ -50,7 +50,6 @@ export default function RoomPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [submissionStatus, setSubmissionStatus] = useState<SubmissionStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [advancing, setAdvancing] = useState(false);
   const [myPostcode, setMyPostcode] = useState("");
   const [savingPostcode, setSavingPostcode] = useState(false);
   const [showPostcodeEdit, setShowPostcodeEdit] = useState(false);
@@ -107,16 +106,16 @@ export default function RoomPage() {
     }
   }
 
-  async function handleAdvanceStep() {
-    if (!token || !room?.is_admin) return;
-    setAdvancing(true);
+
+  async function handleDelete() {
+    if (!token || !room) return;
+    if (!window.confirm(`Delete "${room.name}"? This permanently removes the Holiday and all its data — this cannot be undone.`)) return;
     try {
-      const updated = await advanceStep(token, slug);
-      setRoom(updated);
+      await deleteRoom(token, slug);
+      toast.success(`Deleted "${room.name}"`);
+      router.replace("/dashboard");
     } catch (e: unknown) {
-      toast.error(errorMessage(e, "Could not advance step"));
-    } finally {
-      setAdvancing(false);
+      toast.error(errorMessage(e, "Failed to delete Holiday"));
     }
   }
 
@@ -154,7 +153,6 @@ export default function RoomPage() {
 
   const stepIdx = STEPS.findIndex((s) => s.key === room.current_step);
   const activeStep = STEPS[stepIdx];
-  const stepRoute = STEP_ROUTES[room.current_step];
   const canAdvance = room.is_admin && room.current_step !== "done";
 
   // Availability-step copy
@@ -269,13 +267,10 @@ export default function RoomPage() {
                   </button>
                   {canAdvance && availabilityReady && (
                     <div className="pt-2">
-                      <button
-                        onClick={handleAdvanceStep}
-                        disabled={advancing}
-                        className="rounded-xl border-2 border-blue-600 px-6 py-2.5 font-semibold text-blue-600 hover:bg-blue-50 disabled:opacity-50"
-                      >
-                        {advancing ? "Advancing…" : "Admin: advance to duration step →"}
-                      </button>
+                      <p className="text-xs text-gray-500 mb-2">
+                        Once everyone&apos;s submitted, click <strong>Use these dates</strong>{" "}
+                        on one of the free windows to lock in dates and move to the next step.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -397,19 +392,12 @@ export default function RoomPage() {
                 </div>
               )}
 
-              {/* Admin: advance button for non-availability steps */}
-              {canAdvance && !["availability", "booking", "done"].includes(room.current_step) && stepRoute && (
-                <div className="mt-4 pt-4 border-t">
-                  <p className="text-xs text-gray-500 mb-2">Admin controls</p>
-                  <button
-                    onClick={handleAdvanceStep}
-                    disabled={advancing}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    {advancing ? "Advancing…" : `Skip to next step →`}
-                  </button>
-                </div>
-              )}
+              {/* The previous "Skip to next step" admin shortcut was removed —
+                  it let admins advance past required data (no agreed dates /
+                  no duration etc.) which caused the flights page to fail with
+                  "Room is missing: agreed_start, agreed_end…". Each step now
+                  has its own advance button on its dedicated page that only
+                  fires once the required data is set. */}
             </div>
 
             {/* Room info */}
@@ -519,7 +507,7 @@ export default function RoomPage() {
             <div className="rounded-xl border bg-blue-50 p-6">
               <h3 className="font-semibold text-blue-900 mb-2">Invite friends</h3>
               <p className="text-sm text-blue-700 mb-3">
-                Room code: <span className="font-mono font-bold">{slug}</span>
+                Holiday code: <span className="font-mono font-bold">{slug}</span>
               </p>
               <button
                 onClick={shareLink}
@@ -550,6 +538,22 @@ export default function RoomPage() {
                 </button>
               </div>
             </div>
+
+            {/* Admin: delete Holiday */}
+            {room.is_admin && (
+              <div className="rounded-xl border border-red-100 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-semibold text-gray-900 mb-1">Danger zone</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  Permanently removes this Holiday and all its data.
+                </p>
+                <button
+                  onClick={handleDelete}
+                  className="w-full rounded-lg border border-red-200 bg-red-50 py-2 text-xs font-medium text-red-700 hover:bg-red-100"
+                >
+                  Delete this Holiday
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

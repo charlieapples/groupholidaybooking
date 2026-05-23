@@ -119,7 +119,8 @@ function MonthGrid({
                   ? "bg-red-500 text-white hover:bg-red-600"
                   : isPast || outOfWindow
                   ? "text-gray-300 cursor-not-allowed"
-                  : "text-gray-700 hover:bg-blue-50 hover:text-blue-700",
+                  // Free, in-window, clickable: light green so the "I'm free" state is visually obvious
+                  : "bg-green-50 text-green-800 hover:bg-red-100 hover:text-red-700",
               ].join(" ")}
             >
               {day}
@@ -603,18 +604,17 @@ export default function AvailabilityPage() {
             {/* Legend + instructions */}
             <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-white px-5 py-3">
               <p className="text-sm text-gray-600 flex-1">
-                <strong>Click any date</strong> to mark it as{" "}
-                <span className="font-semibold text-red-600">busy</span>.
-                Click again to unmark. Leave free days blank.
+                <strong>Green = free</strong>, <strong>red = busy</strong>.
+                Click any date to flip it.
               </p>
               <div className="flex items-center gap-4 text-sm">
                 <span className="flex items-center gap-1.5">
-                  <span className="h-5 w-5 rounded bg-red-500 inline-block" />
-                  <span className="text-gray-600">Busy</span>
+                  <span className="h-5 w-5 rounded bg-green-50 border border-green-200 inline-block" />
+                  <span className="text-gray-600">Free</span>
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="h-5 w-5 rounded border border-gray-200 inline-block" />
-                  <span className="text-gray-600">Free</span>
+                  <span className="h-5 w-5 rounded bg-red-500 inline-block" />
+                  <span className="text-gray-600">Busy</span>
                 </span>
               </div>
             </div>

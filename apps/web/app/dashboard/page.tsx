@@ -1,7 +1,14 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { createRoom, joinRoom, listRooms, type Room } from "@/lib/api";
+import {
+  createRoom,
+  joinRoom,
+  listRooms,
+  deleteRoom,
+  getMyProfile,
+  type Room,
+} from "@/lib/api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
@@ -62,8 +69,16 @@ export default function Dashboard() {
         email: data.session.user.email,
         name: data.session.user.user_metadata?.full_name,
       });
-      const rooms = await listRooms(t).catch(() => []);
+      // Pre-fill postcode from saved profile so users don't re-type it for every Holiday
+      const [rooms, profile] = await Promise.all([
+        listRooms(t).catch(() => []),
+        getMyProfile(t).catch(() => null),
+      ]);
       setRooms(rooms);
+      if (profile?.default_home_postcode) {
+        setNewPostcode(profile.default_home_postcode);
+        setJoinPostcode(profile.default_home_postcode);
+      }
       setLoading(false);
     });
   }, [supabase, router]);
@@ -104,6 +119,18 @@ export default function Dashboard() {
       toast.error(errorMessage(e, "Failed to create room"));
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleDeleteRoom(slug: string, name: string) {
+    if (!token) return;
+    if (!window.confirm(`Delete "${name}"? This permanently removes the Holiday and all its data — this cannot be undone.`)) return;
+    try {
+      await deleteRoom(token, slug);
+      setRooms((prev) => prev.filter((r) => r.slug !== slug));
+      toast.success(`Deleted "${name}"`);
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Failed to delete Holiday"));
     }
   }
 
@@ -176,12 +203,12 @@ export default function Dashboard() {
       <div className="mx-auto max-w-5xl px-6 py-10 space-y-10">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">Your holiday rooms</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Your Holidays</h1>
           <button
             onClick={() => setShowCreate(true)}
             className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
           >
-            + New room
+            + New Holiday
           </button>
         </div>
 
@@ -190,9 +217,9 @@ export default function Dashboard() {
           <div className="rounded-2xl border-2 border-dashed border-gray-300 bg-white px-6 py-14 text-center">
             <div className="mx-auto max-w-md space-y-4">
               <div className="text-5xl">🏖️</div>
-              <h2 className="text-xl font-semibold text-gray-900">No holiday rooms yet</h2>
+              <h2 className="text-xl font-semibold text-gray-900">No Holidays yet</h2>
               <p className="text-gray-500">
-                A room is a shared planning space — invite your friends, mark when
+                A Holiday is a shared planning space — invite your friends, mark when
                 you&apos;re free, and the app finds the dates that work for everyone.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
@@ -200,7 +227,7 @@ export default function Dashboard() {
                   onClick={() => setShowCreate(true)}
                   className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
                 >
-                  Create your first room
+                  Plan your first Holiday
                 </button>
                 <button
                   onClick={() => document.getElementById("join-room-card")?.scrollIntoView({ behavior: "smooth" })}
@@ -239,18 +266,33 @@ export default function Dashboard() {
                     {room.is_admin ? " · admin" : ""}
                   </p>
                 </button>
-                {/* Quick share — only visible on hover/focus */}
-                <button
-                  onClick={() => copyRoomLink(room.slug)}
-                  title="Copy invite link"
-                  className="absolute top-2 right-2 rounded-lg p-1.5 text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-gray-100 hover:text-gray-700 transition-opacity"
-                  aria-label="Copy invite link"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                  </svg>
-                </button>
+                {/* Quick actions — only visible on hover/focus */}
+                <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => copyRoomLink(room.slug)}
+                    title="Copy invite link"
+                    className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                    aria-label="Copy invite link"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                    </svg>
+                  </button>
+                  {room.is_admin && (
+                    <button
+                      onClick={() => handleDeleteRoom(room.slug, room.name)}
+                      title="Delete this Holiday"
+                      className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                      aria-label="Delete Holiday"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -258,11 +300,11 @@ export default function Dashboard() {
 
         {/* Join room */}
         <div id="join-room-card" className="rounded-xl border bg-white p-6 shadow-sm scroll-mt-6">
-          <h2 className="mb-4 font-semibold text-gray-900">Join a room</h2>
+          <h2 className="mb-4 font-semibold text-gray-900">Join a Holiday</h2>
           <div className="flex gap-3 flex-wrap">
             <input
               type="text"
-              placeholder="Room code or full invite link"
+              placeholder="Holiday code or full invite link"
               value={joinSlug}
               onChange={(e) => setJoinSlug(e.target.value)}
               className="flex-1 min-w-40 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
@@ -295,11 +337,11 @@ export default function Dashboard() {
             className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="mb-6 text-xl font-bold text-gray-900">Create a holiday room</h2>
+            <h2 className="mb-6 text-xl font-bold text-gray-900">Plan a Holiday</h2>
             <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Room name *
+                  Holiday name *
                 </label>
                 <input
                   ref={nameInputRef}
@@ -371,7 +413,7 @@ export default function Dashboard() {
                   disabled={creating || !newName.trim()}
                   className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {creating ? "Creating…" : "Create room"}
+                  {creating ? "Creating…" : "Plan Holiday"}
                 </button>
               </div>
             </div>

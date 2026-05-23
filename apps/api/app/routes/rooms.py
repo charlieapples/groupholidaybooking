@@ -212,14 +212,28 @@ def create_room(
 
     # Ensure the user has a profile row (the trigger may have missed them
     # if they signed up before the migration ran).
-    db.table("profiles").upsert(
-        {
-            "id": user.id,
-            "email": user.email,
-            "display_name": user.display_name or (user.email or "").split("@")[0],
-        },
-        on_conflict="id",
-    ).execute()
+    profile_data = {
+        "id": user.id,
+        "email": user.email,
+        "display_name": user.display_name or (user.email or "").split("@")[0],
+    }
+    # If the caller passed a postcode, also save it as their default so we
+    # can pre-fill the field on future Holidays they create or join.
+    if body.home_postcode:
+        profile_data["default_home_postcode"] = body.home_postcode
+    db.table("profiles").upsert(profile_data, on_conflict="id").execute()
+
+    # If no postcode was passed, fall back to the user's stored default.
+    home_postcode = body.home_postcode
+    if not home_postcode:
+        existing = (
+            db.table("profiles")
+            .select("default_home_postcode")
+            .eq("id", user.id)
+            .execute()
+        )
+        if existing.data:
+            home_postcode = existing.data[0].get("default_home_postcode")
 
     # Create room
     room_res = (
@@ -242,7 +256,7 @@ def create_room(
             "room_id": room["id"],
             "user_id": user.id,
             "is_admin": True,
-            "home_postcode": body.home_postcode,
+            "home_postcode": home_postcode,
         }
     ).execute()
 
@@ -282,15 +296,27 @@ def join_room(
 
     # Ensure the joining user has a profile row (the trigger may have missed
     # them if they signed up before the migration ran). Without this, they'd
-    # appear as 'Unknown' to other members of the room.
-    db.table("profiles").upsert(
-        {
-            "id": user.id,
-            "email": user.email,
-            "display_name": user.display_name or (user.email or "").split("@")[0],
-        },
-        on_conflict="id",
-    ).execute()
+    # appear as 'Unknown' to other members of the room. Also save the postcode
+    # as their default if they passed one, so future Holidays pre-fill it.
+    profile_data = {
+        "id": user.id,
+        "email": user.email,
+        "display_name": user.display_name or (user.email or "").split("@")[0],
+    }
+    if home_postcode:
+        profile_data["default_home_postcode"] = home_postcode
+    db.table("profiles").upsert(profile_data, on_conflict="id").execute()
+
+    # Fall back to stored default if none was passed
+    if not home_postcode:
+        existing_profile = (
+            db.table("profiles")
+            .select("default_home_postcode")
+            .eq("id", user.id)
+            .execute()
+        )
+        if existing_profile.data:
+            home_postcode = existing_profile.data[0].get("default_home_postcode")
 
     # Check if already a member
     existing = (
@@ -376,6 +402,24 @@ def update_room(
 
     updated = db.table("rooms").update(updates).eq("id", room["id"]).execute()
     return _room_with_member_count(db, updated.data[0], user.id)
+
+
+@router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_room(slug: str, user: UserInfo = Depends(current_user)):
+    """Delete a Holiday (room) and all related rows (cascade). Admin only.
+
+    Database FKs use ON DELETE CASCADE so members, availability blocks,
+    preferences, destination candidates/votes, and flight results are
+    all cleaned up automatically.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    membership = _assert_member(db, room["id"], user.id)
+    if not membership.get("is_admin"):
+        raise HTTPException(403, "Only the Holiday admin can delete it.")
+
+    db.table("rooms").delete().eq("id", room["id"]).execute()
+    return None
 
 
 @router.post("/{slug}/advance", response_model=RoomResponse)

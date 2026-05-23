@@ -123,7 +123,7 @@ export default function PreferencesPage() {
   const responsesCount = data.responses.length;
   const totalMembers = data.members_total;
 
-  // Suggest agreed values: median
+  // Suggest agreed values: median nights, lowest-as-cap for budget, plus average for display
   const allMin = data.responses.map(r => r.min_nights).filter(Boolean) as number[];
   const allMax = data.responses.map(r => r.max_nights).filter(Boolean) as number[];
   const allBudget = data.responses.map(r => r.budget_gbp).filter(Boolean) as number[];
@@ -131,6 +131,9 @@ export default function PreferencesPage() {
   const suggestedMin = median(allMin);
   const suggestedMax = median(allMax);
   const minBudget = allBudget.length ? Math.min(...allBudget) : null;
+  const avgBudget = allBudget.length
+    ? Math.round(allBudget.reduce((a, b) => a + b, 0) / allBudget.length)
+    : null;
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -188,16 +191,19 @@ export default function PreferencesPage() {
 
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">
-              Max budget per person (£)
+              Max budget per person (£) <span className="text-gray-400 font-normal">— optional</span>
             </label>
             <input
               type="number"
               min={0}
-              placeholder="e.g. 800"
+              placeholder="Leave blank to just rank by cheapest"
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
             />
+            <p className="mt-1 text-xs text-gray-500">
+              If everyone leaves this blank, destinations are simply ranked from cheapest to most expensive.
+            </p>
             <p className="mt-1 text-xs text-gray-500">
               Total including flights, accommodation, and travel to airport.
             </p>
@@ -251,7 +257,12 @@ export default function PreferencesPage() {
             {suggestedMin && (
               <p className="text-sm text-blue-700">
                 💡 Suggested: {suggestedMin}–{suggestedMax} nights
-                {minBudget ? `, max budget £${minBudget?.toLocaleString()} (lowest submitted)` : ""}
+                {minBudget && avgBudget ? (
+                  <>
+                    , max budget <strong>£{minBudget.toLocaleString()}</strong> (tightest submitted),
+                    group average £{avgBudget.toLocaleString()}
+                  </>
+                ) : null}
               </p>
             )}
 

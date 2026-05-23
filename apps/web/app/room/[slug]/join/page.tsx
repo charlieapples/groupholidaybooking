@@ -77,7 +77,7 @@ export default function JoinRoomPage() {
       <main className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
         <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl text-center">
           <div className="text-4xl mb-4">✅</div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">You&apos;re already in this room!</h1>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">You&apos;re already in this Holiday!</h1>
           <p className="text-gray-600 mb-6">
             You&apos;re already a member of <strong>{room.name}</strong>.
           </p>
@@ -85,7 +85,7 @@ export default function JoinRoomPage() {
             onClick={() => router.push(`/room/${slug}`)}
             className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700"
           >
-            Go to room →
+            Go to Holiday →
           </button>
         </div>
       </main>
@@ -98,8 +98,8 @@ export default function JoinRoomPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="text-5xl mb-3">✈️</div>
-          <h1 className="text-2xl font-bold text-gray-900">Join a holiday room</h1>
-          <p className="text-gray-500 mt-1">Room code: <span className="font-mono font-bold text-blue-600">{slug}</span></p>
+          <h1 className="text-2xl font-bold text-gray-900">Join a Holiday</h1>
+          <p className="text-gray-500 mt-1">Holiday code: <span className="font-mono font-bold text-blue-600">{slug}</span></p>
         </div>
 
         <div className="rounded-2xl bg-white p-8 shadow-xl space-y-5">
