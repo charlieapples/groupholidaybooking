@@ -1,19 +1,9 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #111827;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0f172a;
-    --foreground: #f1f5f9;
-  }
-}
-
+/* App uses explicit light-mode Tailwind classes throughout — no dark mode override */
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: #ffffff;
+  color: #111827;
   font-family: system-ui, -apple-system, sans-serif;
+  color-scheme: light;
 }
