@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Ensure the API URL always has a protocol (guards against env vars set without https://)
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const apiUrl = rawApiUrl.startsWith("http") ? rawApiUrl : `https://${rawApiUrl}`;
 
 const nextConfig: NextConfig = {
   async rewrites() {
