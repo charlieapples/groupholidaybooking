@@ -357,10 +357,37 @@ export default function RoomPage() {
 
               {/* Done! */}
               {room.current_step === "done" && (
-                <div className="text-center py-4">
-                  <div className="text-5xl mb-3">🎉</div>
-                  <h3 className="text-lg font-bold text-green-700">Holiday booked!</h3>
-                  <p className="text-gray-600 mt-1">Enjoy your trip! 🌴</p>
+                <div className="text-center py-6">
+                  <div className="text-6xl mb-4 animate-bounce">🎉</div>
+                  <h3 className="text-2xl font-bold text-green-700">Holiday booked!</h3>
+                  <p className="text-gray-600 mt-2 max-w-md mx-auto">
+                    {room.destination_iata && room.agreed_start ? (
+                      <>
+                        See you in <span className="font-semibold">{room.destination_iata}</span>{" "}
+                        on{" "}
+                        <span className="font-semibold">
+                          {new Date(room.agreed_start).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+                        </span>
+                        {" "}— have an amazing time! 🌴
+                      </>
+                    ) : (
+                      <>Enjoy your trip! 🌴</>
+                    )}
+                  </p>
+                  <div className="mt-6 flex flex-wrap gap-3 justify-center">
+                    <button
+                      onClick={() => router.push(`/room/${slug}/booking`)}
+                      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      View booking details
+                    </button>
+                    <button
+                      onClick={shareLink}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                    >
+                      Share with the group
+                    </button>
+                  </div>
                 </div>
               )}
 

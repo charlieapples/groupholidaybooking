@@ -96,6 +96,21 @@ export default function Dashboard() {
     }
   }
 
+  async function copyRoomLink(slug: string) {
+    const url = `${window.location.origin}/room/${slug}/join`;
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({ title: "Group Holiday invite", url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      toast.success("Invite link copied");
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      toast.error("Could not copy link");
+    }
+  }
+
   async function handleJoinRoom() {
     if (!token || !joinSlug.trim()) return;
     setJoining(true);
@@ -173,27 +188,44 @@ export default function Dashboard() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {rooms.map((room) => (
-              <button
+              <div
                 key={room.slug}
-                onClick={() => router.push(`/room/${room.slug}`)}
-                className="rounded-xl border bg-white p-6 text-left shadow-sm hover:shadow-md transition-shadow"
+                className="group relative rounded-xl border bg-white shadow-sm hover:shadow-md transition-shadow"
               >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="font-semibold text-gray-900">{room.name}</h2>
-                    {room.rough_window && (
-                      <p className="text-sm text-gray-500">{room.rough_window}</p>
-                    )}
+                {/* Main click target — navigates to room */}
+                <button
+                  onClick={() => router.push(`/room/${room.slug}`)}
+                  className="w-full p-6 text-left rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="font-semibold text-gray-900 truncate">{room.name}</h2>
+                      {room.rough_window && (
+                        <p className="text-sm text-gray-500 truncate">{room.rough_window}</p>
+                      )}
+                    </div>
+                    <span className="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                      {room.current_step}
+                    </span>
                   </div>
-                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                    {room.current_step}
-                  </span>
-                </div>
-                <p className="mt-3 text-sm text-gray-500">
-                  {room.member_count} member{room.member_count !== 1 ? "s" : ""}
-                  {room.is_admin ? " · admin" : ""}
-                </p>
-              </button>
+                  <p className="mt-3 text-sm text-gray-500">
+                    {room.member_count} member{room.member_count !== 1 ? "s" : ""}
+                    {room.is_admin ? " · admin" : ""}
+                  </p>
+                </button>
+                {/* Quick share — only visible on hover/focus */}
+                <button
+                  onClick={() => copyRoomLink(room.slug)}
+                  title="Copy invite link"
+                  className="absolute top-2 right-2 rounded-lg p-1.5 text-gray-400 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-gray-100 hover:text-gray-700 transition-opacity"
+                  aria-label="Copy invite link"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                </button>
+              </div>
             ))}
           </div>
         )}
