@@ -1,13 +1,15 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { createRoom, getRoom, joinRoom, type Room } from "@/lib/api";
-import { useEffect, useState } from "react";
+import { createRoom, joinRoom, listRooms, type Room } from "@/lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function Dashboard() {
-  const supabase = createClient();
+  // Stable client — don't recreate on every render
+  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<{ email?: string; name?: string } | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -16,8 +18,30 @@ export default function Dashboard() {
   // Create room modal state
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newWindow, setNewWindow] = useState("");
   const [newPostcode, setNewPostcode] = useState("");
+
+  // Time window pickers
+  const [windowMode, setWindowMode] = useState<"month" | "date">("month");
+  const [fromVal, setFromVal] = useState("");
+  const [toVal, setToVal] = useState("");
+
+  function buildWindow(): string | undefined {
+    if (!fromVal && !toVal) return undefined;
+    const fmt = (v: string) => {
+      if (!v) return "";
+      if (windowMode === "month") {
+        const [y, m] = v.split("-");
+        return new Date(Number(y), Number(m) - 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+      }
+      return new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    };
+    if (fromVal && toVal) return `${fmt(fromVal)} – ${fmt(toVal)}`;
+    return fmt(fromVal) || fmt(toVal);
+  }
+
+  function resetWindow() {
+    setFromVal(""); setToVal(""); setWindowMode("month");
+  }
   const [creating, setCreating] = useState(false);
 
   // Join room state
@@ -26,7 +50,7 @@ export default function Dashboard() {
   const [joining, setJoining] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) { router.replace("/"); return; }
       const t = data.session.access_token;
       setToken(t);
@@ -34,10 +58,19 @@ export default function Dashboard() {
         email: data.session.user.email,
         name: data.session.user.user_metadata?.full_name,
       });
-      // TODO: load rooms from DB once room-list endpoint is added
+      const rooms = await listRooms(t).catch(() => []);
+      setRooms(rooms);
       setLoading(false);
     });
-  }, []);
+  }, [supabase, router]);
+
+  // Focus the name input after the modal animates in
+  useEffect(() => {
+    if (showCreate) {
+      const id = setTimeout(() => nameInputRef.current?.focus(), 50);
+      return () => clearTimeout(id);
+    }
+  }, [showCreate]);
 
   async function handleCreateRoom() {
     if (!token || !newName.trim()) return;
@@ -45,12 +78,13 @@ export default function Dashboard() {
     try {
       const room = await createRoom(token, {
         name: newName,
-        rough_window: newWindow || undefined,
+        rough_window: buildWindow(),
         home_postcode: newPostcode || undefined,
       });
       setRooms((prev) => [room, ...prev]);
       setShowCreate(false);
-      setNewName(""); setNewWindow(""); setNewPostcode("");
+      setNewName(""); setNewPostcode("");
+      resetWindow();
       router.push(`/room/${room.slug}`);
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : "Failed to create room");
@@ -154,14 +188,14 @@ export default function Dashboard() {
               placeholder="Room code (e.g. ab3x9k2m)"
               value={joinSlug}
               onChange={(e) => setJoinSlug(e.target.value)}
-              className="flex-1 min-w-40 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="flex-1 min-w-40 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
             />
             <input
               type="text"
               placeholder="Your postcode"
               value={joinPostcode}
               onChange={(e) => setJoinPostcode(e.target.value)}
-              className="w-36 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="w-36 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
             />
             <button
               onClick={handleJoinRoom}
@@ -176,8 +210,14 @@ export default function Dashboard() {
 
       {/* Create room modal */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowCreate(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2 className="mb-6 text-xl font-bold text-gray-900">Create a holiday room</h2>
             <div className="space-y-4">
               <div>
@@ -185,25 +225,50 @@ export default function Dashboard() {
                   Room name *
                 </label>
                 <input
-                  autoFocus
+                  ref={nameInputRef}
                   type="text"
                   placeholder="e.g. Lads Summer 2026"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Rough time window
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. July–August 2026"
-                  value={newWindow}
-                  onChange={(e) => setNewWindow(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                />
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">
+                    Rough time window
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => { setFromVal(""); setToVal(""); setWindowMode(windowMode === "month" ? "date" : "month"); }}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    {windowMode === "month" ? "Need exact dates? →" : "← Back to months"}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="mb-1 text-xs text-gray-500">From</p>
+                    <input
+                      type={windowMode}
+                      value={fromVal}
+                      onChange={(e) => setFromVal(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-xs text-gray-500">To</p>
+                    <input
+                      type={windowMode}
+                      value={toVal}
+                      onChange={(e) => setToVal(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                {buildWindow() && (
+                  <p className="mt-1.5 text-xs text-blue-600">📅 {buildWindow()}</p>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -214,7 +279,7 @@ export default function Dashboard() {
                   placeholder="e.g. M1 1AE"
                   value={newPostcode}
                   onChange={(e) => setNewPostcode(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
                 />
               </div>
               <div className="flex gap-3 pt-2">

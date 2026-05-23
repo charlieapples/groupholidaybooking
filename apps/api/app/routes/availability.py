@@ -8,6 +8,7 @@ Flow:
 """
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 from typing import Optional
 
@@ -17,6 +18,43 @@ from pydantic import BaseModel
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user
 from .rooms import _assert_member, _get_room_by_slug
+
+_MONTH_MAP = {
+    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
+    "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7, "aug": 8,
+    "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+
+def _parse_rough_window(rough: str | None) -> tuple[date, date] | None:
+    """Parse rough_window text into (start, end) dates.  Returns None if unparseable."""
+    if not rough:
+        return None
+    sep = r"\s*[–—-]\s*"
+    # "Month YYYY – Month YYYY"
+    m = re.match(r"(\w+)\s+(\d{4})" + sep + r"(\w+)\s+(\d{4})", rough, re.I)
+    if m:
+        sm, sy, em, ey = _MONTH_MAP.get(m[1].lower()), int(m[2]), _MONTH_MAP.get(m[3].lower()), int(m[4])
+        if sm and em:
+            return date(sy, sm, 1), date(ey, em, _days_in_month(ey, em))
+    # "Month–Month YYYY"
+    m = re.match(r"(\w+)" + sep + r"(\w+)\s+(\d{4})", rough, re.I)
+    if m:
+        sm, em, y = _MONTH_MAP.get(m[1].lower()), _MONTH_MAP.get(m[2].lower()), int(m[3])
+        if sm and em:
+            return date(y, sm, 1), date(y, em, _days_in_month(y, em))
+    # "Month YYYY"
+    m = re.match(r"(\w+)\s+(\d{4})", rough, re.I)
+    if m:
+        sm, y = _MONTH_MAP.get(m[1].lower()), int(m[2])
+        if sm:
+            return date(y, sm, 1), date(y, sm, _days_in_month(y, sm))
+    return None
+
+def _days_in_month(year: int, month: int) -> int:
+    if month == 12:
+        return 31
+    return (date(year, month + 1, 1) - timedelta(days=1)).day
 
 router = APIRouter()
 
@@ -235,18 +273,20 @@ def get_windows(
             "Results are hidden until everyone has submitted.",
         )
 
-    # Room must have a search window defined
+    # Determine search window — use explicit dates if set, fall back to rough_window
     search_start = room.get("search_start")
     search_end = room.get("search_end")
-    if not search_start or not search_end:
-        raise HTTPException(
-            422,
-            "Room has no search window set. The room admin must set "
-            "search_start and search_end first.",
-        )
-
-    start = date.fromisoformat(search_start)
-    end = date.fromisoformat(search_end)
+    if search_start and search_end:
+        start = date.fromisoformat(search_start)
+        end = date.fromisoformat(search_end)
+    else:
+        parsed = _parse_rough_window(room.get("rough_window"))
+        if not parsed:
+            raise HTTPException(
+                422,
+                "Room has no time window set. The room admin must set a rough_window or exact dates.",
+            )
+        start, end = parsed
 
     # Load all BUSY blocks for this room
     blocks_res = (

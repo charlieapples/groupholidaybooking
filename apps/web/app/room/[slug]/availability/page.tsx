@@ -1,11 +1,13 @@
 "use client";
 
 /**
- * Availability submission page.
+ * Availability page — multi-month calendar with calendar import.
  *
- * Shows a month calendar. Users click dates to mark them as busy (red).
- * When done, they click Submit — the dates are sent to FastAPI and the blind
- * reveal begins. Once everyone submits, free windows appear automatically.
+ * • Shows every month in the room's time window
+ * • Click any day to toggle it busy (red) / free
+ * • Import from Google Calendar (OAuth provider token),
+ *   or upload a .ics file from Outlook / Apple Calendar / Google export
+ * • Blind-reveal: results hidden until everyone submits
  */
 
 import { createClient } from "@/lib/supabase/client";
@@ -13,64 +15,489 @@ import {
   submitAvailability,
   getSubmissionStatus,
   getFreeWindows,
+  getRoom,
+  type Room,
   type SubmissionStatus,
   type FreeWindow,
 } from "@/lib/api";
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { parseIcal, parseRoughWindow, getMonthsInRange } from "@/lib/ical";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
-function getDaysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate();
-}
-
-function getFirstDayOfWeek(year: number, month: number) {
-  return new Date(year, month, 1).getDay(); // 0=Sun
-}
+// ── helpers ──────────────────────────────────────────────────────────────────
 
 function toISO(year: number, month: number, day: number) {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+function getDaysInMonth(year: number, month: number) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+// Monday-first: Mon=0 … Sun=6
+function getFirstDayMon(year: number, month: number) {
+  const jsDay = new Date(year, month, 1).getDay(); // 0=Sun
+  return (jsDay + 6) % 7;
+}
+
+const DAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+
+// ── month calendar component ──────────────────────────────────────────────────
+
+function MonthGrid({
+  year,
+  month,
+  busyDates,
+  onToggle,
+  windowStart,
+  windowEnd,
+  disabled,
+}: {
+  year: number;
+  month: number;
+  busyDates: Set<string>;
+  onToggle: (iso: string) => void;
+  windowStart: Date;
+  windowEnd: Date;
+  disabled: boolean;
+}) {
+  const today = useMemo(() => {
+    const d = new Date();
+    return toISO(d.getFullYear(), d.getMonth(), d.getDate());
+  }, []);
+
+  const daysInMonth = getDaysInMonth(year, month);
+  const firstDay = getFirstDayMon(year, month);
+  const monthLabel = new Date(year, month).toLocaleString("en-GB", {
+    month: "long",
+    year: "numeric",
+  });
+
+  return (
+    <div className="rounded-xl border bg-white p-5 shadow-sm">
+      <h3 className="mb-4 text-center font-semibold text-gray-900">{monthLabel}</h3>
+
+      {/* Day headers */}
+      <div className="mb-1 grid grid-cols-7 gap-1">
+        {DAY_LABELS.map((d) => (
+          <div key={d} className="py-1 text-center text-xs font-medium text-gray-400">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7 gap-1">
+        {/* Leading blanks */}
+        {Array.from({ length: firstDay }).map((_, i) => (
+          <div key={`blank-${i}`} />
+        ))}
+
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day = i + 1;
+          const iso = toISO(year, month, day);
+          const isBusy = busyDates.has(iso);
+          const isPast = iso < today;
+          const outOfWindow =
+            new Date(year, month, day) < windowStart ||
+            new Date(year, month, day) > windowEnd;
+
+          return (
+            <button
+              key={iso}
+              onClick={() => !isPast && !outOfWindow && !disabled && onToggle(iso)}
+              disabled={isPast || outOfWindow || disabled}
+              title={
+                isBusy ? "Busy — click to unmark" : isPast ? "Past date" : "Click to mark busy"
+              }
+              className={[
+                "aspect-square rounded-lg text-sm font-medium transition-colors",
+                isBusy
+                  ? "bg-red-500 text-white hover:bg-red-600"
+                  : isPast || outOfWindow
+                  ? "text-gray-300 cursor-not-allowed"
+                  : "text-gray-700 hover:bg-blue-50 hover:text-blue-700",
+              ].join(" ")}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── import panel ──────────────────────────────────────────────────────────────
+
+function ImportPanel({
+  onImport,
+  windowStart,
+  windowEnd,
+  providerToken,
+  slug,
+  autoSync,
+  onAutoSyncDone,
+  busyDates,
+}: {
+  onImport: (dates: string[]) => void;
+  windowStart: Date;
+  windowEnd: Date;
+  providerToken: string | null;
+  slug: string;
+  autoSync: boolean;
+  onAutoSyncDone: () => void;
+  busyDates: Set<string>;
+}) {
+  const supabase = useMemo(() => createClient(), []);
+  const [open, setOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"google" | "outlook" | "apple">("google");
+  const [gcalStatus, setGcalStatus] = useState<"idle" | "syncing" | "done" | "needs_grant" | "error">("idle");
+  const [gcalError, setGcalError] = useState("");
+  const [icsError, setIcsError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Auto-trigger Google sync when returning from OAuth
+  useEffect(() => {
+    if (autoSync && providerToken && gcalStatus === "idle") {
+      setOpen(true);
+      setActiveTab("google");
+      syncGoogle();
+      onAutoSyncDone();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSync, providerToken]);
+
+  async function grantCalendarAccess() {
+    // Persist any manually-marked dates so they survive the OAuth redirect
+    localStorage.setItem(`busy_${slug}`, JSON.stringify([...busyDates])); // busyDates is a prop
+    // Return to the availability page and auto-trigger sync on arrival
+    const returnPath = `/room/${slug}/availability?sync_google=1`;
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        scopes: "openid profile email https://www.googleapis.com/auth/calendar.readonly",
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnPath)}`,
+        queryParams: { prompt: "consent", access_type: "offline" },
+      },
+    });
+    // Page navigates away — user comes back with calendar-scoped provider_token
+  }
+
+  async function syncGoogle() {
+    if (!providerToken) {
+      setGcalStatus("needs_grant");
+      return;
+    }
+    setGcalStatus("syncing");
+    setGcalError("");
+    try {
+      const url = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
+      url.searchParams.set("timeMin", windowStart.toISOString());
+      url.searchParams.set("timeMax", windowEnd.toISOString());
+      url.searchParams.set("singleEvents", "true");
+      url.searchParams.set("maxResults", "2500");
+
+      const resp = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${providerToken}` },
+      });
+
+      if (resp.status === 403 || resp.status === 401) {
+        setGcalStatus("needs_grant");
+        return;
+      }
+
+      const data = await resp.json();
+      const busy: string[] = [];
+
+      for (const ev of data.items ?? []) {
+        if (ev.status === "cancelled") continue;
+        const start: string = ev.start?.date ?? ev.start?.dateTime?.slice(0, 10);
+        const end: string   = ev.end?.date   ?? ev.end?.dateTime?.slice(0, 10);
+        if (!start || !end) continue;
+
+        const cur = new Date(start);
+        const stop = new Date(end);
+        while (cur < stop) {
+          busy.push(cur.toISOString().slice(0, 10));
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+
+      onImport(busy);
+      setGcalStatus("done");
+    } catch {
+      setGcalStatus("error");
+      setGcalError("Failed to reach Google Calendar. Check your connection and try again.");
+    }
+  }
+
+  async function handleFile(file: File) {
+    setIcsError("");
+    try {
+      const text = await file.text();
+      const dates = parseIcal(text, windowStart, windowEnd);
+      if (dates.length === 0) {
+        setIcsError(
+          "No events found in this file within your time window. " +
+          "Make sure you exported the right calendar."
+        );
+        return;
+      }
+      onImport(dates);
+    } catch {
+      setIcsError("Couldn't read this file. Make sure it's a valid .ics calendar file.");
+    }
+  }
+
+  return (
+    <div className="rounded-xl border bg-white shadow-sm">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between px-6 py-4 text-left"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xl">📲</span>
+          <div>
+            <p className="font-semibold text-gray-900">Import from your calendar</p>
+            <p className="text-sm text-gray-500">Google, Outlook, Apple — auto-fill busy days</p>
+          </div>
+        </div>
+        <span className="text-gray-400">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="border-t px-6 pb-6">
+          {/* Tab row */}
+          <div className="mt-4 flex gap-2 border-b">
+            {(["google", "outlook", "apple"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={[
+                  "px-4 py-2 text-sm font-medium capitalize transition-colors",
+                  activeTab === tab
+                    ? "border-b-2 border-blue-600 text-blue-600"
+                    : "text-gray-500 hover:text-gray-900",
+                ].join(" ")}
+              >
+                {tab === "google" ? "🗓 Google" : tab === "outlook" ? "📘 Outlook" : "🍎 Apple"}
+              </button>
+            ))}
+          </div>
+
+          {/* Google tab */}
+          {activeTab === "google" && (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-gray-600">
+                Syncs your primary Google Calendar automatically — marks anything you have
+                scheduled in the holiday window as busy.
+              </p>
+
+              {gcalStatus === "needs_grant" ? (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 space-y-3">
+                  <p className="text-sm text-amber-800">
+                    <strong>One-time permission needed.</strong> Click below to let this app read
+                    your Google Calendar. You'll see a Google permissions screen — just click{" "}
+                    <em>Allow</em>. You stay logged in, no sign-out required.
+                  </p>
+                  <button
+                    onClick={grantCalendarAccess}
+                    className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                  >
+                    🗓 Grant calendar access →
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={syncGoogle}
+                  disabled={gcalStatus === "syncing" || gcalStatus === "done"}
+                  className={[
+                    "rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors",
+                    gcalStatus === "done"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60",
+                  ].join(" ")}
+                >
+                  {gcalStatus === "syncing"
+                    ? "Syncing…"
+                    : gcalStatus === "done"
+                    ? "✓ Synced!"
+                    : "Sync Google Calendar"}
+                </button>
+              )}
+              {gcalError && (
+                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{gcalError}</div>
+              )}
+            </div>
+          )}
+
+          {/* Outlook tab */}
+          {activeTab === "outlook" && (
+            <div className="mt-4 space-y-3">
+              <ol className="ml-4 list-decimal space-y-2 text-sm text-gray-600">
+                <li>Go to <strong>outlook.com</strong> and sign in</li>
+                <li>Click the calendar icon in the left bar</li>
+                <li>Click <strong>⚙️ Settings → View all Outlook settings</strong></li>
+                <li>Go to <strong>Calendar → Shared calendars</strong></li>
+                <li>Under <em>Publish a calendar</em>, select your calendar and click <strong>Publish</strong></li>
+                <li>Copy the <strong>ICS link</strong>, open it in a browser, save as a file, then upload below</li>
+              </ol>
+              <p className="text-xs text-gray-400">
+                Or in the Outlook desktop app: File → Open &amp; Export → Import/Export → Export to a file → iCalendar
+              </p>
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="rounded-lg border border-dashed border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:border-blue-400 hover:text-blue-600 w-full"
+              >
+                📂 Upload .ics file
+              </button>
+            </div>
+          )}
+
+          {/* Apple tab */}
+          {activeTab === "apple" && (
+            <div className="mt-4 space-y-3">
+              <ol className="ml-4 list-decimal space-y-2 text-sm text-gray-600">
+                <li>Open the <strong>Calendar</strong> app on your Mac</li>
+                <li>In the left sidebar, right-click (or Ctrl-click) the calendar you want</li>
+                <li>Click <strong>Export…</strong></li>
+                <li>Save the <strong>.ics</strong> file and upload it below</li>
+              </ol>
+              <p className="text-xs text-gray-400">
+                On iPhone/iPad: use iCloud.com → Calendar → export, or share via AirDrop to your Mac first.
+              </p>
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="rounded-lg border border-dashed border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:border-blue-400 hover:text-blue-600 w-full"
+              >
+                📂 Upload .ics file
+              </button>
+            </div>
+          )}
+
+          {/* Shared hidden file input for .ics upload */}
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".ics,text/calendar"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f);
+              e.target.value = "";
+            }}
+          />
+          {icsError && (
+            <div className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{icsError}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── main page ─────────────────────────────────────────────────────────────────
+
 export default function AvailabilityPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
-  const supabase = createClient();
+  const searchParams = useSearchParams();
+  const supabase = useMemo(() => createClient(), []);
 
   const [token, setToken] = useState<string | null>(null);
+  const [providerToken, setProviderToken] = useState<string | null>(null);
+  const [room, setRoom] = useState<Room | null>(null);
   const [busyDates, setBusyDates] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
   const [windows, setWindows] = useState<FreeWindow[] | null>(null);
-
-  // Calendar state
-  const today = new Date();
-  const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth());
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
       if (!data.session) { router.replace("/"); return; }
       const t = data.session.access_token;
+      const pt = data.session.provider_token ?? null;
       setToken(t);
-      // Load submission status
-      const s = await getSubmissionStatus(t, slug).catch(() => null);
-      if (s) {
-        setStatus(s);
-        if (s.all_submitted) {
-          const w = await getFreeWindows(t, slug).catch(() => null);
-          setWindows(w);
+      setProviderToken(pt);
+
+      // Restore any busy dates saved before the OAuth redirect
+      const saved = localStorage.getItem(`busy_${slug}`);
+      if (saved) {
+        try {
+          const dates: string[] = JSON.parse(saved);
+          setBusyDates(new Set(dates));
+        } catch { /* ignore */ }
+        localStorage.removeItem(`busy_${slug}`);
+      }
+
+      try {
+        const [r, s] = await Promise.all([
+          getRoom(t, slug),
+          getSubmissionStatus(t, slug).catch(() => null),
+        ]);
+        setRoom(r);
+        if (s) {
+          setStatus(s);
+          if (s.all_submitted) {
+            const w = await getFreeWindows(t, slug).catch(() => null);
+            setWindows(w);
+          }
         }
+      } catch {
+        router.replace("/dashboard");
+      } finally {
+        setLoading(false);
       }
     });
-  }, [slug]);
+  }, [slug, supabase, router]);
 
-  function toggleDate(dateStr: string) {
-    if (submitted) return;
+  // If we've just returned from Google OAuth (sync_google=1), auto-trigger sync
+  const autoSyncDone = useRef(false);
+  useEffect(() => {
+    if (autoSyncDone.current) return;
+    if (searchParams.get("sync_google") !== "1") return;
+    if (!providerToken || loading) return;
+    autoSyncDone.current = true;
+    // Clean the URL param without reloading
+    const url = new URL(window.location.href);
+    url.searchParams.delete("sync_google");
+    window.history.replaceState({}, "", url.toString());
+    // The ImportPanel's syncGoogle is internal — trigger it via a flag
+    setAutoSync(true);
+  }, [searchParams, providerToken, loading]);
+
+  const [autoSync, setAutoSync] = useState(false);
+
+  // Derive the month range from the room's rough_window
+  const { windowStart, windowEnd, months } = useMemo(() => {
+    const { start, end } = parseRoughWindow(room?.rough_window ?? null);
+    return {
+      windowStart: start,
+      windowEnd: end,
+      months: getMonthsInRange(start, end),
+    };
+  }, [room]);
+
+  const toggleDate = useCallback(
+    (iso: string) => {
+      if (submitted) return;
+      setBusyDates((prev) => {
+        const next = new Set(prev);
+        if (next.has(iso)) next.delete(iso);
+        else next.add(iso);
+        return next;
+      });
+    },
+    [submitted]
+  );
+
+  function handleImport(dates: string[]) {
     setBusyDates((prev) => {
       const next = new Set(prev);
-      if (next.has(dateStr)) next.delete(dateStr);
-      else next.add(dateStr);
+      dates.forEach((d) => next.add(d));
       return next;
     });
   }
@@ -82,7 +509,7 @@ export default function AvailabilityPage() {
       const blocks = Array.from(busyDates).map((d) => ({
         block_date: d,
         is_busy: true,
-        source: "manual",
+        source: "manual" as const,
       }));
       await submitAvailability(token, slug, blocks, true);
       setSubmitted(true);
@@ -99,24 +526,21 @@ export default function AvailabilityPage() {
     }
   }
 
-  function prevMonth() {
-    if (month === 0) { setYear(y => y - 1); setMonth(11); }
-    else setMonth(m => m - 1);
-  }
-  function nextMonth() {
-    if (month === 11) { setYear(y => y + 1); setMonth(0); }
-    else setMonth(m => m + 1);
-  }
-
-  const daysInMonth = getDaysInMonth(year, month);
-  const firstDay = getFirstDayOfWeek(year, month);
-  const monthName = new Date(year, month).toLocaleString("en-GB", { month: "long", year: "numeric" });
+  if (loading) return (
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+    </div>
+  );
 
   return (
     <main className="min-h-screen bg-gray-50">
+      {/* Nav */}
       <nav className="border-b bg-white px-6 py-4">
         <div className="mx-auto flex max-w-3xl items-center justify-between">
-          <button onClick={() => router.push(`/room/${slug}`)} className="text-sm text-gray-500 hover:text-gray-900">
+          <button
+            onClick={() => router.push(`/room/${slug}`)}
+            className="text-sm text-gray-500 hover:text-gray-900"
+          >
             ← Back to room
           </button>
           <span className="font-semibold text-gray-900">Mark your availability</span>
@@ -124,86 +548,106 @@ export default function AvailabilityPage() {
         </div>
       </nav>
 
-      <div className="mx-auto max-w-3xl px-6 py-10 space-y-8">
+      <div className="mx-auto max-w-3xl space-y-6 px-6 py-10">
 
-        {/* Status */}
+        {/* Status banner */}
         {status && (
-          <div className={`rounded-xl p-4 text-sm font-medium ${
-            status.all_submitted ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"
-          }`}>
+          <div
+            className={`rounded-xl p-4 text-sm font-medium ${
+              status.all_submitted
+                ? "bg-green-50 text-green-800"
+                : "bg-amber-50 text-amber-800"
+            }`}
+          >
             {status.all_submitted
-              ? "Everyone has submitted! Free windows are shown below."
-              : `${status.submitted}/${status.total} members have submitted. Waiting for: ${status.members_pending.join(", ")}`}
+              ? "🎉 Everyone has submitted! Free windows are shown below."
+              : `${status.submitted} / ${status.total} members submitted. Still waiting for: ${status.members_pending.join(", ")}`}
           </div>
         )}
 
-        {/* Calendar */}
         {!submitted ? (
-          <div className="rounded-xl border bg-white p-6 shadow-sm">
-            <p className="text-sm text-gray-500 mb-4">
-              Click the dates you are <span className="font-semibold text-red-600">NOT available</span> (busy, working, etc.)
-            </p>
+          <>
+            {/* Import panel */}
+            <ImportPanel
+              onImport={handleImport}
+              windowStart={windowStart}
+              windowEnd={windowEnd}
+              providerToken={providerToken}
+              slug={slug}
+              autoSync={autoSync}
+              onAutoSyncDone={() => setAutoSync(false)}
+              busyDates={busyDates}
+            />
 
-            {/* Month navigation */}
-            <div className="flex items-center justify-between mb-4">
-              <button onClick={prevMonth} className="rounded-lg p-2 hover:bg-gray-100">←</button>
-              <span className="font-semibold text-gray-900">{monthName}</span>
-              <button onClick={nextMonth} className="rounded-lg p-2 hover:bg-gray-100">→</button>
+            {/* Legend + instructions */}
+            <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-white px-5 py-3">
+              <p className="text-sm text-gray-600 flex-1">
+                <strong>Click any date</strong> to mark it as{" "}
+                <span className="font-semibold text-red-600">busy</span>.
+                Click again to unmark. Leave free days blank.
+              </p>
+              <div className="flex items-center gap-4 text-sm">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-5 w-5 rounded bg-red-500 inline-block" />
+                  <span className="text-gray-600">Busy</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-5 w-5 rounded border border-gray-200 inline-block" />
+                  <span className="text-gray-600">Free</span>
+                </span>
+              </div>
             </div>
 
-            {/* Day headers */}
-            <div className="grid grid-cols-7 gap-1 mb-1">
-              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
-                <div key={d} className="text-center text-xs font-medium text-gray-400 py-1">{d}</div>
-              ))}
-            </div>
+            {/* Month grids — all months in the window */}
+            {months.length === 0 ? (
+              <div className="rounded-xl border bg-white p-8 text-center text-gray-500">
+                No time window set for this room yet.{" "}
+                <button
+                  onClick={() => router.push(`/room/${slug}`)}
+                  className="text-blue-600 hover:underline"
+                >
+                  Go back and set one.
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {months.map(({ year, month }) => (
+                  <MonthGrid
+                    key={`${year}-${month}`}
+                    year={year}
+                    month={month}
+                    busyDates={busyDates}
+                    onToggle={toggleDate}
+                    windowStart={windowStart}
+                    windowEnd={windowEnd}
+                    disabled={submitted}
+                  />
+                ))}
+              </div>
+            )}
 
-            {/* Days */}
-            <div className="grid grid-cols-7 gap-1">
-              {Array.from({ length: firstDay }).map((_, i) => (
-                <div key={`blank-${i}`} />
-              ))}
-              {Array.from({ length: daysInMonth }).map((_, i) => {
-                const day = i + 1;
-                const dateStr = toISO(year, month, day);
-                const isBusy = busyDates.has(dateStr);
-                const isPast = new Date(dateStr) < today;
-                return (
-                  <button
-                    key={dateStr}
-                    onClick={() => !isPast && toggleDate(dateStr)}
-                    disabled={isPast}
-                    className={`aspect-square rounded-lg text-sm font-medium transition-colors
-                      ${isBusy ? "bg-red-500 text-white" : "hover:bg-gray-100 text-gray-700"}
-                      ${isPast ? "opacity-30 cursor-not-allowed" : "cursor-pointer"}
-                    `}
-                  >
-                    {day}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-6 flex items-center justify-between">
-              <p className="text-sm text-gray-500">
+            {/* Sticky submit bar */}
+            <div className="sticky bottom-6 flex items-center justify-between rounded-2xl border bg-white px-6 py-4 shadow-lg">
+              <p className="text-sm text-gray-600">
                 {busyDates.size === 0
-                  ? "No busy dates marked — you're free for everything!"
+                  ? "No busy days marked — you're free the whole window!"
                   : `${busyDates.size} busy day${busyDates.size !== 1 ? "s" : ""} marked`}
               </p>
               <button
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-xl bg-blue-600 px-7 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {submitting ? "Submitting…" : "Submit"}
+                {submitting ? "Submitting…" : "Submit availability →"}
               </button>
             </div>
-          </div>
+          </>
         ) : (
+          /* Post-submit state */
           <div className="rounded-xl border bg-green-50 p-8 text-center shadow-sm">
-            <div className="text-4xl mb-3">✅</div>
+            <div className="mb-3 text-4xl">✅</div>
             <h2 className="text-lg font-bold text-green-900">Availability submitted!</h2>
-            <p className="text-green-700 mt-2">
+            <p className="mt-2 text-green-700">
               {status?.all_submitted
                 ? "Everyone is in — check the free windows below."
                 : `Waiting for ${status?.members_pending?.join(", ")} to submit.`}
@@ -211,34 +655,49 @@ export default function AvailabilityPage() {
           </div>
         )}
 
-        {/* Free windows */}
+        {/* Free windows — shown once everyone submits */}
         {windows && windows.length > 0 && (
           <div className="rounded-xl border bg-white p-6 shadow-sm">
-            <h2 className="font-semibold text-gray-900 mb-4">Free windows for everyone</h2>
+            <h2 className="mb-4 font-semibold text-gray-900">🗓 Free windows for everyone</h2>
             <div className="space-y-3">
               {windows.map((w, i) => (
                 <div
                   key={i}
-                  className={`flex items-center justify-between rounded-lg px-4 py-3 ${
-                    i === 0 ? "bg-green-50 border border-green-200" : "bg-gray-50"
+                  className={`flex items-center justify-between rounded-xl px-5 py-3 ${
+                    i === 0
+                      ? "bg-green-50 border border-green-200"
+                      : "bg-gray-50 border border-gray-100"
                   }`}
                 >
                   <div>
-                    <span className="font-semibold text-gray-900">
-                      {new Date(w.start_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                    <p className="font-semibold text-gray-900">
+                      {new Date(w.start_date).toLocaleDateString("en-GB", {
+                        day: "numeric", month: "short",
+                      })}
                       {" – "}
-                      {new Date(w.end_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                    </span>
-                    <span className="ml-2 text-sm text-gray-500">{w.days} days</span>
+                      {new Date(w.end_date).toLocaleDateString("en-GB", {
+                        day: "numeric", month: "short", year: "numeric",
+                      })}
+                    </p>
+                    <p className="text-sm text-gray-500">{w.days} days free</p>
                   </div>
                   {i === 0 && (
                     <span className="rounded-full bg-green-600 px-3 py-1 text-xs font-bold text-white">
-                      Best
+                      Best window
                     </span>
                   )}
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {windows && windows.length === 0 && status?.all_submitted && (
+          <div className="rounded-xl border bg-red-50 p-6 text-center">
+            <p className="font-semibold text-red-800">No common free windows found 😬</p>
+            <p className="mt-1 text-sm text-red-600">
+              Everyone is too busy in this period. Consider expanding your time window.
+            </p>
           </div>
         )}
       </div>

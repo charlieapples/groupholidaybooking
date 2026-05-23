@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import secrets
 import string
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -34,6 +34,31 @@ class RoomResponse(BaseModel):
     rough_window: Optional[str] = None
     member_count: int = 0
     is_admin: bool = False
+    # Optional room settings
+    search_start: Optional[str] = None
+    search_end: Optional[str] = None
+    agreed_start: Optional[str] = None
+    agreed_end: Optional[str] = None
+    min_nights: Optional[int] = None
+    max_nights: Optional[int] = None
+    budget_gbp: Optional[float] = None
+    destination_iata: Optional[str] = None
+
+
+STEP_ORDER = ["availability", "duration", "budget", "destination", "flights", "booking", "done"]
+
+
+class UpdateRoomRequest(BaseModel):
+    name: Optional[str] = None
+    rough_window: Optional[str] = None
+    search_start: Optional[str] = None   # ISO date
+    search_end: Optional[str] = None
+    agreed_start: Optional[str] = None
+    agreed_end: Optional[str] = None
+    min_nights: Optional[int] = None
+    max_nights: Optional[int] = None
+    budget_gbp: Optional[float] = None
+    destination_iata: Optional[str] = None
 
 
 class MemberResponse(BaseModel):
@@ -101,10 +126,71 @@ def _room_with_member_count(db, room: dict, user_id: str) -> RoomResponse:
         rough_window=room.get("rough_window"),
         member_count=member_count,
         is_admin=is_admin,
+        search_start=room.get("search_start"),
+        search_end=room.get("search_end"),
+        agreed_start=room.get("agreed_start"),
+        agreed_end=room.get("agreed_end"),
+        min_nights=room.get("min_nights"),
+        max_nights=room.get("max_nights"),
+        budget_gbp=room.get("budget_gbp"),
+        destination_iata=room.get("destination_iata"),
     )
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+
+@router.get("", response_model=list[RoomResponse])
+def list_rooms(user: UserInfo = Depends(current_user)):
+    """List all rooms the authenticated user belongs to, newest first."""
+    db = get_client()
+
+    memberships = (
+        db.table("room_members")
+        .select("room_id, is_admin")
+        .eq("user_id", user.id)
+        .execute()
+    )
+    if not memberships.data:
+        return []
+
+    admin_map = {m["room_id"]: m["is_admin"] for m in memberships.data}
+    room_ids = list(admin_map.keys())
+
+    rooms_res = (
+        db.table("rooms")
+        .select("*")
+        .in_("id", room_ids)
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    result = []
+    for room in rooms_res.data:
+        count_res = (
+            db.table("room_members")
+            .select("*", count="exact")
+            .eq("room_id", room["id"])
+            .execute()
+        )
+        result.append(RoomResponse(
+            id=room["id"],
+            slug=room["slug"],
+            name=room["name"],
+            current_step=room["current_step"],
+            rough_window=room.get("rough_window"),
+            member_count=count_res.count or 0,
+            is_admin=admin_map.get(room["id"], False),
+            search_start=room.get("search_start"),
+            search_end=room.get("search_end"),
+            agreed_start=room.get("agreed_start"),
+            agreed_end=room.get("agreed_end"),
+            min_nights=room.get("min_nights"),
+            max_nights=room.get("max_nights"),
+            budget_gbp=room.get("budget_gbp"),
+            destination_iata=room.get("destination_iata"),
+        ))
+    return result
 
 
 @router.post("", response_model=RoomResponse, status_code=status.HTTP_201_CREATED)
@@ -123,6 +209,17 @@ def create_room(
             break
     else:
         raise HTTPException(500, "Could not generate a unique room slug. Try again.")
+
+    # Ensure the user has a profile row (the trigger may have missed them
+    # if they signed up before the migration ran).
+    db.table("profiles").upsert(
+        {
+            "id": user.id,
+            "email": user.email,
+            "display_name": user.display_name or (user.email or "").split("@")[0],
+        },
+        on_conflict="id",
+    ).execute()
 
     # Create room
     room_res = (
@@ -157,6 +254,10 @@ def create_room(
         rough_window=room.get("rough_window"),
         member_count=1,
         is_admin=True,
+        search_start=None, search_end=None,
+        agreed_start=None, agreed_end=None,
+        min_nights=None, max_nights=None,
+        budget_gbp=None, destination_iata=None,
     )
 
 
@@ -240,3 +341,50 @@ def list_members(slug: str, user: UserInfo = Depends(current_user)):
         )
         for m in members.data
     ]
+
+
+@router.patch("/{slug}", response_model=RoomResponse)
+def update_room(
+    slug: str,
+    body: UpdateRoomRequest,
+    user: UserInfo = Depends(current_user),
+):
+    """Update room settings. Admin only."""
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    membership = _assert_member(db, room["id"], user.id)
+    if not membership.get("is_admin"):
+        raise HTTPException(403, "Only room admins can update room settings.")
+
+    updates: dict[str, Any] = {
+        k: v for k, v in body.model_dump().items() if v is not None
+    }
+    if not updates:
+        return _room_with_member_count(db, room, user.id)
+
+    updated = db.table("rooms").update(updates).eq("id", room["id"]).execute()
+    return _room_with_member_count(db, updated.data[0], user.id)
+
+
+@router.post("/{slug}/advance", response_model=RoomResponse)
+def advance_step(slug: str, user: UserInfo = Depends(current_user)):
+    """Advance the room to the next planning step. Admin only."""
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    membership = _assert_member(db, room["id"], user.id)
+    if not membership.get("is_admin"):
+        raise HTTPException(403, "Only room admins can advance the step.")
+
+    current = room.get("current_step", "availability")
+    try:
+        next_step = STEP_ORDER[STEP_ORDER.index(current) + 1]
+    except (ValueError, IndexError):
+        raise HTTPException(400, "Room is already at the final step.")
+
+    updated = (
+        db.table("rooms")
+        .update({"current_step": next_step})
+        .eq("id", room["id"])
+        .execute()
+    )
+    return _room_with_member_count(db, updated.data[0], user.id)

@@ -39,6 +39,15 @@ export interface Room {
   rough_window: string | null;
   member_count: number;
   is_admin: boolean;
+  // Optional room settings (populated after later steps)
+  search_start?: string | null;
+  search_end?: string | null;
+  agreed_start?: string | null;
+  agreed_end?: string | null;
+  min_nights?: number | null;
+  max_nights?: number | null;
+  budget_gbp?: number | null;
+  destination_iata?: string | null;
 }
 
 export function createRoom(
@@ -49,6 +58,10 @@ export function createRoom(
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export function listRooms(token: string) {
+  return apiFetch<Room[]>("/rooms", token);
 }
 
 export function getRoom(token: string, slug: string) {
@@ -62,6 +75,32 @@ export function joinRoom(token: string, slug: string, home_postcode?: string) {
 
 export function listMembers(token: string, slug: string) {
   return apiFetch<Member[]>(`/rooms/${slug}/members`, token);
+}
+
+export function updateRoom(
+  token: string,
+  slug: string,
+  body: {
+    name?: string;
+    rough_window?: string;
+    search_start?: string;
+    search_end?: string;
+    agreed_start?: string;
+    agreed_end?: string;
+    min_nights?: number;
+    max_nights?: number;
+    budget_gbp?: number;
+    destination_iata?: string;
+  }
+) {
+  return apiFetch<Room>(`/rooms/${slug}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function advanceStep(token: string, slug: string) {
+  return apiFetch<Room>(`/rooms/${slug}/advance`, token, { method: "POST" });
 }
 
 export interface Member {
@@ -125,9 +164,16 @@ export function listDestinations(token: string, slug: string) {
   return apiFetch<DestinationCandidate[]>(`/rooms/${slug}/destinations`, token);
 }
 
+export function suggestDestinations(token: string, slug: string, top_n = 5) {
+  return apiFetch<DestinationCandidate[]>(
+    `/rooms/${slug}/destinations/suggest?top_n=${top_n}`,
+    token
+  );
+}
+
 export function proposeDestination(token: string, slug: string, iata_code: string) {
   return apiFetch<DestinationCandidate>(
-    `/rooms/${slug}/destinations/propose?iata_code=${iata_code}`,
+    `/rooms/${slug}/destinations/propose?iata_code=${encodeURIComponent(iata_code.toUpperCase())}`,
     token,
     { method: "POST" }
   );
@@ -146,6 +192,53 @@ export function voteDestination(
   );
 }
 
+export function submitDestinationPreferences(
+  token: string,
+  slug: string,
+  body: {
+    climate?: string;
+    setting?: string;
+    activity_level?: string;
+    must_have?: string[];
+    avoid?: string[];
+    max_total_per_person_gbp?: number;
+  }
+) {
+  return apiFetch(`/rooms/${slug}/destinations/preferences`, token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export interface DurationBudgetAggregate {
+  members_total: number;
+  responses: {
+    user_id: string;
+    display_name: string | null;
+    min_nights: number | null;
+    max_nights: number | null;
+    budget_gbp: number | null;
+  }[];
+}
+
+export function submitDurationBudget(
+  token: string,
+  slug: string,
+  body: { min_nights?: number; max_nights?: number; budget_gbp?: number }
+) {
+  return apiFetch(`/rooms/${slug}/destinations/duration-budget`, token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getDurationBudget(token: string, slug: string) {
+  return apiFetch<DurationBudgetAggregate>(
+    `/rooms/${slug}/destinations/duration-budget`,
+    token
+  );
+}
+
 // ── Flights ───────────────────────────────────────────────────────────────────
 
 export interface FlightResult {
@@ -153,11 +246,15 @@ export interface FlightResult {
   destination_name: string;
   is_fully_viable: boolean;
   viable_count: number;
+  total_group_money_cost: number;
   total_group_cost: number;
   avg_individual_cost: number;
   max_individual_cost: number;
+  fairness_ratio: number;
   shared_out_date: string | null;
   shared_return_date: string | null;
+  date_spread_days: number;
+  note: string;
   people: PersonResult[];
 }
 
@@ -168,8 +265,13 @@ export interface PersonResult {
   outbound_cost_gbp: number;
   inbound_cost_gbp: number;
   ground_cost_gbp: number;
+  ground_hours: number;
+  outbound_date: string | null;
+  inbound_date: string | null;
   total_money_gbp: number;
+  total_inc_time_gbp: number;
   booking_link: string | null;
+  note: string;
 }
 
 export function runFlightOptimiser(token: string, slug: string) {

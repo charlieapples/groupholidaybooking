@@ -1,9 +1,21 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { getRoom, listMembers, type Room, type Member } from "@/lib/api";
-import { useEffect, useState } from "react";
+import {
+  getRoom,
+  listMembers,
+  getSubmissionStatus,
+  advanceStep,
+  type Room,
+  type Member,
+  type SubmissionStatus,
+} from "@/lib/api";
+import dynamic from "next/dynamic";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+
+// Lazy-load the chat widget so it doesn't block initial render
+const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
 const STEPS = [
   { key: "availability", label: "Availability", icon: "📅" },
@@ -14,15 +26,26 @@ const STEPS = [
   { key: "booking", label: "Booking", icon: "🎫" },
 ];
 
+// Maps step key → the page to navigate to when user clicks the CTA
+const STEP_ROUTES: Record<string, string> = {
+  availability: "availability",
+  duration: "preferences",
+  budget: "preferences",
+  destination: "destinations",
+  flights: "flights",
+};
+
 export default function RoomPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [token, setToken] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  const [submissionStatus, setSubmissionStatus] = useState<SubmissionStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [advancing, setAdvancing] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -36,22 +59,38 @@ export default function RoomPage() {
         ]);
         setRoom(r);
         setMembers(m);
+
+        // Load availability submission status if on that step
+        if (r.current_step === "availability") {
+          const status = await getSubmissionStatus(t, slug).catch(() => null);
+          setSubmissionStatus(status);
+        }
       } catch {
         router.replace("/dashboard");
       } finally {
         setLoading(false);
       }
     });
-  }, [slug]);
+  }, [slug, router, supabase]);
 
-  function currentStepIndex() {
-    return STEPS.findIndex((s) => s.key === room?.current_step) ?? 0;
+  async function handleAdvanceStep() {
+    if (!token || !room?.is_admin) return;
+    setAdvancing(true);
+    try {
+      const updated = await advanceStep(token, slug);
+      setRoom(updated);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Could not advance step");
+    } finally {
+      setAdvancing(false);
+    }
   }
 
   function shareLink() {
     const url = `${window.location.origin}/room/${slug}/join`;
-    navigator.clipboard.writeText(url);
-    alert("Invite link copied to clipboard!");
+    navigator.clipboard.writeText(url).then(() => {
+      alert("Invite link copied to clipboard!");
+    });
   }
 
   if (loading) return (
@@ -62,7 +101,15 @@ export default function RoomPage() {
 
   if (!room) return null;
 
-  const stepIdx = currentStepIndex();
+  const stepIdx = STEPS.findIndex((s) => s.key === room.current_step);
+  const activeStep = STEPS[stepIdx];
+  const stepRoute = STEP_ROUTES[room.current_step];
+  const canAdvance = room.is_admin && room.current_step !== "done";
+
+  // Availability-step copy
+  const availabilityReady =
+    submissionStatus?.all_submitted ||
+    (submissionStatus && submissionStatus.submitted === submissionStatus.total);
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -112,67 +159,180 @@ export default function RoomPage() {
           {/* Main content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Current step card */}
-            <div className="rounded-xl border bg-white p-8 shadow-sm text-center">
-              <div className="text-5xl mb-4">{STEPS[stepIdx]?.icon}</div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">
-                Step {stepIdx + 1}: {STEPS[stepIdx]?.label}
-              </h2>
+            <div className="rounded-xl border bg-white p-8 shadow-sm">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <span className="text-4xl">{activeStep?.icon}</span>
+                  <h2 className="mt-2 text-xl font-bold text-gray-900">
+                    Step {stepIdx + 1}: {activeStep?.label}
+                  </h2>
+                </div>
+              </div>
 
+              {/* Availability step */}
               {room.current_step === "availability" && (
                 <div className="space-y-4">
+                  {submissionStatus && (
+                    <div className={`rounded-lg px-4 py-3 text-sm ${
+                      availabilityReady ? "bg-green-50 text-green-800" : "bg-blue-50 text-blue-800"
+                    }`}>
+                      {availabilityReady
+                        ? "✅ All members have submitted! Admin can now view the results and advance."
+                        : `⏳ ${submissionStatus.submitted} of ${submissionStatus.total} members have submitted.`}
+                      {!availabilityReady && submissionStatus.members_pending.length > 0 && (
+                        <p className="mt-1 text-xs opacity-75">
+                          Waiting for: {submissionStatus.members_pending.join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <p className="text-gray-600">
-                    Everyone needs to mark their available dates.
-                    Results stay hidden until all {room.member_count} members have submitted.
+                    Everyone needs to mark their busy dates. Results are hidden until all {room.member_count} members have submitted.
                   </p>
                   <button
                     onClick={() => router.push(`/room/${slug}/availability`)}
                     className="rounded-xl bg-blue-600 px-8 py-3 font-semibold text-white hover:bg-blue-700"
                   >
-                    Submit my availability
+                    Submit my availability →
+                  </button>
+                  {canAdvance && availabilityReady && (
+                    <div className="pt-2">
+                      <button
+                        onClick={handleAdvanceStep}
+                        disabled={advancing}
+                        className="rounded-xl border-2 border-blue-600 px-6 py-2.5 font-semibold text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+                      >
+                        {advancing ? "Advancing…" : "Admin: advance to duration step →"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Duration step */}
+              {room.current_step === "duration" && (
+                <div className="space-y-4">
+                  <p className="text-gray-600">
+                    Everyone submits their preferred trip length. The admin will agree on final min/max nights.
+                    {room.min_nights && ` (Current: ${room.min_nights}–${room.max_nights} nights)`}
+                  </p>
+                  <button
+                    onClick={() => router.push(`/room/${slug}/preferences`)}
+                    className="rounded-xl bg-blue-600 px-8 py-3 font-semibold text-white hover:bg-blue-700"
+                  >
+                    Set trip length →
                   </button>
                 </div>
               )}
 
+              {/* Budget step */}
+              {room.current_step === "budget" && (
+                <div className="space-y-4">
+                  <p className="text-gray-600">
+                    Tell us your maximum budget per person including flights and travel.
+                    {room.budget_gbp && ` (Current cap: £${room.budget_gbp.toLocaleString()})`}
+                  </p>
+                  <button
+                    onClick={() => router.push(`/room/${slug}/preferences`)}
+                    className="rounded-xl bg-blue-600 px-8 py-3 font-semibold text-white hover:bg-blue-700"
+                  >
+                    Set budget →
+                  </button>
+                </div>
+              )}
+
+              {/* Destination step */}
               {room.current_step === "destination" && (
                 <div className="space-y-4">
-                  <p className="text-gray-600">Time to pick where you're going.</p>
+                  <p className="text-gray-600">
+                    Answer a quick questionnaire and our algorithm will suggest destinations. You can also propose and vote on any destination.
+                  </p>
                   <button
                     onClick={() => router.push(`/room/${slug}/destinations`)}
                     className="rounded-xl bg-blue-600 px-8 py-3 font-semibold text-white hover:bg-blue-700"
                   >
-                    Vote on destinations
+                    Vote on destinations →
                   </button>
                 </div>
               )}
 
+              {/* Flights step */}
               {room.current_step === "flights" && (
                 <div className="space-y-4">
                   <p className="text-gray-600">
-                    Let's find the cheapest flights from everyone's nearest airport.
+                    Find the cheapest combination of flights from everyone&apos;s nearest airport to the shortlisted destinations.
                   </p>
                   <button
                     onClick={() => router.push(`/room/${slug}/flights`)}
                     className="rounded-xl bg-blue-600 px-8 py-3 font-semibold text-white hover:bg-blue-700"
                   >
-                    Find flights
+                    Find flights →
                   </button>
                 </div>
               )}
 
-              {!["availability", "destination", "flights"].includes(room.current_step) && (
-                <p className="text-gray-500">
-                  This step is under construction. Coming soon!
-                </p>
+              {/* Booking step */}
+              {room.current_step === "booking" && (
+                <div className="space-y-4">
+                  <p className="text-gray-600">
+                    Time to book! Use the flight links from the previous step and coordinate accommodation together.
+                  </p>
+                  {canAdvance && (
+                    <button
+                      onClick={handleAdvanceStep}
+                      disabled={advancing}
+                      className="rounded-xl border-2 border-green-600 px-6 py-2.5 font-semibold text-green-600 hover:bg-green-50 disabled:opacity-50"
+                    >
+                      {advancing ? "Marking done…" : "✅ Mark holiday as booked"}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Done! */}
+              {room.current_step === "done" && (
+                <div className="text-center py-4">
+                  <div className="text-5xl mb-3">🎉</div>
+                  <h3 className="text-lg font-bold text-green-700">Holiday booked!</h3>
+                  <p className="text-gray-600 mt-1">Enjoy your trip! 🌴</p>
+                </div>
+              )}
+
+              {/* Admin: advance button for non-availability steps */}
+              {canAdvance && !["availability", "booking", "done"].includes(room.current_step) && stepRoute && (
+                <div className="mt-4 pt-4 border-t">
+                  <p className="text-xs text-gray-500 mb-2">Admin controls</p>
+                  <button
+                    onClick={handleAdvanceStep}
+                    disabled={advancing}
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {advancing ? "Advancing…" : `Skip to next step →`}
+                  </button>
+                </div>
               )}
             </div>
 
             {/* Room info */}
-            {room.rough_window && (
-              <div className="rounded-xl border bg-white p-6 shadow-sm">
-                <h3 className="text-sm font-medium text-gray-500 mb-1">Time window</h3>
-                <p className="font-semibold text-gray-900">{room.rough_window}</p>
-              </div>
-            )}
+            <div className="grid grid-cols-2 gap-4">
+              {room.rough_window && (
+                <div className="rounded-xl border bg-white p-4 shadow-sm">
+                  <h3 className="text-xs font-medium text-gray-500 mb-1">Time window</h3>
+                  <p className="font-semibold text-gray-900 text-sm">{room.rough_window}</p>
+                </div>
+              )}
+              {(room.min_nights || room.budget_gbp) && (
+                <div className="rounded-xl border bg-white p-4 shadow-sm">
+                  <h3 className="text-xs font-medium text-gray-500 mb-1">Agreed preferences</h3>
+                  {room.min_nights && (
+                    <p className="text-sm font-semibold text-gray-900">{room.min_nights}–{room.max_nights} nights</p>
+                  )}
+                  {room.budget_gbp && (
+                    <p className="text-sm text-gray-600">£{room.budget_gbp.toLocaleString()} budget pp</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Sidebar — members */}
@@ -207,7 +367,7 @@ export default function RoomPage() {
             <div className="rounded-xl border bg-blue-50 p-6">
               <h3 className="font-semibold text-blue-900 mb-2">Invite friends</h3>
               <p className="text-sm text-blue-700 mb-3">
-                Share the room code: <span className="font-mono font-bold">{slug}</span>
+                Room code: <span className="font-mono font-bold">{slug}</span>
               </p>
               <button
                 onClick={shareLink}
@@ -216,9 +376,31 @@ export default function RoomPage() {
                 Copy invite link
               </button>
             </div>
+
+            {/* Quick links */}
+            <div className="rounded-xl border bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick links</h3>
+              <div className="space-y-1">
+                <button onClick={() => router.push(`/room/${slug}/availability`)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                  📅 Availability
+                </button>
+                <button onClick={() => router.push(`/room/${slug}/preferences`)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                  🗓️ Duration &amp; budget
+                </button>
+                <button onClick={() => router.push(`/room/${slug}/destinations`)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                  🗺️ Destinations
+                </button>
+                <button onClick={() => router.push(`/room/${slug}/flights`)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                  ✈️ Flights
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Chat widget — only rendered when token available */}
+      {token && <ChatWidget token={token} roomSlug={slug} />}
     </main>
   );
 }

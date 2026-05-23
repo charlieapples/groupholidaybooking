@@ -15,7 +15,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ..core.destinations import label as label_dest
+from ..core.destinations import DEST_NAMES, POPULAR_LABELS, label as label_dest, score_destination
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user
 from .rooms import _assert_member, _get_room_by_slug
@@ -24,6 +24,13 @@ router = APIRouter()
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
+
+
+class DurationBudgetPreferences(BaseModel):
+    """Step 2 + 3: each member's preferred trip duration and budget."""
+    min_nights: Optional[int] = None
+    max_nights: Optional[int] = None
+    budget_gbp: Optional[float] = None
 
 
 class DestinationPreferences(BaseModel):
@@ -69,6 +76,92 @@ def _candidate_to_dto(c: dict, my_user_id: str, votes: list[dict]) -> Destinatio
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+
+@router.post("/duration-budget")
+def submit_duration_budget(
+    slug: str,
+    body: DurationBudgetPreferences,
+    user: UserInfo = Depends(current_user),
+):
+    """Step 2 + 3: Save this member's preferred duration and budget.
+
+    Also returns aggregated stats across all members so the UI can show
+    the group median min/max nights and average budget.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+
+    update: dict = {}
+    if body.min_nights is not None:
+        update["pref_min_nights"] = body.min_nights
+    if body.max_nights is not None:
+        update["pref_max_nights"] = body.max_nights
+    if body.budget_gbp is not None:
+        update["pref_budget_gbp"] = body.budget_gbp
+
+    if update:
+        update["room_id"] = room["id"]
+        update["user_id"] = user.id
+        db.table("trip_preferences").upsert(update, on_conflict="room_id,user_id").execute()
+
+    # Aggregate across members
+    all_prefs = (
+        db.table("trip_preferences")
+        .select("pref_min_nights, pref_max_nights, pref_budget_gbp")
+        .eq("room_id", room["id"])
+        .execute()
+    )
+    min_nights_vals = [r["pref_min_nights"] for r in all_prefs.data if r.get("pref_min_nights")]
+    max_nights_vals = [r["pref_max_nights"] for r in all_prefs.data if r.get("pref_max_nights")]
+    budget_vals = [r["pref_budget_gbp"] for r in all_prefs.data if r.get("pref_budget_gbp")]
+
+    return {
+        "ok": True,
+        "aggregate": {
+            "median_min_nights": sorted(min_nights_vals)[len(min_nights_vals) // 2] if min_nights_vals else None,
+            "median_max_nights": sorted(max_nights_vals)[len(max_nights_vals) // 2] if max_nights_vals else None,
+            "avg_budget_gbp": round(sum(budget_vals) / len(budget_vals), 0) if budget_vals else None,
+            "min_budget_gbp": min(budget_vals) if budget_vals else None,
+            "responses": len(all_prefs.data),
+        },
+    }
+
+
+@router.get("/duration-budget")
+def get_duration_budget(slug: str, user: UserInfo = Depends(current_user)):
+    """Return all members' duration + budget preferences for this room."""
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+
+    prefs = (
+        db.table("trip_preferences")
+        .select("user_id, pref_min_nights, pref_max_nights, pref_budget_gbp, profiles(display_name)")
+        .eq("room_id", room["id"])
+        .execute()
+    )
+
+    members_count = (
+        db.table("room_members")
+        .select("*", count="exact")
+        .eq("room_id", room["id"])
+        .execute()
+    ).count or 0
+
+    rows = []
+    for r in prefs.data:
+        if r.get("pref_min_nights") or r.get("pref_max_nights") or r.get("pref_budget_gbp"):
+            rows.append({
+                "user_id": r["user_id"],
+                "display_name": (r.get("profiles") or {}).get("display_name"),
+                "min_nights": r.get("pref_min_nights"),
+                "max_nights": r.get("pref_max_nights"),
+                "budget_gbp": r.get("pref_budget_gbp"),
+            })
+
+    return {"members_total": members_count, "responses": rows}
 
 
 @router.post("/preferences")
@@ -204,6 +297,91 @@ def vote(
         on_conflict="candidate_id,user_id",
     ).execute()
     return {"ok": True, "vote": vote_value}
+
+
+@router.get("/suggest", response_model=list[DestinationCandidate])
+def suggest_destinations(
+    slug: str,
+    top_n: int = 5,
+    user: UserInfo = Depends(current_user),
+):
+    """Score all destinations against aggregated member preferences and add
+    the top results as algorithm-proposed candidates.
+
+    Reads pref_destination_answers from trip_preferences for all room members.
+    Falls back to returning popular destinations if no preferences submitted yet.
+    Returns the updated candidate list (sorted by vote count, algorithm suggestions last).
+    """
+    import json as _json
+
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+
+    # Load all trip preferences for this room
+    prefs_res = (
+        db.table("trip_preferences")
+        .select("pref_destination_answers")
+        .eq("room_id", room["id"])
+        .execute()
+    )
+
+    prefs_list: list[dict] = []
+    for row in prefs_res.data:
+        raw = row.get("pref_destination_answers")
+        if not raw:
+            continue
+        if isinstance(raw, str):
+            try:
+                prefs_list.append(_json.loads(raw))
+            except Exception:
+                pass
+        elif isinstance(raw, dict):
+            prefs_list.append(raw)
+
+    if not prefs_list:
+        # No preferences submitted yet — suggest popular defaults
+        top = list(POPULAR_LABELS.values())[:top_n]
+    else:
+        # Score every destination against aggregated member answers
+        scored = [
+            (iata, score_destination(iata, prefs_list))
+            for iata in DEST_NAMES
+        ]
+        scored.sort(key=lambda x: -x[1])
+        # Keep only positively-scored destinations
+        top = [iata for iata, s in scored if s > 0][:top_n]
+        # Fall back to popular if scoring returns nothing (very restrictive avoids)
+        if not top:
+            top = list(POPULAR_LABELS.values())[:top_n]
+
+    # Upsert algorithm-suggested candidates (proposed_by = null = algorithm)
+    for iata in top:
+        db.table("destination_candidates").upsert(
+            {"room_id": room["id"], "iata_code": iata},
+            on_conflict="room_id,iata_code",
+        ).execute()
+
+    # Return the full updated candidate list
+    candidates_res = (
+        db.table("destination_candidates")
+        .select("*")
+        .eq("room_id", room["id"])
+        .execute()
+    )
+    votes_res = (
+        db.table("destination_votes")
+        .select("candidate_id, user_id, vote_value")
+        .in_("candidate_id", [c["id"] for c in candidates_res.data] or ["none"])
+        .execute()
+    )
+
+    results = [
+        _candidate_to_dto(c, user.id, votes_res.data)
+        for c in candidates_res.data
+    ]
+    results.sort(key=lambda x: -x.vote_count)
+    return results
 
 
 @router.get("/pick-random")
