@@ -300,17 +300,17 @@ export default function RoomPage() {
               {room.current_step === "booking" && (
                 <div className="space-y-4">
                   <p className="text-gray-600">
-                    Time to book! Use the flight links from the previous step and coordinate accommodation together.
+                    Time to book! Everyone books their own flights and you coordinate accommodation together.
+                    {room.destination_iata && (
+                      <span className="font-semibold"> Destination: {room.destination_iata}</span>
+                    )}
                   </p>
-                  {canAdvance && (
-                    <button
-                      onClick={handleAdvanceStep}
-                      disabled={advancing}
-                      className="rounded-xl border-2 border-green-600 px-6 py-2.5 font-semibold text-green-600 hover:bg-green-50 disabled:opacity-50"
-                    >
-                      {advancing ? "Marking done…" : "✅ Mark holiday as booked"}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => router.push(`/room/${slug}/booking`)}
+                    className="rounded-xl bg-blue-600 px-8 py-3 font-semibold text-white hover:bg-blue-700"
+                  >
+                    Go to booking page
+                  </button>
                 </div>
               )}
 
@@ -454,6 +454,9 @@ export default function RoomPage() {
                 </button>
                 <button onClick={() => router.push(`/room/${slug}/flights`)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
                   ✈️ Flights
+                </button>
+                <button onClick={() => router.push(`/room/${slug}/booking`)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 text-left">
+                  🎫 Booking
                 </button>
               </div>
             </div>

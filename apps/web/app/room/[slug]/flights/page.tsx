@@ -6,6 +6,7 @@ import {
   getFlightResults,
   runFlightOptimiser,
   advanceStep,
+  updateRoom,
   type Room,
   type FlightResult,
 } from "@/lib/api";
@@ -26,7 +27,7 @@ export default function FlightsPage() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [advancing, setAdvancing] = useState(false);
+  const [choosingDest, setChoosingDest] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,15 +62,16 @@ export default function FlightsPage() {
     }
   }
 
-  async function handleAdvance() {
+  async function handleChooseDestination(iata: string) {
     if (!token || !room?.is_admin) return;
-    setAdvancing(true);
+    setChoosingDest(iata);
     try {
+      await updateRoom(token, slug, { destination_iata: iata });
       await advanceStep(token, slug);
       router.push(`/room/${slug}`);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to advance");
-      setAdvancing(false);
+      alert(e instanceof Error ? e.message : "Failed to choose destination");
+      setChoosingDest(null);
     }
   }
 
@@ -178,11 +180,11 @@ export default function FlightsPage() {
                 }`}
               >
                 {/* Summary header */}
-                <button
-                  className="w-full text-left p-5 flex items-center justify-between gap-4"
-                  onClick={() => setExpanded(expanded === r.destination ? null : r.destination)}
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="p-5 flex items-center justify-between gap-4">
+                  <button
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                    onClick={() => setExpanded(expanded === r.destination ? null : r.destination)}
+                  >
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-bold text-gray-900">{r.destination_name}</h3>
@@ -197,19 +199,35 @@ export default function FlightsPage() {
                       </div>
                       {r.shared_out_date && (
                         <p className="text-xs text-gray-500 mt-0.5">
-                          {r.shared_out_date} → {r.shared_return_date}
+                          {r.shared_out_date} to {r.shared_return_date}
                         </p>
                       )}
                     </div>
+                  </button>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-gray-900">
+                        £{Math.round(r.avg_individual_cost).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-gray-500">avg per person</p>
+                    </div>
+                    {room.is_admin && (
+                      <button
+                        onClick={() => handleChooseDestination(r.destination)}
+                        disabled={choosingDest !== null}
+                        className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {choosingDest === r.destination ? "Choosing..." : "Choose this"}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setExpanded(expanded === r.destination ? null : r.destination)}
+                      className="text-gray-400"
+                    >
+                      {expanded === r.destination ? "▲" : "▼"}
+                    </button>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-xl font-bold text-gray-900">
-                      £{Math.round(r.avg_individual_cost).toLocaleString()}
-                    </p>
-                    <p className="text-xs text-gray-500">avg per person</p>
-                  </div>
-                  <span className="text-gray-400">{expanded === r.destination ? "▲" : "▼"}</span>
-                </button>
+                </div>
 
                 {/* Per-person breakdown */}
                 {expanded === r.destination && (
@@ -263,20 +281,18 @@ export default function FlightsPage() {
           </div>
         )}
 
-        {/* Admin advance */}
-        {room.is_admin && results.length > 0 && (
+        {/* Admin: pick destination note */}
+        {room.is_admin && results.length > 0 && !room.destination_iata && (
           <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-6">
-            <h2 className="text-lg font-bold text-blue-900 mb-2">Ready to book?</h2>
-            <p className="text-sm text-blue-700 mb-4">
-              Share the flight links with the group and use the booking step to coordinate.
+            <h2 className="text-lg font-bold text-blue-900 mb-2">Ready to choose?</h2>
+            <p className="text-sm text-blue-700">
+              Click <strong>Choose this</strong> on your preferred destination above to lock it in and move to the booking step.
             </p>
-            <button
-              onClick={handleAdvance}
-              disabled={advancing}
-              className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {advancing ? "Advancing…" : "Move to booking step →"}
-            </button>
+          </div>
+        )}
+        {room.destination_iata && (
+          <div className="rounded-xl border-2 border-green-200 bg-green-50 p-6">
+            <p className="font-semibold text-green-800">Destination locked in: {room.destination_iata}</p>
           </div>
         )}
       </div>
