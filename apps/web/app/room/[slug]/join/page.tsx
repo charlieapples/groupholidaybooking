@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getRoom, joinRoom, type Room } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { normalisePostcode } from "@/lib/postcode";
 
 export default function JoinRoomPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -43,10 +44,19 @@ export default function JoinRoomPage() {
 
   async function handleJoin() {
     if (!token) return;
+    let normalised: string | undefined;
+    if (postcode.trim()) {
+      const ok = normalisePostcode(postcode);
+      if (!ok) {
+        setError("That doesn't look like a UK postcode (e.g. M1 1AE). Leave it blank if you'd rather set it later.");
+        return;
+      }
+      normalised = ok;
+    }
     setJoining(true);
     setError(null);
     try {
-      await joinRoom(token, slug, postcode || undefined);
+      await joinRoom(token, slug, normalised);
       router.push(`/room/${slug}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Could not join room. Check the room code and try again.");

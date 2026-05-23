@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
 import { DashboardSkeleton } from "@/components/Skeleton";
+import { normalisePostcode } from "@/lib/postcode";
 
 export default function Dashboard() {
   // Stable client — don't recreate on every render
@@ -77,12 +78,22 @@ export default function Dashboard() {
 
   async function handleCreateRoom() {
     if (!token || !newName.trim()) return;
+    // Validate postcode if one was entered (it's optional)
+    let normalisedPostcode: string | undefined;
+    if (newPostcode.trim()) {
+      const normalised = normalisePostcode(newPostcode);
+      if (!normalised) {
+        toast.error("That doesn't look like a UK postcode (e.g. M1 1AE)");
+        return;
+      }
+      normalisedPostcode = normalised;
+    }
     setCreating(true);
     try {
       const room = await createRoom(token, {
         name: newName,
         rough_window: buildWindow(),
-        home_postcode: newPostcode || undefined,
+        home_postcode: normalisedPostcode,
       });
       setRooms((prev) => [room, ...prev]);
       setShowCreate(false);
@@ -113,10 +124,20 @@ export default function Dashboard() {
 
   async function handleJoinRoom() {
     if (!token || !joinSlug.trim()) return;
+    // Validate postcode if entered
+    let normalisedPostcode: string | undefined;
+    if (joinPostcode.trim()) {
+      const normalised = normalisePostcode(joinPostcode);
+      if (!normalised) {
+        toast.error("That doesn't look like a UK postcode (e.g. M1 1AE)");
+        return;
+      }
+      normalisedPostcode = normalised;
+    }
     setJoining(true);
     try {
       const slug = joinSlug.trim().toLowerCase();
-      await joinRoom(token, slug, joinPostcode || undefined);
+      await joinRoom(token, slug, normalisedPostcode);
       router.push(`/room/${slug}`);
     } catch (e: unknown) {
       toast.error(errorMessage(e, "Room not found or you're not allowed to join"));

@@ -15,6 +15,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
+import { normalisePostcode } from "@/lib/postcode";
 
 // Lazy-load the chat widget so it doesn't block initial render
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
@@ -87,9 +88,14 @@ export default function RoomPage() {
 
   async function handleSavePostcode() {
     if (!token || !myPostcode.trim()) return;
+    const normalised = normalisePostcode(myPostcode);
+    if (!normalised) {
+      toast.error("That doesn't look like a UK postcode (e.g. M1 1AE)");
+      return;
+    }
     setSavingPostcode(true);
     try {
-      await updateMyPostcode(token, slug, myPostcode.trim());
+      await updateMyPostcode(token, slug, normalised);
       // Refresh members list
       const m = await listMembers(token, slug);
       setMembers(m);
