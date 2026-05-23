@@ -42,6 +42,7 @@ export default function PreferencesPage() {
     supabase.auth.getSession().then(async ({ data: s }) => {
       if (!s.session) { router.replace("/"); return; }
       const t = s.session.access_token;
+      const uid = s.session.user.id;
       setToken(t);
       try {
         const [r, d] = await Promise.all([getRoom(t, slug), getDurationBudget(t, slug)]);
@@ -51,6 +52,13 @@ export default function PreferencesPage() {
         if (r.min_nights) setAgreedMin(String(r.min_nights));
         if (r.max_nights) setAgreedMax(String(r.max_nights));
         if (r.budget_gbp) setAgreedBudget(String(r.budget_gbp));
+        // Pre-fill my personal preferences from saved answers
+        const mine = d.responses.find((row) => row.user_id === uid);
+        if (mine) {
+          if (mine.min_nights) setMinNights(String(mine.min_nights));
+          if (mine.max_nights) setMaxNights(String(mine.max_nights));
+          if (mine.budget_gbp) setBudget(String(mine.budget_gbp));
+        }
       } catch {
         router.replace("/dashboard");
       }
