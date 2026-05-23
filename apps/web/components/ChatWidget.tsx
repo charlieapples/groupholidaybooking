@@ -20,6 +20,34 @@ export default function ChatWidget({ token, roomSlug }: ChatWidgetProps) {
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Persist chat history per-room in sessionStorage so navigating between
+  // pages within the same room doesn't lose the conversation.
+  const storageKey = roomSlug ? `chat-${roomSlug}` : "chat-global";
+
+  // Load saved messages on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = sessionStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Message[];
+        if (Array.isArray(parsed)) setMessages(parsed);
+      }
+    } catch {
+      // Corrupt storage — ignore, start fresh
+    }
+  }, [storageKey]);
+
+  // Save messages whenever they change
+  useEffect(() => {
+    if (typeof window === "undefined" || messages.length === 0) return;
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify(messages));
+    } catch {
+      // Quota exceeded or storage disabled — silently skip
+    }
+  }, [messages, storageKey]);
+
   useEffect(() => {
     if (open && bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
@@ -73,10 +101,22 @@ export default function ChatWidget({ token, roomSlug }: ChatWidgetProps) {
           {/* Header */}
           <div className="flex items-center gap-3 rounded-t-2xl bg-blue-600 px-4 py-3">
             <span className="text-xl">✈️</span>
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="font-semibold text-white text-sm">Holiday Assistant</p>
               <p className="text-xs text-blue-200">Powered by Gemini</p>
             </div>
+            {messages.length > 0 && (
+              <button
+                onClick={() => {
+                  setMessages([]);
+                  if (typeof window !== "undefined") sessionStorage.removeItem(storageKey);
+                }}
+                className="text-xs text-blue-200 hover:text-white whitespace-nowrap"
+                title="Clear chat history"
+              >
+                Clear
+              </button>
+            )}
           </div>
 
           {/* Messages */}
