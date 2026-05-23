@@ -136,7 +136,12 @@ export default function Dashboard() {
     }
     setJoining(true);
     try {
-      const slug = joinSlug.trim().toLowerCase();
+      // Accept either a bare slug ("ab3x9k2m") or a full invite URL
+      // ("https://groupholidaybooking.vercel.app/room/ab3x9k2m/join").
+      // Extract the slug segment in either case.
+      const raw = joinSlug.trim();
+      const urlMatch = raw.match(/\/room\/([a-z0-9]+)/i);
+      const slug = (urlMatch ? urlMatch[1] : raw).toLowerCase();
       await joinRoom(token, slug, normalisedPostcode);
       router.push(`/room/${slug}`);
     } catch (e: unknown) {
@@ -257,7 +262,7 @@ export default function Dashboard() {
           <div className="flex gap-3 flex-wrap">
             <input
               type="text"
-              placeholder="Room code (e.g. ab3x9k2m)"
+              placeholder="Room code or full invite link"
               value={joinSlug}
               onChange={(e) => setJoinSlug(e.target.value)}
               className="flex-1 min-w-40 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
