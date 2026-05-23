@@ -35,6 +35,7 @@ const STEP_ROUTES: Record<string, string> = {
   budget: "preferences",
   destination: "destinations",
   flights: "flights",
+  booking: "booking",
 };
 
 export default function RoomPage() {
@@ -177,25 +178,46 @@ export default function RoomPage() {
         {/* Step progress */}
         <div className="rounded-xl border bg-white p-6 shadow-sm">
           <div className="flex items-center gap-2 overflow-x-auto pb-2">
-            {STEPS.map((step, i) => (
-              <div key={step.key} className="flex items-center">
+            {STEPS.map((step, i) => {
+              // Past steps are clickable (revisit), current is highlighted, future is dimmed
+              const isPast = i < stepIdx;
+              const isCurrent = i === stepIdx;
+              const route = STEP_ROUTES[step.key];
+              const clickable = (isPast || isCurrent) && route;
+
+              const pill = (
                 <div
-                  className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap ${
-                    i === stepIdx
+                  className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
+                    isCurrent
                       ? "bg-blue-600 text-white"
-                      : i < stepIdx
-                      ? "bg-green-100 text-green-700"
+                      : isPast
+                      ? "bg-green-100 text-green-700 hover:bg-green-200"
                       : "bg-gray-100 text-gray-400"
                   }`}
                 >
                   <span>{step.icon}</span>
                   <span>{step.label}</span>
                 </div>
-                {i < STEPS.length - 1 && (
-                  <div className={`mx-1 h-0.5 w-6 ${i < stepIdx ? "bg-green-400" : "bg-gray-200"}`} />
-                )}
-              </div>
-            ))}
+              );
+
+              return (
+                <div key={step.key} className="flex items-center">
+                  {clickable ? (
+                    <button
+                      onClick={() => router.push(`/room/${slug}/${route}`)}
+                      title={isPast ? `Revisit ${step.label}` : step.label}
+                    >
+                      {pill}
+                    </button>
+                  ) : (
+                    pill
+                  )}
+                  {i < STEPS.length - 1 && (
+                    <div className={`mx-1 h-0.5 w-6 ${i < stepIdx ? "bg-green-400" : "bg-gray-200"}`} />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 

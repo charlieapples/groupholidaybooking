@@ -26,8 +26,8 @@ export default function ChatWidget({ token, roomSlug }: ChatWidgetProps) {
     }
   }, [messages, open]);
 
-  async function send() {
-    const text = input.trim();
+  async function send(overrideText?: string) {
+    const text = (overrideText ?? input).trim();
     if (!text || sending) return;
 
     const userMsg: Message = { role: "user", content: text };
@@ -67,9 +67,9 @@ export default function ChatWidget({ token, roomSlug }: ChatWidgetProps) {
         {open ? "✕" : "💬"}
       </button>
 
-      {/* Chat panel */}
+      {/* Chat panel — full-width on phones, fixed width on tablet+ */}
       {open && (
-        <div className="fixed bottom-24 right-6 z-50 flex w-80 flex-col rounded-2xl border bg-white shadow-2xl sm:w-96">
+        <div className="fixed bottom-24 right-3 left-3 z-50 flex flex-col rounded-2xl border bg-white shadow-2xl sm:left-auto sm:right-6 sm:w-96">
           {/* Header */}
           <div className="flex items-center gap-3 rounded-t-2xl bg-blue-600 px-4 py-3">
             <span className="text-xl">✈️</span>
@@ -94,8 +94,8 @@ export default function ChatWidget({ token, roomSlug }: ChatWidgetProps) {
                   ].map((q) => (
                     <button
                       key={q}
-                      onClick={() => { setInput(q); }}
-                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-left text-gray-600 hover:bg-gray-50"
+                      onClick={() => send(q)}
+                      className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-left text-gray-600 hover:bg-gray-50 hover:border-blue-300"
                     >
                       {q}
                     </button>
