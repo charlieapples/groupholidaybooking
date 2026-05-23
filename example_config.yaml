@@ -17,11 +17,20 @@ destinations:
 
 date_window:
   earliest_outbound: "2026-08-01"
-  latest_inbound: "2026-09-14"   # allow return dates a bit beyond max_nights
+  latest_inbound: "2026-09-14"
   min_nights: 4
   max_nights: 7
 
-budget_cap_per_person: 500   # optional; remove line to disable
+# Optional cap on total per-person money cost
+budget_cap_per_person: 500
 
-# Max one-way ground travel time to airport (hours)
-max_ground_hours: 3
+# Max ground travel time to airport in hours (omit / null = no limit).
+# With shared_dates=true, looser limit usually helps find a viable date pair.
+max_ground_hours: null
+
+# Charge for travel time when ranking (in £/hour). 0 = ignore time.
+time_value_per_hour: 0
+
+# Pick one (out_date, return_date) so the group actually travels together.
+# false = each person picks their own cheapest dates (may not coincide).
+shared_dates: true

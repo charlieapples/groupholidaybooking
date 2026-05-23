@@ -70,9 +70,12 @@ def _fetch_route_bucket(
     currency: str,
 ) -> dict:
     """
-    Query Travelpayouts for cheapest round-trip fares for a given origin/month.
-    If destination is None, returns ALL destinations from that origin (broader cache).
-    Returns the raw data dict keyed by destination IATA code.
+    Query Travelpayouts for cheapest round-trip fares from origin in the given month.
+
+    Returns the inner bucket for the destination — a dict of {index: flight_info}.
+    When destination is provided, queries that route specifically.
+    When destination is None, queries all destinations from origin (broader cache
+    coverage for sparse routes).
     """
     cache_key = f"bucket:{origin}:{destination or 'ALL'}:{month}:{currency}"
     if cache_key in _CACHE:
@@ -84,11 +87,14 @@ def _fetch_route_bucket(
 
     try:
         data = _get("/v1/prices/cheap", params)
-        result = data.get("data") or {}
-        # When destination specified, API returns {destination: {idx: info}}
-        # When no destination, API returns {dest1: {idx: info}, dest2: ...}
+        all_dests = data.get("data") or {}
+        # API returns {dest_code: {idx: info}}. We want the inner dict.
         if destination:
-            result = {destination: result.get(destination, {})}
+            result = all_dests.get(destination, {})
+        else:
+            # When no destination specified, return the whole thing so caller
+            # can pick its target. Caller code handles this case.
+            result = all_dests
     except httpx.HTTPStatusError:
         result = {}
 
@@ -135,7 +141,8 @@ def cheapest_return_pair(
         # Fallback: if no data for specific route, query all destinations from
         # this origin and pick our target — catches sparse-cache routes (e.g. MAN)
         if not dest_bucket:
-            dest_bucket = _fetch_route_bucket(origin, None, month, currency).get(destination, {})
+            all_dests = _fetch_route_bucket(origin, None, month, currency)
+            dest_bucket = all_dests.get(destination, {}) if isinstance(all_dests, dict) else {}
 
         for info in dest_bucket.values():
             dep_str = info.get("departure_at", "")

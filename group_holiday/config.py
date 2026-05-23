@@ -35,6 +35,7 @@ class Config(BaseModel):
     budget_cap_per_person: Optional[float] = None
     max_ground_hours: Optional[float] = None   # None = no limit
     time_value_per_hour: float = 0.0           # £/hr — cost of travel time
+    shared_dates: bool = True                  # group flies together on same dates
 
 
 def load_config(path: str | Path) -> Config:
