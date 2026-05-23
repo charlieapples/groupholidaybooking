@@ -280,6 +280,18 @@ def join_room(
     db = get_client()
     room = _get_room_by_slug(db, slug)
 
+    # Ensure the joining user has a profile row (the trigger may have missed
+    # them if they signed up before the migration ran). Without this, they'd
+    # appear as 'Unknown' to other members of the room.
+    db.table("profiles").upsert(
+        {
+            "id": user.id,
+            "email": user.email,
+            "display_name": user.display_name or (user.email or "").split("@")[0],
+        },
+        on_conflict="id",
+    ).execute()
+
     # Check if already a member
     existing = (
         db.table("room_members")
