@@ -10,6 +10,8 @@ can answer questions like:
 from __future__ import annotations
 
 import os
+import time
+from collections import defaultdict, deque
 from typing import Optional
 
 from google import genai
@@ -21,6 +23,33 @@ from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user
 
 router = APIRouter()
+
+# ── Rate limiting ────────────────────────────────────────────────────────────
+# Simple in-memory per-user sliding-window limit. Resets on process restart,
+# which is fine for a single-instance Railway service. If we scale horizontally
+# we'd move this to Redis or Supabase.
+
+_RATE_LIMIT_WINDOW_SEC = 3600  # 1 hour
+_RATE_LIMIT_MAX_REQUESTS = 40  # per user per window
+_user_request_log: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _check_rate_limit(user_id: str) -> None:
+    """Raise HTTPException 429 if the user has exceeded their hourly quota."""
+    now = time.time()
+    window_start = now - _RATE_LIMIT_WINDOW_SEC
+    log = _user_request_log[user_id]
+    # Drop stale entries from the left of the deque
+    while log and log[0] < window_start:
+        log.popleft()
+    if len(log) >= _RATE_LIMIT_MAX_REQUESTS:
+        retry_in = int(log[0] + _RATE_LIMIT_WINDOW_SEC - now)
+        raise HTTPException(
+            429,
+            f"Chat rate limit reached ({_RATE_LIMIT_MAX_REQUESTS}/hour). "
+            f"Try again in {max(retry_in, 1)} seconds.",
+        )
+    log.append(now)
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -151,6 +180,7 @@ def chat(
     user: UserInfo = Depends(current_user),
 ):
     """Send a message to Gemini with optional room context."""
+    _check_rate_limit(user.id)
     client = _get_gemini_client()
 
     # Build context string
