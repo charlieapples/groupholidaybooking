@@ -5,6 +5,7 @@ import { createRoom, joinRoom, listRooms, type Room } from "@/lib/api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
+import { DashboardSkeleton } from "@/components/Skeleton";
 
 export default function Dashboard() {
   // Stable client — don't recreate on every render
@@ -114,11 +115,7 @@ export default function Dashboard() {
     router.replace("/");
   }
 
-  if (loading) return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-    </div>
-  );
+  if (loading) return <DashboardSkeleton />;
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -149,9 +146,29 @@ export default function Dashboard() {
 
         {/* Room list */}
         {rooms.length === 0 ? (
-          <div className="rounded-xl border-2 border-dashed border-gray-300 py-16 text-center">
-            <div className="text-4xl mb-3">🏖️</div>
-            <p className="text-gray-500">No rooms yet. Create one or join via a link.</p>
+          <div className="rounded-2xl border-2 border-dashed border-gray-300 bg-white px-6 py-14 text-center">
+            <div className="mx-auto max-w-md space-y-4">
+              <div className="text-5xl">🏖️</div>
+              <h2 className="text-xl font-semibold text-gray-900">No holiday rooms yet</h2>
+              <p className="text-gray-500">
+                A room is a shared planning space — invite your friends, mark when
+                you&apos;re free, and the app finds the dates that work for everyone.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                <button
+                  onClick={() => setShowCreate(true)}
+                  className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                >
+                  Create your first room
+                </button>
+                <button
+                  onClick={() => document.getElementById("join-room-card")?.scrollIntoView({ behavior: "smooth" })}
+                  className="rounded-xl border border-gray-300 px-6 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Or join one with a code
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -182,7 +199,7 @@ export default function Dashboard() {
         )}
 
         {/* Join room */}
-        <div className="rounded-xl border bg-white p-6 shadow-sm">
+        <div id="join-room-card" className="rounded-xl border bg-white p-6 shadow-sm scroll-mt-6">
           <h2 className="mb-4 font-semibold text-gray-900">Join a room</h2>
           <div className="flex gap-3 flex-wrap">
             <input
