@@ -1,9 +1,24 @@
 @import "tailwindcss";
 
-/* App uses explicit light-mode Tailwind classes throughout — no dark mode override */
+/* The app uses explicit light-mode Tailwind classes throughout.
+   color-scheme on html stops user-agent dark-mode styles bleeding into
+   form controls; the html-level background ensures no flash of dark even
+   before Tailwind's classes apply. */
+html {
+  color-scheme: light;
+  background: #f9fafb; /* matches Tailwind's bg-gray-50 */
+}
+
 body {
-  background: #ffffff;
+  background: #f9fafb;
   color: #111827;
   font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Belt-and-braces: explicitly force inputs/textareas/selects to light scheme
+   in case any parent declares otherwise. */
+input, textarea, select {
   color-scheme: light;
+  background-color: #ffffff;
+  color: #111827;
 }
