@@ -1,27 +1,231 @@
-"""Step 5: flights. Wraps the existing optimiser as an HTTP endpoint.
+"""Step 5: flights — room-aware wrapper around the core optimiser.
 
-For now this is a thin shim — the actual business logic still lives in
-apps/streamlit-legacy/group_holiday/. We'll move it into apps/api/app/core/
-in the next pass so both Streamlit and the API can use the same module.
+Reads room state from Supabase (members + postcodes, agreed dates,
+destination shortlist), runs the optimiser, and caches results.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+import json
+from datetime import date
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from ..core.config import Config, DateWindow, Person
+from ..core.destinations import label as label_dest
+from ..core.optimiser import optimise
+from ..db.supabase import get_client
+from ..deps.auth import UserInfo, current_user
+from .rooms import _assert_member, _get_room_by_slug
 
 router = APIRouter()
 
 
-@router.post("/optimise")
-def run_optimiser(slug: str):
+# ── Schemas ──────────────────────────────────────────────────────────────────
+
+
+class PersonResultDTO(BaseModel):
+    person_name: str
+    viable: bool
+    chosen_airport: Optional[str] = None
+    ground_cost_gbp: float = 0.0
+    ground_hours: float = 0.0
+    outbound_cost_gbp: float = 0.0
+    inbound_cost_gbp: float = 0.0
+    outbound_date: Optional[str] = None
+    inbound_date: Optional[str] = None
+    total_money_gbp: float = 0.0
+    total_inc_time_gbp: float = 0.0
+    booking_link: Optional[str] = None
+    note: str = ""
+
+
+class DestinationResultDTO(BaseModel):
+    destination: str
+    destination_name: str
+    is_fully_viable: bool
+    viable_count: int
+    total_group_money_cost: float
+    total_group_cost: float
+    avg_individual_cost: float
+    max_individual_cost: float
+    fairness_ratio: float
+    shared_out_date: Optional[str] = None
+    shared_return_date: Optional[str] = None
+    date_spread_days: int = 0
+    note: str = ""
+    people: list[PersonResultDTO]
+
+
+# ── Serialiser (shared with stateless /api/optimise) ─────────────────────────
+
+
+def _serialise(dr) -> DestinationResultDTO:
+    return DestinationResultDTO(
+        destination=dr.destination,
+        destination_name=label_dest(dr.destination, "name"),
+        is_fully_viable=dr.is_fully_viable,
+        viable_count=dr.viable_count,
+        total_group_money_cost=dr.total_group_money_cost,
+        total_group_cost=dr.total_group_cost,
+        avg_individual_cost=dr.avg_individual_cost,
+        max_individual_cost=dr.max_individual_cost,
+        fairness_ratio=dr.fairness_ratio,
+        shared_out_date=str(dr.shared_out_date) if dr.shared_out_date else None,
+        shared_return_date=str(dr.shared_return_date) if dr.shared_return_date else None,
+        date_spread_days=dr.date_spread_days,
+        note=dr.note,
+        people=[
+            PersonResultDTO(
+                person_name=p.person_name,
+                viable=p.viable,
+                chosen_airport=p.chosen_airport,
+                ground_cost_gbp=p.ground_cost,
+                ground_hours=p.ground_hours,
+                outbound_cost_gbp=p.outbound_cost,
+                inbound_cost_gbp=p.inbound_cost,
+                outbound_date=str(p.out_date) if p.out_date else None,
+                inbound_date=str(p.return_date) if p.return_date else None,
+                total_money_gbp=p.flight_plus_ground_gbp,
+                total_inc_time_gbp=p.total_cost_gbp,
+                booking_link=p.outbound.deep_link if p.outbound else None,
+                note=p.note,
+            )
+            for p in dr.person_results
+        ],
+    )
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+
+@router.post("/optimise", response_model=list[DestinationResultDTO])
+def run_optimiser(slug: str, user: UserInfo = Depends(current_user)):
     """Run the flight optimiser for the room's agreed parameters.
 
-    Reads from DB: members (postcodes), agreed_start, agreed_end,
-    min_nights, max_nights, destination shortlist. Writes results to
-    flight_results table; returns the same."""
-    raise HTTPException(501, "Not implemented — needs Supabase wiring + core/ migration")
+    Reads from DB:
+    - room_members (postcodes)
+    - rooms (agreed_start, agreed_end, min_nights, max_nights, budget_gbp)
+    - destination_candidates (the shortlist)
+
+    Writes results to flight_results table. Returns ranked DestinationResults.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+
+    # Validate room has required fields
+    required = ["agreed_start", "agreed_end", "min_nights", "max_nights"]
+    missing = [f for f in required if not room.get(f)]
+    if missing:
+        raise HTTPException(
+            422,
+            f"Room is missing: {', '.join(missing)}. "
+            "Complete earlier steps (availability + duration) first.",
+        )
+
+    # Load members and postcodes
+    members_res = (
+        db.table("room_members")
+        .select("home_postcode, profiles(display_name)")
+        .eq("room_id", room["id"])
+        .execute()
+    )
+    people: list[Person] = []
+    for m in members_res.data:
+        postcode = m.get("home_postcode")
+        name = (m.get("profiles") or {}).get("display_name", "Unknown")
+        if not postcode:
+            raise HTTPException(
+                422,
+                f"Member '{name}' has no home postcode set. "
+                "All members must enter their postcode before running the optimiser.",
+            )
+        people.append(Person(name=name, home=postcode))
+
+    # Load destination candidates
+    candidates_res = (
+        db.table("destination_candidates")
+        .select("iata_code")
+        .eq("room_id", room["id"])
+        .execute()
+    )
+    destinations = [c["iata_code"] for c in candidates_res.data]
+    if not destinations:
+        raise HTTPException(
+            422,
+            "No destination candidates in this room. Add some via the destinations endpoints.",
+        )
+
+    config = Config(
+        people=people,
+        destinations=destinations,
+        date_window=DateWindow(
+            earliest_outbound=date.fromisoformat(room["agreed_start"]),
+            latest_inbound=date.fromisoformat(room["agreed_end"]),
+            min_nights=room["min_nights"],
+            max_nights=room["max_nights"],
+        ),
+        budget_cap_per_person=room.get("budget_gbp"),
+        shared_dates=True,
+    )
+
+    results = optimise(config)
+    dtos = [_serialise(r) for r in results]
+
+    # Cache results in DB — one row per destination
+    for dto in dtos:
+        db.table("flight_results").upsert(
+            {
+                "room_id": room["id"],
+                "destination_iata": dto.destination,
+                "shared_out_date": dto.shared_out_date,
+                "shared_return_date": dto.shared_return_date,
+                "total_group_cost_gbp": dto.total_group_cost,
+                "per_person_results": json.dumps([p.model_dump() for p in dto.people]),
+            },
+            on_conflict="room_id,destination_iata",
+        ).execute()
+
+    return dtos
 
 
-@router.get("/results")
-def get_results(slug: str):
-    """Latest cached flight results for this room."""
-    raise HTTPException(501, "Not implemented — needs Supabase wiring")
+@router.get("/results", response_model=list[DestinationResultDTO])
+def get_results(slug: str, user: UserInfo = Depends(current_user)):
+    """Return the latest cached flight results for this room (all destinations)."""
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+
+    res = (
+        db.table("flight_results")
+        .select("*")
+        .eq("room_id", room["id"])
+        .order("total_group_cost_gbp")
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(404, "No flight results yet. Run /optimise first.")
+
+    # Reconstruct DTOs from cached per_person_results
+    dtos = []
+    for row in res.data:
+        people_data = json.loads(row["per_person_results"]) if row["per_person_results"] else []
+        dtos.append(
+            DestinationResultDTO(
+                destination=row["destination_iata"],
+                destination_name=label_dest(row["destination_iata"], "name"),
+                is_fully_viable=all(p.get("viable", False) for p in people_data),
+                viable_count=sum(1 for p in people_data if p.get("viable")),
+                total_group_money_cost=row.get("total_group_cost_gbp") or 0,
+                total_group_cost=row.get("total_group_cost_gbp") or 0,
+                avg_individual_cost=(row.get("total_group_cost_gbp") or 0) / max(len(people_data), 1),
+                max_individual_cost=max((p.get("total_money_gbp", 0) for p in people_data), default=0),
+                fairness_ratio=1.0,
+                shared_out_date=str(row["shared_out_date"]) if row.get("shared_out_date") else None,
+                shared_return_date=str(row["shared_return_date"]) if row.get("shared_return_date") else None,
+                people=[PersonResultDTO(**p) for p in people_data],
+            )
+        )
+    return dtos
