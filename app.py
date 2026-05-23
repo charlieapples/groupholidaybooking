@@ -12,6 +12,15 @@ if os.path.exists(".env"):
     from dotenv import load_dotenv
     load_dotenv()
 
+# On Streamlit Cloud, secrets live in st.secrets — inject them into os.environ
+# so that the flights/ground modules can pick them up via os.getenv().
+try:
+    for _k in ("TRAVELPAYOUTS_TOKEN", "GOOGLE_MAPS_API_KEY"):
+        if _k in st.secrets and not os.getenv(_k):
+            os.environ[_k] = st.secrets[_k]
+except Exception:
+    pass  # st.secrets may not exist when running outside Streamlit
+
 from group_holiday.config import Config, DateWindow, Person
 from group_holiday.destinations import DEST_NAMES, POPULAR_LABELS, label
 from group_holiday.optimiser import DestinationResult, optimise
@@ -30,6 +39,10 @@ if "people" not in st.session_state:
         {"name": "Alice", "home": "SW1A 1AA"},
         {"name": "Bob",   "home": "M1 1AE"},
     ]
+if "results" not in st.session_state:
+    st.session_state.results = None
+if "results_time_value" not in st.session_state:
+    st.session_state.results_time_value = 0.0
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.title("✈️ Group Holiday Finder")
@@ -368,13 +381,19 @@ def _show_results(results: list[DestinationResult], time_value: float) -> None:
                     delta_color="inverse",
                 )
 
-            first_viable = next((p for p in dr.person_results if p.viable and p.outbound), None)
-            if first_viable and first_viable.outbound.deep_link:
-                st.link_button(
-                    f"🔗 Search {label(dr.destination, style)} flights on Aviasales",
-                    first_viable.outbound.deep_link,
-                    use_container_width=True,
-                )
+            # Per-person booking links (each may fly from a different airport)
+            viable_people = [p for p in dr.person_results if p.viable and p.outbound and p.outbound.deep_link]
+            if viable_people:
+                st.markdown("**Book flights:**")
+                cols = st.columns(len(viable_people))
+                for col, p in zip(cols, viable_people):
+                    with col:
+                        airport_label = f" via {p.chosen_airport}" if p.chosen_airport else ""
+                        st.link_button(
+                            f"🔗 {p.person_name}{airport_label}",
+                            p.outbound.deep_link,
+                            use_container_width=True,
+                        )
 
     # Download as JSON
     st.divider()
@@ -387,8 +406,27 @@ def _show_results(results: list[DestinationResult], time_value: float) -> None:
     )
 
 
+# ── API key check ─────────────────────────────────────────────────────────────
+def _missing_keys() -> list[str]:
+    missing = []
+    if not os.getenv("TRAVELPAYOUTS_TOKEN"):
+        missing.append("TRAVELPAYOUTS_TOKEN")
+    if not os.getenv("GOOGLE_MAPS_API_KEY"):
+        missing.append("GOOGLE_MAPS_API_KEY")
+    return missing
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 if run:
+    missing = _missing_keys()
+    if missing:
+        st.error(
+            f"**API keys not configured:** {', '.join(missing)}. "
+            "Add them to your `.env` file (local) or Streamlit Cloud → "
+            "App settings → Secrets."
+        )
+        st.stop()
+
     errors = _validate()
     if errors:
         for e in errors:
@@ -411,8 +449,12 @@ if run:
         )
         with st.spinner("Searching… first run takes a minute, then results are cached."):
             results = optimise(config)
-        _show_results(results, float(time_value))
-else:
+        st.session_state.results = results
+        st.session_state.results_time_value = float(time_value)
+
+if st.session_state.results:
+    _show_results(st.session_state.results, st.session_state.results_time_value)
+elif not run:
     st.info("👈 Fill in your group and dates in the sidebar, then click **Find cheapest holiday**.")
     with st.expander("How does this work?"):
         st.markdown("""
