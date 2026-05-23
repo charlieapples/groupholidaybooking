@@ -43,6 +43,8 @@ if "results" not in st.session_state:
     st.session_state.results = None
 if "results_time_value" not in st.session_state:
     st.session_state.results_time_value = 0.0
+if "results_fresh" not in st.session_state:
+    st.session_state.results_fresh = False
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.title("✈️ Group Holiday Finder")
@@ -431,6 +433,9 @@ if run:
     if errors:
         for e in errors:
             st.error(e)
+        # Search didn't run — mark any existing results as stale
+        if st.session_state.results:
+            st.session_state.results_fresh = False
     else:
         valid_people = [p for p in st.session_state.people if p["name"] and p["home"]]
         config = Config(
@@ -451,8 +456,15 @@ if run:
             results = optimise(config)
         st.session_state.results = results
         st.session_state.results_time_value = float(time_value)
+        st.session_state.results_fresh = True
+else:
+    # Sidebar changed without re-running — mark stale
+    if st.session_state.results:
+        st.session_state.results_fresh = False
 
 if st.session_state.results:
+    if not st.session_state.results_fresh:
+        st.info("ℹ️ Showing results from a previous search. Click **Find cheapest holiday** to update.")
     _show_results(st.session_state.results, st.session_state.results_time_value)
 elif not run:
     st.info("👈 Fill in your group and dates in the sidebar, then click **Find cheapest holiday**.")
