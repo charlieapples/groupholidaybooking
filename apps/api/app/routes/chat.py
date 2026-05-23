@@ -12,7 +12,8 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -113,15 +114,11 @@ Current room context:
 # ── Gemini client ─────────────────────────────────────────────────────────────
 
 
-def _get_gemini_model():
+def _get_gemini_client():
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(503, "GEMINI_API_KEY not configured on this server.")
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel(
-        model_name="gemini-2.0-flash-exp",
-        system_instruction=None,  # injected per-request via history
-    )
+    return genai.Client(api_key=api_key)
 
 
 # ── Endpoint ──────────────────────────────────────────────────────────────────
@@ -133,7 +130,7 @@ def chat(
     user: UserInfo = Depends(current_user),
 ):
     """Send a message to Gemini with optional room context."""
-    model = _get_gemini_model()
+    client = _get_gemini_client()
 
     # Build context string
     if body.room_slug:
@@ -143,18 +140,26 @@ def chat(
 
     system_text = _SYSTEM_PROMPT.format(context=context)
 
-    # Build history for Gemini (inject system prompt as first user/model exchange)
-    history = [
-        {"role": "user", "parts": [system_text]},
-        {"role": "model", "parts": ["Understood! I'm ready to help with your group holiday planning."]},
+    # Build conversation history
+    contents = [
+        genai_types.Content(role="user", parts=[genai_types.Part(text=system_text)]),
+        genai_types.Content(role="model", parts=[genai_types.Part(text="Understood! I'm ready to help with your group holiday planning.")]),
     ]
     for msg in body.history:
-        history.append({"role": msg.role, "parts": [msg.content]})
-
-    chat_session = model.start_chat(history=history)
+        contents.append(genai_types.Content(
+            role=msg.role,
+            parts=[genai_types.Part(text=msg.content)],
+        ))
+    contents.append(genai_types.Content(
+        role="user",
+        parts=[genai_types.Part(text=body.message)],
+    ))
 
     try:
-        response = chat_session.send_message(body.message)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=contents,
+        )
         return ChatResponse(reply=response.text)
     except Exception as exc:
         raise HTTPException(502, f"Gemini API error: {exc}") from exc
