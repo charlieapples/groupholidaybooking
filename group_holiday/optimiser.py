@@ -14,7 +14,7 @@ from typing import Optional
 
 from .airports import UK_AIRPORTS
 from .config import Config, Person
-from .flights import Fare, cheapest_return_pair
+from .flights import Fare, cheap_destination_codes, cheapest_return_pair
 from .ground import GroundLeg, nearest_airports
 
 
@@ -276,6 +276,42 @@ def _optimise_destination_shared(
             dest_result.person_results.append(_build_result(person.name, opt))
 
     return dest_result
+
+
+def discover_destinations(config: Config, top_n: int = 25) -> list[str]:
+    """
+    Auto-discover destination codes without a user-specified shortlist.
+
+    For each person's nearest airports, queries the Travelpayouts all-destinations
+    bucket and collects every destination that has a viable fare in the window.
+    Destinations are scored by how many people's airports have fare data for them
+    (so popular routes beat obscure ones). Returns up to top_n codes.
+
+    These are then passed to `optimise()` as normal.
+    """
+    UK_CODES = set(UK_AIRPORTS)
+    dw = config.date_window
+    dest_votes: dict[str, int] = {}  # dest_code → number of person-airports that see a fare
+
+    for person in config.people:
+        reachable = nearest_airports(person.home, UK_AIRPORTS, config.max_ground_hours)
+        # Only check the 3 closest airports per person to bound API calls
+        person_dests: set[str] = set()
+        for airport, _ in reachable[:3]:
+            codes = cheap_destination_codes(
+                airport,
+                dw.earliest_outbound,
+                dw.latest_inbound,
+                min_nights=dw.min_nights,
+                max_nights=dw.max_nights,
+            )
+            person_dests.update(c for c in codes if c not in UK_CODES)
+        for dest in person_dests:
+            dest_votes[dest] = dest_votes.get(dest, 0) + 1
+
+    # Prefer destinations where more people have available fares
+    ranked = sorted(dest_votes, key=lambda d: -dest_votes[d])
+    return ranked[:top_n]
 
 
 def optimise(config: Config) -> list[DestinationResult]:

@@ -23,7 +23,7 @@ except Exception:
 
 from group_holiday.config import Config, DateWindow, Person
 from group_holiday.destinations import DEST_NAMES, POPULAR_LABELS, label
-from group_holiday.optimiser import DestinationResult, optimise
+from group_holiday.optimiser import DestinationResult, discover_destinations, optimise
 
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -87,13 +87,35 @@ with st.sidebar:
 
     # Destinations
     st.header("📍 Destinations")
-    mode = st.radio(
+    dest_mode = st.radio(
         "Mode",
-        ["Compare multiple destinations", "I know where we want to go"],
-        captions=["Rank cheapest places to fly", "Just optimise flights for one place"],
+        [
+            "🔍 Discover cheapest (automatic)",
+            "📋 Pick from a list",
+            "📌 I know where we want to go",
+        ],
+        captions=[
+            "Search everything — no shortlist needed",
+            "Choose from popular destinations",
+            "Optimise flights for one place",
+        ],
     )
 
-    if mode == "Compare multiple destinations":
+    destinations: list[str] = []   # filled below or at run-time for discover mode
+    discover_mode = False
+
+    if dest_mode == "🔍 Discover cheapest (automatic)":
+        discover_mode = True
+        top_n = st.slider(
+            "Max destinations to compare", min_value=5, max_value=40, value=20, step=5,
+            help="Higher = more thorough but slower on a cold cache.",
+        )
+        st.caption(
+            "We'll check every route in the Aviasales cache from your group's "
+            "nearest airports and surface the cheapest options automatically."
+        )
+
+    elif dest_mode == "📋 Pick from a list":
         chosen_labels = st.multiselect(
             "Popular destinations",
             options=list(POPULAR_LABELS.keys()),
@@ -103,18 +125,19 @@ with st.sidebar:
             ],
         )
         custom_raw = st.text_input(
-            "Or add custom IATA codes (comma-separated)",
-            placeholder="e.g. DUB, NCE, VIE",
+            "Add more IATA codes (comma-separated)",
+            placeholder="e.g. DUB, NCE, VIE, JMK",
         )
         custom_codes = [c.strip().upper() for c in custom_raw.split(",") if c.strip()]
         destinations = [POPULAR_LABELS[l] for l in chosen_labels] + custom_codes
-    else:
+
+    else:  # single destination
         single_label = st.selectbox(
             "Where are you going?",
             options=list(POPULAR_LABELS.keys()),
             index=1,  # Barcelona default
         )
-        custom_single = st.text_input("Or custom IATA code", placeholder="e.g. NCE")
+        custom_single = st.text_input("Or type an IATA code", placeholder="e.g. NCE")
         if custom_single.strip():
             destinations = [custom_single.strip().upper()]
         else:
@@ -187,21 +210,23 @@ with st.sidebar:
             min_value=0.5, max_value=24.0, value=3.0, step=0.5,
         ))
 
-    st.markdown("**Value of travel time**")
-    time_choice = st.radio(
-        "How much is an hour of travel time worth?",
-        ["£0 / hr — cheapest money cost only", "£10 / hr", "£15 / hr", "Custom"],
-        captions=[
-            "Ignore travel time",
-            "Mild incentive to avoid long journeys",
-            "Strong incentive to save time",
-            "Set your own",
-        ],
+    st.markdown("**Value of travel time (£/hr)**")
+    time_value = st.slider(
+        "Drag or type — how much is 1 hour of travel worth?",
+        min_value=0, max_value=100, value=0, step=5,
+        help=(
+            "£0 = rank by cheapest money cost only. "
+            "£10–£20 is a typical 'time is money' setting — it biases the algorithm "
+            "toward nearby airports even if the flight is slightly pricier."
+        ),
     )
-    if time_choice == "Custom":
-        time_value = st.number_input("£ per hour", min_value=0.0, value=10.0, step=5.0)
-    else:
-        time_value = float(time_choice.split("£")[1].split(" ")[0]) if "£" in time_choice else 0.0
+    time_value_override = st.number_input(
+        "Or type an exact value (£/hr)",
+        min_value=0, max_value=500, value=int(time_value), step=5,
+        label_visibility="collapsed",
+    )
+    if time_value_override != time_value:
+        time_value = time_value_override
 
     st.divider()
     run = st.button("🔍 Find cheapest holiday", type="primary", use_container_width=True)
@@ -213,7 +238,7 @@ def _validate() -> list[str]:
     valid = [p for p in st.session_state.people if p["name"] and p["home"]]
     if not valid:
         errors.append("Add at least one person with a name and home location.")
-    if not destinations:
+    if not discover_mode and not destinations:
         errors.append("Select at least one destination.")
     if min_nights > max_nights:
         errors.append("Min nights must be ≤ max nights.")
@@ -438,9 +463,11 @@ if run:
             st.session_state.results_fresh = False
     else:
         valid_people = [p for p in st.session_state.people if p["name"] and p["home"]]
+        # For discover mode, destinations will be filled in after discovery;
+        # use a placeholder list so Pydantic's min_length=1 constraint is satisfied.
         config = Config(
             people=[Person(name=p["name"], home=p["home"]) for p in valid_people],
-            destinations=destinations,
+            destinations=destinations if destinations else ["DISCOVER"],
             date_window=DateWindow(
                 earliest_outbound=earliest_out,
                 latest_inbound=latest_in,
@@ -453,6 +480,21 @@ if run:
             shared_dates=shared_dates,
         )
         with st.spinner("Searching… first run takes a minute, then results are cached."):
+            if discover_mode:
+                # Build destination list automatically from Aviasales cache
+                discovered = discover_destinations(config, top_n=int(top_n))
+                if not discovered:
+                    st.error(
+                        "No destinations found in the Aviasales cache for your airports "
+                        "and date window. Try widening the dates or check your API key."
+                    )
+                    st.stop()
+                config = config.model_copy(update={"destinations": discovered})
+                st.info(
+                    f"Discovered {len(discovered)} destinations from the Aviasales cache: "
+                    + ", ".join(discovered[:10])
+                    + ("…" if len(discovered) > 10 else "")
+                )
             results = optimise(config)
         st.session_state.results = results
         st.session_state.results_time_value = float(time_value)

@@ -199,6 +199,59 @@ def cheapest_return_pair(
     return result
 
 
+def cheap_destination_codes(
+    origin: str,
+    earliest_outbound: date,
+    latest_inbound: date,
+    min_nights: int = 1,
+    max_nights: int = 60,
+    currency: str = "GBP",
+) -> list[str]:
+    """
+    Return all destination IATA codes that have any viable cached fare from origin
+    in the given window. Uses the all-destinations bucket query (no per-dest calls).
+
+    This is used by the auto-discover mode to build a destination shortlist without
+    the user having to specify one.
+    """
+    cache_key = f"discover:{origin}:{earliest_outbound}:{latest_inbound}:{currency}"
+    if cache_key in _CACHE:
+        return _CACHE[cache_key]
+
+    found: list[str] = []
+    latest_viable_out = latest_inbound - timedelta(days=min_nights)
+
+    for month in _months_in_window(earliest_outbound, latest_inbound):
+        all_dests = _fetch_route_bucket(origin, None, month, currency)
+        if not isinstance(all_dests, dict):
+            continue
+        for dest_code, bucket in all_dests.items():
+            if dest_code in found:
+                continue
+            if not isinstance(bucket, dict):
+                continue
+            for info in bucket.values():
+                dep_str = info.get("departure_at", "")
+                ret_str = info.get("return_at", "")
+                try:
+                    dep_date = date.fromisoformat(dep_str[:10])
+                    ret_date = date.fromisoformat(ret_str[:10])
+                except (ValueError, TypeError):
+                    continue
+                if not (earliest_outbound <= dep_date <= latest_viable_out):
+                    continue
+                nights = (ret_date - dep_date).days
+                if nights < min_nights or nights > max_nights * 2:
+                    continue
+                price = float(info.get("price", 0))
+                if price > 0:
+                    found.append(dest_code)
+                    break
+
+    _CACHE.set(cache_key, found, expire=3600)
+    return found
+
+
 def cheapest_one_way(
     origin: str,
     destination: str,
