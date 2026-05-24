@@ -346,6 +346,7 @@ def get_my_preferences(slug: str, user: UserInfo = Depends(current_user)):
         activity_level=raw.get("activity_level"),
         must_have=raw.get("must_have") or [],
         avoid=raw.get("avoid") or [],
+        free_text=raw.get("free_text"),
         max_total_per_person_gbp=row.get("pref_budget_gbp"),
     )
 
@@ -375,6 +376,7 @@ def submit_preferences(
                 "activity_level": body.activity_level,
                 "must_have": body.must_have,
                 "avoid": body.avoid,
+                "free_text": body.free_text,
             }),
         },
         on_conflict="room_id,user_id",
