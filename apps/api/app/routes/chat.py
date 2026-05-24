@@ -133,9 +133,13 @@ def _load_room_context(slug: str) -> str:
             )
             if flight_res.data:
                 import json as _json
+                def _parse_field(v):
+                    if v is None: return []
+                    if isinstance(v, (list, dict)): return v if isinstance(v, list) else [v]
+                    return _json.loads(v)
                 flight_lines = []
                 for fr in flight_res.data:
-                    people_data = _json.loads(fr["per_person_results"]) if fr.get("per_person_results") else []
+                    people_data = _parse_field(fr.get("per_person_results"))
                     viable = [p for p in people_data if p.get("viable")]
                     people_str = "; ".join(
                         f"{p['person_name']} £{p.get('total_money_gbp', 0):.0f} from {p.get('chosen_airport', '?')}"

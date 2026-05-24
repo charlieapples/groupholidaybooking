@@ -29,6 +29,26 @@ from .rooms import _assert_member, _get_room_by_slug
 router = APIRouter()
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _parse_json_field(value) -> list:
+    """Safely deserialise a DB field that may be a JSON string or already a Python object.
+
+    Supabase JSONB columns can be returned as either a JSON-encoded string (older
+    supabase-py versions) or as a Python list/dict (newer versions that deserialise
+    JSONB automatically).  Calling json.loads() on a list would raise TypeError, so
+    we guard against that here.
+    """
+    if value is None:
+        return []
+    if isinstance(value, (list, dict)):
+        return value if isinstance(value, list) else [value]
+    # Assume string — may raise json.JSONDecodeError on corrupt data, which is
+    # intentional (caller can catch if needed).
+    return json.loads(value)
+
+
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
 
@@ -288,7 +308,7 @@ def get_results(slug: str, user: UserInfo = Depends(current_user)):
     # Reconstruct DTOs from cached per_person_results
     dtos = []
     for row in res.data:
-        people_data = json.loads(row["per_person_results"]) if row["per_person_results"] else []
+        people_data = _parse_json_field(row.get("per_person_results"))
         viable_people = [p for p in people_data if p.get("viable")]
         # Compute avg from actual money costs (not time-weighted total_group_cost)
         money_costs = [p.get("total_money_gbp", 0) for p in viable_people]

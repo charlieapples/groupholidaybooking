@@ -643,7 +643,8 @@ def get_public_summary(slug: str, _user=Depends(optional_user)):
         if match is None:
             match = results_res.data[0]
         if match:
-            people_data = json.loads(match.get("per_person_results") or "[]")
+            _ppr = match.get("per_person_results")
+            people_data = _ppr if isinstance(_ppr, list) else (json.loads(_ppr) if _ppr else [])
             # Only average over viable people (same logic as flights GET /results)
             viable = [p for p in people_data if p.get("viable")]
             if viable:
