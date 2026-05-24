@@ -7,6 +7,7 @@ import {
   getSubmissionStatus,
   updateMyPostcode,
   deleteRoom,
+  leaveRoom,
   type Room,
   type Member,
   type SubmissionStatus,
@@ -16,6 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
 import { normalisePostcode } from "@/lib/postcode";
+import { destName } from "@/lib/destinations";
 import FeedbackButton from "@/components/FeedbackButton";
 
 // Lazy-load the chat widget so it doesn't block initial render
@@ -150,6 +152,18 @@ export default function RoomPage() {
       router.replace("/dashboard");
     } catch (e: unknown) {
       toast.error(errorMessage(e, "Failed to delete Holiday"));
+    }
+  }
+
+  async function handleLeave() {
+    if (!token || !room) return;
+    if (!window.confirm(`Leave "${room.name}"? You won't be able to rejoin unless re-invited.`)) return;
+    try {
+      await leaveRoom(token, slug);
+      toast.success(`Left "${room.name}"`);
+      router.replace("/dashboard");
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Failed to leave Holiday"));
     }
   }
 
@@ -403,7 +417,7 @@ export default function RoomPage() {
                   <p className="text-gray-600 mt-2 max-w-md mx-auto">
                     {room.destination_iata && room.agreed_start ? (
                       <>
-                        See you in <span className="font-semibold">{room.destination_iata}</span>{" "}
+                        See you in <span className="font-semibold">{destName(room.destination_iata)}</span>{" "}
                         on{" "}
                         <span className="font-semibold">
                           {new Date(room.agreed_start).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
@@ -471,7 +485,8 @@ export default function RoomPage() {
               {room.destination_iata && (
                 <div className="rounded-xl border bg-green-50 p-4 shadow-sm">
                   <h3 className="text-xs font-medium text-green-600 mb-1">Chosen destination</h3>
-                  <p className="font-semibold text-green-900 text-sm">{room.destination_iata}</p>
+                  <p className="font-semibold text-green-900 text-sm">{destName(room.destination_iata)}</p>
+                  <p className="text-xs text-green-600 font-mono">{room.destination_iata}</p>
                 </div>
               )}
             </div>
@@ -590,21 +605,35 @@ export default function RoomPage() {
               </div>
             </div>
 
-            {/* Admin: delete Holiday */}
-            {room.is_admin && (
-              <div className="rounded-xl border border-red-100 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-semibold text-gray-900 mb-1">Danger zone</h3>
-                <p className="text-xs text-gray-500 mb-3">
-                  Permanently removes this Holiday and all its data.
-                </p>
-                <button
-                  onClick={handleDelete}
-                  className="w-full rounded-lg border border-red-200 bg-red-50 py-2 text-xs font-medium text-red-700 hover:bg-red-100"
-                >
-                  Delete this Holiday
-                </button>
-              </div>
-            )}
+            {/* Danger zone — admin can delete, non-admin can leave */}
+            <div className="rounded-xl border border-red-100 bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-900 mb-1">Danger zone</h3>
+              {room.is_admin ? (
+                <>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Permanently removes this Holiday and all its data.
+                  </p>
+                  <button
+                    onClick={handleDelete}
+                    className="w-full rounded-lg border border-red-200 bg-red-50 py-2 text-xs font-medium text-red-700 hover:bg-red-100"
+                  >
+                    Delete this Holiday
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Remove yourself from this Holiday.
+                  </p>
+                  <button
+                    onClick={handleLeave}
+                    className="w-full rounded-lg border border-red-200 bg-red-50 py-2 text-xs font-medium text-red-700 hover:bg-red-100"
+                  >
+                    Leave this Holiday
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

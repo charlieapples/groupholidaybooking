@@ -144,7 +144,7 @@ function LandingPageContent() {
         </button>
 
         <p className="text-sm text-gray-400">
-          Free to use. Earn commission from bookings.
+          Free to use · No booking fees · Works with Ryanair, easyJet, BA &amp; more
         </p>
       </div>
 

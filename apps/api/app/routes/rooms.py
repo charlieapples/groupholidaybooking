@@ -5,6 +5,7 @@ The creator becomes admin. Members submit availability, preferences, and votes.
 """
 from __future__ import annotations
 
+import json
 import secrets
 import string
 from typing import Any, Optional
@@ -12,6 +13,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
+from ..core.destinations import label as label_dest
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user, optional_user
 
@@ -430,6 +432,25 @@ def delete_room(slug: str, user: UserInfo = Depends(current_user)):
     return None
 
 
+@router.delete("/{slug}/leave", status_code=status.HTTP_204_NO_CONTENT)
+def leave_room(slug: str, user: UserInfo = Depends(current_user)):
+    """Remove the calling user from a room.
+
+    Admins cannot leave their own room — they must transfer admin or delete it.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    membership = _assert_member(db, room["id"], user.id)
+    if membership.get("is_admin"):
+        raise HTTPException(
+            400,
+            "Admins cannot leave their own Holiday. "
+            "Delete the Holiday instead, or ask another member to become admin.",
+        )
+    db.table("room_members").delete().eq("room_id", room["id"]).eq("user_id", user.id).execute()
+    return None
+
+
 @router.post("/{slug}/advance", response_model=RoomResponse)
 def advance_step(slug: str, user: UserInfo = Depends(current_user)):
     """Advance the room to the next planning step. Admin only."""
@@ -481,17 +502,25 @@ def get_public_summary(slug: str, _user=Depends(optional_user)):
 
     avg_cost = None
     dest_name = None
-    results_res = db.table("flight_results").select("result_json").eq("room_id", room["id"]).execute()
+    dest_iata = room.get("destination_iata")
+    # Query per-destination rows (one row per destination, not a single JSON blob)
+    results_res = (
+        db.table("flight_results")
+        .select("destination_iata, total_group_cost_gbp, per_person_results")
+        .eq("room_id", room["id"])
+        .order("total_group_cost_gbp")
+        .execute()
+    )
     if results_res.data:
-        import json as _json
-        all_results = _json.loads(results_res.data[0]["result_json"])
-        dest_iata = room.get("destination_iata")
-        match = next((r for r in all_results if r.get("destination") == dest_iata), None)
-        if match is None and all_results:
-            match = all_results[0]
+        # Prefer the locked destination; fall back to cheapest
+        match = next((r for r in results_res.data if r.get("destination_iata") == dest_iata), None)
+        if match is None:
+            match = results_res.data[0]
         if match:
-            avg_cost = match.get("avg_individual_cost")
-            dest_name = match.get("destination_name")
+            people_data = json.loads(match.get("per_person_results") or "[]")
+            if people_data:
+                avg_cost = sum(p.get("total_money_gbp", 0) for p in people_data) / len(people_data)
+            dest_name = label_dest(match.get("destination_iata", ""), "name")
 
     return PublicRoomSummary(
         name=room["name"],

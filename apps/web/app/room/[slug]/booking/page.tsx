@@ -14,6 +14,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
+import { destName } from "@/lib/destinations";
 import FeedbackButton from "@/components/FeedbackButton";
 
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
@@ -79,7 +80,7 @@ const DEST_TO_CITY: Record<string, string> = {
 };
 
 function cityFor(iata: string): string {
-  return DEST_TO_CITY[iata] || iata;
+  return DEST_TO_CITY[iata] || destName(iata) || iata;
 }
 
 function bookingComLink(iata: string, checkIn: string, checkOut: string, guests: number) {
@@ -545,30 +546,35 @@ function CopyGroupPlanButton({
 }) {
   function buildPlanText(): string {
     const lines: string[] = [];
+    const destDisplay = destResult.destination_name ?? destIata ?? "TBC";
     lines.push(`✈️ ${room.name} — Group Holiday Plan`);
-    if (destIata) lines.push(`📍 Destination: ${destIata}`);
+    lines.push(`📍 Destination: ${destDisplay}`);
     if (destResult.shared_out_date) {
       lines.push(`📅 Dates: ${destResult.shared_out_date} → ${destResult.shared_return_date}`);
     }
     lines.push("");
-    lines.push("💰 Per person:");
+    lines.push("💰 Flights per person:");
     for (const p of destResult.people) {
       if (!p.viable) {
         lines.push(`  ${p.person_name}: ❌ no flights found`);
         continue;
       }
-      const parts = [`£${Math.round(p.total_money_gbp)}`];
-      if (p.chosen_airport) parts.push(`from ${p.chosen_airport}`);
-      if (p.booking_link) parts.push(`→ ${p.booking_link}`);
-      lines.push(`  ${p.person_name}: ${parts.join(" — ")}`);
+      const costParts: string[] = [`£${Math.round(p.total_money_gbp)}`];
+      if (p.chosen_airport) costParts.push(`from ${p.chosen_airport}`);
+      if (p.outbound_date) costParts.push(`out ${p.outbound_date}`);
+      lines.push(`  ${p.person_name}: ${costParts.join(" · ")}`);
+      if (p.booking_link) lines.push(`    🔗 ${p.booking_link}`);
     }
     const viable = destResult.people.filter(p => p.viable);
     if (viable.length > 1) {
       const total = viable.reduce((s, p) => s + p.total_money_gbp, 0);
-      lines.push(`  Group total: £${Math.round(total)}`);
+      const avg = total / viable.length;
+      lines.push(`  ─`);
+      lines.push(`  Group total: £${Math.round(total)} · Avg: £${Math.round(avg)}/person`);
     }
     lines.push("");
     lines.push("Each person books their own flights using the links above.");
+    lines.push("🏨 Compare accommodation: Booking.com, Airbnb, Hotels.com");
     return lines.join("\n");
   }
 
