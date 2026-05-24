@@ -201,6 +201,7 @@ export default function DestinationsPage() {
   const [activityLevel, setActivityLevel] = useState("");
   const [mustHave, setMustHave] = useState<string[]>([]);
   const [avoid, setAvoid] = useState<string[]>([]);
+  const [freeText, setFreeText] = useState("");
   const [questSaving, setQuestSaving] = useState(false);
   const [questSaved, setQuestSaved] = useState(false);
 
@@ -243,6 +244,7 @@ export default function DestinationsPage() {
         if (prefs.activity_level) setActivityLevel(prefs.activity_level);
         if (prefs.must_have && prefs.must_have.length) setMustHave(prefs.must_have);
         if (prefs.avoid && prefs.avoid.length) setAvoid(prefs.avoid);
+        if (prefs.free_text) setFreeText(prefs.free_text);
       }
       setLoading(false);
     });
@@ -262,7 +264,8 @@ export default function DestinationsPage() {
         activity_level: activityLevel || undefined,
         must_have: mustHave,
         avoid,
-      });
+        ...(freeText.trim() ? { free_text: freeText.trim() } : {}),
+      } as Parameters<typeof submitDestinationPreferences>[2]);
       setQuestSaved(true);
       setTimeout(() => setQuestSaved(false), 3000);
     } catch (e: unknown) {
@@ -512,6 +515,23 @@ export default function DestinationsPage() {
             </div>
           </div>
 
+          {/* Free text — anything Gemini should know */}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Anything else? <span className="text-gray-400">(optional, in your own words)</span>
+            </label>
+            <textarea
+              rows={3}
+              value={freeText}
+              onChange={(e) => setFreeText(e.target.value)}
+              placeholder="e.g. &quot;Would love somewhere with amazing food and good nightlife, ideally not too far — under 3h flight. Happy with Barcelona or similar vibes. No beach resorts.&quot;"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none resize-none"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              This goes straight to the AI — describe your ideal trip, places you&apos;ve loved, or anything you&apos;d like to avoid.
+            </p>
+          </div>
+
           <div className="flex gap-3 pt-2">
             <button
               onClick={handleSaveQuestionnaire}
@@ -594,7 +614,7 @@ export default function DestinationsPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <span className="min-w-8 text-center text-sm font-bold text-gray-900">
                       {c.vote_count > 0 ? `+${c.vote_count}` : c.vote_count}
                     </span>
@@ -605,9 +625,20 @@ export default function DestinationsPage() {
                           ? "bg-green-500 text-white"
                           : "bg-white border border-gray-300 text-gray-600 hover:border-green-400 hover:text-green-600"
                       }`}
-                      title="Upvote"
+                      title="Yes, I'd go here"
                     >
                       👍
+                    </button>
+                    <button
+                      onClick={() => handleVote(c.id, c.my_vote === 0 ? 1 : 0)}
+                      className={`rounded-full p-1.5 transition-colors text-sm ${
+                        c.my_vote === 0
+                          ? "bg-gray-200 text-gray-600 border border-gray-400"
+                          : "bg-white border border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-600"
+                      }`}
+                      title="Neutral / don't mind"
+                    >
+                      😐
                     </button>
                     <button
                       onClick={() => handleVote(c.id, c.my_vote === -1 ? 0 : -1)}
@@ -616,7 +647,7 @@ export default function DestinationsPage() {
                           ? "bg-red-400 text-white"
                           : "bg-white border border-gray-300 text-gray-600 hover:border-red-300 hover:text-red-500"
                       }`}
-                      title="Downvote"
+                      title="No thanks"
                     >
                       👎
                     </button>
@@ -636,6 +667,42 @@ export default function DestinationsPage() {
             </div>
           )}
         </div>
+
+          {/* Voting summary — show when there are any votes */}
+        {candidates.length > 0 && candidates.some(c => c.vote_count !== 0) && (
+          <div className="rounded-xl border bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-gray-900 mb-3">🗳️ Voting so far</h2>
+            <div className="space-y-2">
+              {[...candidates]
+                .sort((a, b) => b.vote_count - a.vote_count)
+                .map((c, i) => (
+                  <div key={c.id} className="flex items-center gap-3">
+                    <span className="text-lg w-6 shrink-0">{flagFor(c.iata_code)}</span>
+                    <span className="flex-1 text-sm font-medium text-gray-900 truncate">{c.name}</span>
+                    <div className="flex items-center gap-1.5">
+                      <div
+                        className={`h-2 rounded-full transition-all ${
+                          c.vote_count > 0 ? "bg-green-400" :
+                          c.vote_count < 0 ? "bg-red-300" : "bg-gray-200"
+                        }`}
+                        style={{ width: `${Math.max(8, Math.abs(c.vote_count) * 16)}px` }}
+                      />
+                      <span className={`text-sm font-bold min-w-8 text-right ${
+                        c.vote_count > 0 ? "text-green-600" :
+                        c.vote_count < 0 ? "text-red-500" : "text-gray-400"
+                      }`}>
+                        {c.vote_count > 0 ? `+${c.vote_count}` : c.vote_count}
+                      </span>
+                    </div>
+                    {i === 0 && c.vote_count > 0 && (
+                      <span className="text-xs bg-yellow-100 text-yellow-700 rounded-full px-2 py-0.5 font-medium">Top pick</span>
+                    )}
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+        )}
 
           {/* Admin advance */}
         {room.is_admin && candidates.length > 0 && (

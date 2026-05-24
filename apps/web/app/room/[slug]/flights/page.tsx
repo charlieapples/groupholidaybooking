@@ -32,6 +32,8 @@ export default function FlightsPage() {
   const [error, setError] = useState<string | null>(null);
   const [choosingDest, setChoosingDest] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [partialExpanded, setPartialExpanded] = useState(false);
+  const [excludedPerson, setExcludedPerson] = useState<string | null>(null);
   // Rotating progress hint while the optimiser is running (15-30s).
   // Cosmetic only — doesn't reflect actual progress, just keeps the user engaged.
   const [hintIdx, setHintIdx] = useState(0);
@@ -119,7 +121,25 @@ export default function FlightsPage() {
 
   if (!room) return null;
 
-  const bestResult = results.find(r => r.is_fully_viable) ?? results[0];
+  // Partition results: hide destinations where nobody can go
+  const viableResults = results.filter(r => r.viable_count > 0);
+  const fullyViable = viableResults.filter(r => r.is_fully_viable);
+  const partial = viableResults.filter(r => !r.is_fully_viable);
+  const hiddenCount = results.length - viableResults.length;
+
+  // Contingency: when no fully-viable destination exists, allow excluding one person
+  const allPeople = results.length > 0
+    ? Array.from(new Set(results.flatMap(r => r.people.map(p => p.person_name))))
+    : [];
+
+  // Destinations that work for everyone *except* the excluded person
+  const contingencyResults = excludedPerson
+    ? viableResults.filter(r =>
+        r.people.every(p => p.person_name === excludedPerson || p.viable)
+      )
+    : [];
+
+  const bestResult = fullyViable[0] ?? (excludedPerson ? contingencyResults[0] : null);
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -227,125 +247,137 @@ export default function FlightsPage() {
         )}
 
         {/* Results */}
-        {results.length > 0 && (
+        {viableResults.length > 0 && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">Results</h2>
               <p className="text-sm text-gray-500">
-                {results.filter(r => r.is_fully_viable).length} of {results.length} destinations work for everyone
+                {fullyViable.length} of {results.length} {results.length === 1 ? "destination" : "destinations"} work for everyone
+                {hiddenCount > 0 && ` · ${hiddenCount} hidden (no flights found)`}
               </p>
             </div>
 
-            {results.map((r) => (
-              <div
-                key={r.destination}
-                className={`rounded-xl border bg-white shadow-sm overflow-hidden ${
-                  r === bestResult ? "border-blue-400 ring-1 ring-blue-400" : ""
-                }`}
-              >
-                {/* Summary header */}
-                <div className="p-5 flex items-center justify-between gap-4">
-                  <button
-                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
-                    onClick={() => setExpanded(expanded === r.destination ? null : r.destination)}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-gray-900">{r.destination_name}</h3>
-                        {r === bestResult && (
-                          <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">Best</span>
-                        )}
-                        {!r.is_fully_viable && (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                            {r.viable_count}/{room.member_count} can go
-                          </span>
-                        )}
-                      </div>
-                      {r.shared_out_date && (
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {r.shared_out_date} to {r.shared_return_date}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <div className="text-right">
-                      <p className="text-xl font-bold text-gray-900">
-                        £{Math.round(r.avg_individual_cost).toLocaleString()}
-                      </p>
-                      <p className="text-xs text-gray-500">avg per person</p>
-                    </div>
-                    {room.is_admin && (
-                      <button
-                        onClick={() => handleChooseDestination(r.destination)}
-                        disabled={choosingDest !== null}
-                        className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50 whitespace-nowrap"
-                      >
-                        {choosingDest === r.destination ? "Choosing..." : "Choose this"}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setExpanded(expanded === r.destination ? null : r.destination)}
-                      className="text-gray-400"
-                    >
-                      {expanded === r.destination ? "▲" : "▼"}
-                    </button>
+            {/* Fully viable destinations */}
+            {fullyViable.length > 0 ? (
+              <ResultsList
+                results={fullyViable}
+                bestResult={bestResult}
+                expanded={expanded}
+                setExpanded={setExpanded}
+                isAdmin={!!room.is_admin}
+                memberCount={room.member_count ?? 0}
+                choosingDest={choosingDest}
+                handleChooseDestination={handleChooseDestination}
+              />
+            ) : (
+              /* No fully-viable destinations — contingency panel */
+              <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-6 space-y-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl">⚠️</span>
+                  <div>
+                    <h3 className="font-bold text-amber-900">No destination works for everyone right now</h3>
+                    <p className="text-sm text-amber-800 mt-1">
+                      Some flights couldn&apos;t be found for one or more people. You can:
+                    </p>
                   </div>
                 </div>
+                <ul className="text-sm text-amber-900 space-y-2 ml-10 list-disc">
+                  <li>
+                    <button
+                      onClick={() => router.push(`/room/${slug}/destinations`)}
+                      className="underline hover:text-amber-700"
+                    >
+                      Add more destination candidates
+                    </button>
+                    {" "}— a wider list increases the chance of finding viable flights for everyone.
+                  </li>
+                  <li>Check that everyone has set their postcode in their profile (needed for ground travel calculation).</li>
+                  <li>Try the &ldquo;What if someone can&apos;t make it?&rdquo; tool below to see options for a smaller group.</li>
+                </ul>
 
-                {/* Per-person breakdown */}
-                {expanded === r.destination && (
-                  <div className="border-t px-5 pb-5">
-                    <div className="mt-4 space-y-3">
-                      {r.people.map((p) => (
-                        <div key={p.person_name} className={`rounded-lg p-3 ${p.viable ? "bg-gray-50" : "bg-red-50"}`}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium text-gray-900 text-sm">
-                              {p.person_name}
-                              {!p.viable && <span className="ml-2 text-xs text-red-600">(no viable flight found)</span>}
-                            </span>
-                            <span className="font-semibold text-gray-900 text-sm">
-                              £{Math.round(p.total_money_gbp).toLocaleString()}
-                            </span>
-                          </div>
-                          {p.viable && (
-                            <div className="text-xs text-gray-500 space-y-0.5">
-                              {p.chosen_airport && <p>From: {p.chosen_airport}</p>}
-                              {p.outbound_date && <p>Out: {p.outbound_date} · In: {p.inbound_date}</p>}
-                              <div className="flex gap-3 flex-wrap">
-                                {p.outbound_cost_gbp > 0 && <span>Flights: £{Math.round(p.outbound_cost_gbp + p.inbound_cost_gbp)}</span>}
-                                {p.baggage_cost_gbp > 0
-                                  ? <span>Carry-on: £{Math.round(p.baggage_cost_gbp)}</span>
-                                  : p.viable && <span className="text-green-600">Cabin bag incl.</span>
-                                }
-                                {p.ground_cost_gbp > 0 && <span>Ground: £{Math.round(p.ground_cost_gbp)}</span>}
-                              </div>
-                              {p.booking_link && (
-                                <a
-                                  href={p.booking_link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-block mt-1 text-blue-600 hover:underline"
-                                >
-                                  Book return on Aviasales →
-                                </a>
-                              )}
-                            </div>
-                          )}
-                          {p.note && <p className="text-xs text-gray-400 mt-1">{p.note}</p>}
-                        </div>
+                {/* What-if tool */}
+                {allPeople.length > 0 && (
+                  <div className="rounded-lg border border-amber-300 bg-white p-4 space-y-3">
+                    <p className="text-sm font-semibold text-gray-900">What if someone can&apos;t make it?</p>
+                    <p className="text-xs text-gray-500">
+                      Select a person to see which destinations work for everyone else. This does not change the plan — it&apos;s just a what-if view.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {allPeople.map(name => (
+                        <button
+                          key={name}
+                          onClick={() => setExcludedPerson(excludedPerson === name ? null : name)}
+                          className={`rounded-full px-3 py-1 text-sm font-medium border transition-colors ${
+                            excludedPerson === name
+                              ? "bg-amber-600 text-white border-amber-600"
+                              : "bg-white text-gray-700 border-gray-300 hover:border-amber-400"
+                          }`}
+                        >
+                          {excludedPerson === name ? "✕ " : ""}{name}
+                        </button>
                       ))}
                     </div>
-
-                    {/* Group total */}
-                    <div className="mt-4 rounded-lg bg-blue-50 px-4 py-3 flex justify-between text-sm">
-                      <span className="font-medium text-blue-900">Group total</span>
-                      <span className="font-bold text-blue-900">£{Math.round(r.total_group_money_cost).toLocaleString()}</span>
-                    </div>
+                    {excludedPerson && (
+                      <div className="mt-2">
+                        {contingencyResults.length > 0 ? (
+                          <>
+                            <p className="text-sm text-green-700 font-medium mb-3">
+                              ✅ {contingencyResults.length} destination{contingencyResults.length !== 1 ? "s" : ""} work for everyone except {excludedPerson}:
+                            </p>
+                            <ResultsList
+                              results={contingencyResults}
+                              bestResult={contingencyResults[0]}
+                              expanded={expanded}
+                              setExpanded={setExpanded}
+                              isAdmin={!!room.is_admin}
+                              memberCount={room.member_count ?? 0}
+                              choosingDest={choosingDest}
+                              handleChooseDestination={handleChooseDestination}
+                            />
+                          </>
+                        ) : (
+                          <p className="text-sm text-red-700">
+                            No destinations found even without {excludedPerson}. Try adding more candidates.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            ))}
+            )}
+
+            {/* Partial results — collapsed by default */}
+            {partial.length > 0 && (
+              <div className="space-y-2">
+                <button
+                  onClick={() => setPartialExpanded(!partialExpanded)}
+                  className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900"
+                >
+                  <span>{partialExpanded ? "▼" : "▶"}</span>
+                  <span>
+                    Partial results ({partial.length}) — destinations where not everyone can get a flight
+                  </span>
+                </button>
+                {partialExpanded && (
+                  <div className="space-y-3 pl-4 border-l-2 border-amber-200">
+                    <p className="text-xs text-gray-500">
+                      These are shown for reference. Consider them if your group is flexible about who attends.
+                    </p>
+                    <ResultsList
+                      results={partial}
+                      bestResult={null}
+                      expanded={expanded}
+                      setExpanded={setExpanded}
+                      isAdmin={!!room.is_admin}
+                      memberCount={room.member_count ?? 0}
+                      choosingDest={choosingDest}
+                      handleChooseDestination={handleChooseDestination}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -368,5 +400,154 @@ export default function FlightsPage() {
       {token && <ChatWidget token={token} roomSlug={slug} />}
       <FeedbackButton token={token} page="flights" roomSlug={slug} />
     </main>
+  );
+}
+
+// ── Sub-component: renders a list of FlightResult cards ───────────────────────
+
+interface ResultsListProps {
+  results: FlightResult[];
+  bestResult: FlightResult | null;
+  expanded: string | null;
+  setExpanded: (key: string | null) => void;
+  isAdmin: boolean;
+  memberCount: number;
+  choosingDest: string | null;
+  handleChooseDestination: (iata: string) => void;
+}
+
+function ResultsList({
+  results,
+  bestResult,
+  expanded,
+  setExpanded,
+  isAdmin,
+  memberCount,
+  choosingDest,
+  handleChooseDestination,
+}: ResultsListProps) {
+  return (
+    <div className="space-y-3">
+      {results.map((r) => (
+        <div
+          key={r.destination}
+          className={`rounded-xl border bg-white shadow-sm overflow-hidden ${
+            r === bestResult ? "border-blue-400 ring-1 ring-blue-400" : ""
+          }`}
+        >
+          {/* Summary header */}
+          <div className="p-5 flex items-center justify-between gap-4">
+            <button
+              className="flex items-center gap-3 flex-1 min-w-0 text-left"
+              onClick={() => setExpanded(expanded === r.destination ? null : r.destination)}
+            >
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-bold text-gray-900">{r.destination_name}</h3>
+                  {r === bestResult && (
+                    <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">Best</span>
+                  )}
+                  {!r.is_fully_viable && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                      {r.viable_count}/{memberCount} can go
+                    </span>
+                  )}
+                </div>
+                {r.shared_out_date && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {r.shared_out_date} → {r.shared_return_date}
+                  </p>
+                )}
+              </div>
+            </button>
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="text-right">
+                <p className="text-xl font-bold text-gray-900">
+                  £{Math.round(r.avg_individual_cost).toLocaleString()}
+                </p>
+                <p className="text-xs text-gray-500">avg per person</p>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => handleChooseDestination(r.destination)}
+                  disabled={choosingDest !== null}
+                  className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50 whitespace-nowrap"
+                >
+                  {choosingDest === r.destination ? "Choosing…" : "Choose this"}
+                </button>
+              )}
+              <button
+                onClick={() => setExpanded(expanded === r.destination ? null : r.destination)}
+                className="text-gray-400"
+              >
+                {expanded === r.destination ? "▲" : "▼"}
+              </button>
+            </div>
+          </div>
+
+          {/* Per-person breakdown */}
+          {expanded === r.destination && (
+            <div className="border-t px-5 pb-5">
+              <div className="mt-4 space-y-3">
+                {r.people.map((p) => (
+                  <div key={p.person_name} className={`rounded-lg p-3 ${p.viable ? "bg-gray-50" : "bg-red-50"}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-gray-900 text-sm">
+                        {p.person_name}
+                        {!p.viable && (
+                          <span className="ml-2 text-xs text-red-600">no viable flight found</span>
+                        )}
+                      </span>
+                      {p.viable && (
+                        <span className="font-semibold text-gray-900 text-sm">
+                          £{Math.round(p.total_money_gbp).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    {p.viable && (
+                      <div className="text-xs text-gray-500 space-y-0.5">
+                        {p.chosen_airport && <p>From: {p.chosen_airport}</p>}
+                        {p.outbound_date && <p>Out: {p.outbound_date} · In: {p.inbound_date}</p>}
+                        <div className="flex gap-3 flex-wrap">
+                          {p.outbound_cost_gbp > 0 && (
+                            <span>Flights: £{Math.round(p.outbound_cost_gbp + p.inbound_cost_gbp)}</span>
+                          )}
+                          {p.baggage_cost_gbp > 0
+                            ? <span>Carry-on: £{Math.round(p.baggage_cost_gbp)}</span>
+                            : <span className="text-green-600">Cabin bag incl.</span>
+                          }
+                          {p.ground_cost_gbp > 0 && (
+                            <span>Ground: £{Math.round(p.ground_cost_gbp)}</span>
+                          )}
+                        </div>
+                        {p.booking_link && (
+                          <a
+                            href={p.booking_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block mt-1 text-blue-600 hover:underline"
+                          >
+                            Book return on Aviasales →
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    {p.note && <p className="text-xs text-gray-400 mt-1">{p.note}</p>}
+                  </div>
+                ))}
+              </div>
+
+              {/* Group total */}
+              <div className="mt-4 rounded-lg bg-blue-50 px-4 py-3 flex justify-between text-sm">
+                <span className="font-medium text-blue-900">Group total</span>
+                <span className="font-bold text-blue-900">
+                  £{Math.round(r.total_group_money_cost).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }

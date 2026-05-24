@@ -48,7 +48,8 @@ export default function PreferencesPage() {
         const [r, d] = await Promise.all([getRoom(t, slug), getDurationBudget(t, slug)]);
         setRoom(r);
         setData(d);
-        // Pre-fill admin fields with room values if already set
+        // Pre-fill admin fields: use saved room values if already set,
+        // otherwise compute the overlap range from responses
         if (r.min_nights) setAgreedMin(String(r.min_nights));
         if (r.max_nights) setAgreedMax(String(r.max_nights));
         if (r.budget_gbp) setAgreedBudget(String(r.budget_gbp));
@@ -127,17 +128,31 @@ export default function PreferencesPage() {
   const responsesCount = data.responses.length;
   const totalMembers = data.members_total;
 
-  // Suggest agreed values: median nights, lowest-as-cap for budget, plus average for display
+  // ── Duration statistics ────────────────────────────────────────────────────
   const allMin = data.responses.map(r => r.min_nights).filter(Boolean) as number[];
   const allMax = data.responses.map(r => r.max_nights).filter(Boolean) as number[];
   const allBudget = data.responses.map(r => r.budget_gbp).filter(Boolean) as number[];
-  const median = (arr: number[]) => arr.length ? arr.sort((a,b)=>a-b)[Math.floor(arr.length/2)] : null;
-  const suggestedMin = median(allMin);
-  const suggestedMax = median(allMax);
+
+  // Overlap range: the nights that work for EVERYONE
+  // = max(all minimums) to min(all maximums)
+  const overlapMin = allMin.length ? Math.max(...allMin) : null;
+  const overlapMax = allMax.length ? Math.min(...allMax) : null;
+  const hasOverlap = overlapMin !== null && overlapMax !== null && overlapMin <= overlapMax;
+  const hasConflict = overlapMin !== null && overlapMax !== null && overlapMin > overlapMax;
+
+  // Average range (softer suggestion)
+  const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : null;
+  const avgMin = avg(allMin);
+  const avgMax = avg(allMax);
+
   const minBudget = allBudget.length ? Math.min(...allBudget) : null;
   const avgBudget = allBudget.length
     ? Math.round(allBudget.reduce((a, b) => a + b, 0) / allBudget.length)
     : null;
+
+  // Auto-suggest the overlap range to admin; fall back to average if no overlap
+  const suggestedMin = hasOverlap ? overlapMin : avgMin;
+  const suggestedMax = hasOverlap ? overlapMax : avgMax;
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -258,16 +273,90 @@ export default function PreferencesPage() {
         {room.is_admin && (
           <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-6 space-y-5">
             <h2 className="text-lg font-bold text-blue-900">Admin: set agreed values</h2>
-            {suggestedMin && (
-              <p className="text-sm text-blue-700">
-                💡 Suggested: {suggestedMin}–{suggestedMax} nights
-                {minBudget && avgBudget ? (
-                  <>
-                    , max budget <strong>£{minBudget.toLocaleString()}</strong> (tightest submitted),
-                    group average £{avgBudget.toLocaleString()}
-                  </>
-                ) : null}
-              </p>
+
+            {/* Duration statistics */}
+            {allMin.length > 0 && (
+              <div className="space-y-2 text-sm">
+                {hasOverlap && (
+                  <div className="flex items-start gap-2 rounded-lg bg-green-100 border border-green-200 px-3 py-2 text-green-800">
+                    <span>✅</span>
+                    <span>
+                      <strong>Universal overlap: {overlapMin}–{overlapMax} nights</strong>
+                      {" "}— this range works for everyone
+                    </span>
+                  </div>
+                )}
+                {hasConflict && (
+                  <div className="flex items-start gap-2 rounded-lg bg-amber-100 border border-amber-200 px-3 py-2 text-amber-800">
+                    <span>⚠️</span>
+                    <span>
+                      <strong>No universal overlap</strong> — someone will need to compromise.
+                      Shortest someone will go: {overlapMin} nights.
+                      Longest someone can manage: {overlapMax} nights.
+                    </span>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3 text-xs text-blue-700">
+                  {avgMin && avgMax && (
+                    <div className="rounded-lg bg-blue-100 px-3 py-2">
+                      <p className="font-semibold text-blue-900">Group average</p>
+                      <p>{avgMin}–{avgMax} nights</p>
+                    </div>
+                  )}
+                  {minBudget && avgBudget && (
+                    <div className="rounded-lg bg-blue-100 px-3 py-2">
+                      <p className="font-semibold text-blue-900">Budget</p>
+                      <p>Tightest: <strong>£{minBudget.toLocaleString()}</strong></p>
+                      <p>Average: £{avgBudget.toLocaleString()}</p>
+                    </div>
+                  )}
+                </div>
+                {/* Individual ranges visualised */}
+                {data.responses.filter(r => r.min_nights || r.max_nights).length > 0 && (
+                  <div className="rounded-lg bg-white border border-blue-200 p-3 space-y-1.5">
+                    <p className="text-xs font-semibold text-blue-800 mb-2">Individual responses</p>
+                    {data.responses.map(r => (
+                      r.min_nights || r.max_nights ? (
+                        <div key={r.user_id} className="flex items-center gap-3">
+                          <span className="text-xs text-gray-600 w-24 truncate">{r.display_name || "Unknown"}</span>
+                          <div className="flex-1 h-4 bg-gray-100 rounded-full relative overflow-hidden">
+                            {r.min_nights && r.max_nights && (
+                              <div
+                                className="absolute h-full bg-blue-400 rounded-full"
+                                style={{
+                                  left: `${Math.max(0, ((r.min_nights - 1) / 29) * 100)}%`,
+                                  width: `${Math.max(4, ((r.max_nights - r.min_nights) / 29) * 100)}%`,
+                                }}
+                              />
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-500 w-16 text-right">
+                            {r.min_nights}–{r.max_nights}n
+                          </span>
+                        </div>
+                      ) : null
+                    ))}
+                    {/* Overlap marker */}
+                    {hasOverlap && (
+                      <div className="flex items-center gap-3 mt-1 pt-1 border-t border-blue-200">
+                        <span className="text-xs font-semibold text-green-700 w-24">Overlap</span>
+                        <div className="flex-1 h-4 bg-gray-100 rounded-full relative overflow-hidden">
+                          <div
+                            className="absolute h-full bg-green-400 rounded-full"
+                            style={{
+                              left: `${Math.max(0, ((overlapMin! - 1) / 29) * 100)}%`,
+                              width: `${Math.max(4, ((overlapMax! - overlapMin!) / 29) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                        <span className="text-xs font-semibold text-green-700 w-16 text-right">
+                          {overlapMin}–{overlapMax}n ✅
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="grid grid-cols-2 gap-4">
@@ -292,6 +381,19 @@ export default function PreferencesPage() {
                 />
               </div>
             </div>
+            {(suggestedMin || suggestedMax) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (suggestedMin) setAgreedMin(String(suggestedMin));
+                  if (suggestedMax) setAgreedMax(String(suggestedMax));
+                  if (minBudget) setAgreedBudget(String(minBudget));
+                }}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                ↑ Use {hasOverlap ? "overlap" : "average"} values ({suggestedMin}–{suggestedMax}n{minBudget ? `, £${minBudget}` : ""})
+              </button>
+            )}
 
             <div>
               <label className="mb-1 block text-sm font-medium text-blue-800">Budget cap per person (£)</label>

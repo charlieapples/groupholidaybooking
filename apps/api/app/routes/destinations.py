@@ -66,19 +66,64 @@ def _gemini_suggestions(
     if room.get("budget_gbp"):
         trip_summary.append(f"Per-person budget cap: £{room['budget_gbp']:.0f} (incl. flights)")
 
+    # Build hard climate constraints from preferences
+    climate_votes: dict[str, int] = {}
+    for p in prefs_list:
+        c = (p.get("climate") or "").lower()
+        if c:
+            climate_votes[c] = climate_votes.get(c, 0) + 1
+    dominant_climate = max(climate_votes, key=climate_votes.get) if climate_votes else None
+
+    climate_rule = ""
+    if dominant_climate in ("cool", "cold", "cool/cold"):
+        climate_rule = (
+            "\n\nCLIMATE HARD CONSTRAINT (CRITICAL — do not violate):\n"
+            "The majority of the group wants COOL or COLD weather. "
+            "You MUST NOT suggest warm Mediterranean beach/summer destinations "
+            "such as Lisbon, Madrid, Barcelona, Malaga, Alicante, Palma, Ibiza, "
+            "Tenerife, Athens, Dubrovnik, Rome, Naples, Marrakech, Dubai, or anywhere "
+            "with average summer temperatures above 22°C. "
+            "Focus on Northern/Central Europe: Iceland, Scandinavia, Scotland, Ireland, "
+            "Faroe Islands, Swiss Alps, Austrian Alps, Iceland, Northern Norway, "
+            "Canada, Patagonia, New Zealand winter, etc."
+        )
+    elif dominant_climate in ("warm", "warm & sunny", "warm_sunny", "hot"):
+        climate_rule = (
+            "\n\nCLIMATE HARD CONSTRAINT (CRITICAL — do not violate):\n"
+            "The majority of the group wants WARM or SUNNY weather. "
+            "You MUST NOT suggest Northern European destinations likely to be cold "
+            "or rainy (e.g. Iceland, Norway, Scotland, Ireland, Denmark) "
+            "unless they happen to have a warm microclimate in the relevant season. "
+            "Focus on Mediterranean, Canary Islands, Caribbean, Southeast Asia, "
+            "Middle East, or other reliably warm destinations."
+        )
+
+    # Collect free text notes from members
+    free_texts = [p.get("free_text") for p in prefs_list if p.get("free_text")]
+    free_text_section = ""
+    if free_texts:
+        free_text_section = "\n\nAdditional notes from group members (read carefully):\n" + "\n".join(
+            f"  - {t}" for t in free_texts
+        )
+
     prompt = (
-        "You're a travel planner picking destinations for a group of UK-based "
-        "friends planning a Holiday together. Pick the BEST destinations from "
-        "the catalogue below, matched to the group's combined preferences.\n\n"
+        "You're an expert travel planner picking destinations for a group of UK-based "
+        "friends. Pick the BEST destinations from the catalogue below that genuinely "
+        "match the group's combined preferences.\n\n"
         f"Group preferences (one entry per member):\n{prefs_summary}\n\n"
         f"Trip details:\n" + ("\n".join(trip_summary) or "(no extra constraints)") + "\n\n"
-        f"Destination catalogue (IATA code  city):\n{catalogue}\n\n"
-        f"Pick the {top_n} destinations that best match the group's vibe — "
-        "diverse picks are good (don't suggest 5 beach resorts if the group is "
-        "mixed). Respect any 'avoid' tags strongly.\n\n"
+        + climate_rule
+        + free_text_section
+        + f"\n\nDestination catalogue (IATA code  city):\n{catalogue}\n\n"
+        f"Pick the {top_n} destinations that BEST match the group's vibe. Rules:\n"
+        "1. Obey the CLIMATE HARD CONSTRAINT above — this is mandatory.\n"
+        "2. Respect 'avoid' tags strongly — if someone says 'no beach', don't suggest Mykonos.\n"
+        "3. Give diverse picks (don't suggest 5 Spanish cities if the group wants mixed).\n"
+        "4. Free-text notes from members take priority over button selections.\n"
+        "5. Prefer destinations reachable within the group's budget (lower cost = better if budgets are tight).\n\n"
         "Respond with ONLY a JSON array of IATA codes from the catalogue, in "
         "rank order (best first). No prose, no markdown. Example: "
-        '["BCN","LIS","PRG","DUB","ATH"]'
+        '["PRG","BER","CPH","VIE","EDI"]'
     )
 
     try:
@@ -139,6 +184,7 @@ class DestinationPreferences(BaseModel):
     must_have: list[str] = []              # e.g. ['nightlife', 'culture']
     avoid: list[str] = []                  # e.g. ['long flights']
     max_total_per_person_gbp: Optional[float] = None
+    free_text: Optional[str] = None        # plain-text open preference from the user
 
 
 class DestinationCandidate(BaseModel):

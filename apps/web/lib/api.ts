@@ -247,6 +247,7 @@ export interface DestinationPreferences {
   must_have?: string[];
   avoid?: string[];
   max_total_per_person_gbp?: number | null;
+  free_text?: string | null;
 }
 
 export function submitDestinationPreferences(
