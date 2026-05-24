@@ -46,7 +46,7 @@ export default function Dashboard() {
         const [y, m] = v.split("-");
         return new Date(Number(y), Number(m) - 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
       }
-      return new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+      return new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
     };
     if (fromVal && toVal) return `${fmt(fromVal)} – ${fmt(toVal)}`;
     return fmt(fromVal) || fmt(toVal);
@@ -377,6 +377,7 @@ export default function Dashboard() {
               placeholder="Holiday code or full invite link"
               value={joinSlug}
               onChange={(e) => setJoinSlug(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleJoinRoom(); }}
               className="flex-1 min-w-40 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
             />
             <input
@@ -419,6 +420,7 @@ export default function Dashboard() {
                   placeholder="e.g. Lads Summer 2026"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleCreateRoom(); if (e.key === "Escape") setShowCreate(false); }}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
                 />
               </div>
