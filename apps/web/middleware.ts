@@ -40,8 +40,12 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/dashboard") || path.startsWith("/room");
 
   if (!user && isProtected) {
+    // Preserve the original destination as ?next= so post-sign-in redirect
+    // lands the user back where they were trying to go (esp. invite links).
     const url = request.nextUrl.clone();
+    const originalPath = path + (request.nextUrl.search || "");
     url.pathname = "/";
+    url.search = `?next=${encodeURIComponent(originalPath)}`;
     return NextResponse.redirect(url);
   }
 

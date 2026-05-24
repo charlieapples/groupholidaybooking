@@ -52,10 +52,25 @@ function LandingPageContent() {
 
   if (loading) return null;
 
+  // If we redirected here from a protected page (e.g. an invite link),
+  // show a banner so the user understands why they're being asked to sign in.
+  const nextPath = searchParams.get("next");
+  const isInvite = nextPath?.includes("/join");
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 text-center">
       {/* Hero */}
       <div className="max-w-2xl space-y-6">
+        {isInvite && (
+          <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+            🎉 You&apos;ve been invited to a Holiday! Sign in with Google to join the group.
+          </div>
+        )}
+        {nextPath && !isInvite && (
+          <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+            Sign in with Google to continue.
+          </div>
+        )}
         <div className="text-6xl">✈️</div>
 
         <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
