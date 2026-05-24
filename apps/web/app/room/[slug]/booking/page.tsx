@@ -122,6 +122,49 @@ function skyscannerHotelsLink(iata: string, checkIn: string, checkOut: string, g
   return `https://www.skyscanner.net/hotels/search?entity_name=${encodeURIComponent(cityFor(iata))}&checkin=${checkIn}&checkout=${checkOut}&adults=${guests}`;
 }
 
+// ── Train / Eurostar ──────────────────────────────────────────────────────────
+// Destinations reachable by train from London (via Eurostar or direct rail).
+// Each entry maps IATA → { trainCity, eurostar: bool }
+const TRAIN_DESTINATIONS: Record<string, { city: string; eurostar: boolean }> = {
+  CDG: { city: "Paris", eurostar: true },
+  ORY: { city: "Paris", eurostar: true },
+  AMS: { city: "Amsterdam", eurostar: true },
+  BRU: { city: "Brussels", eurostar: true },
+  LIL: { city: "Lille", eurostar: true },
+  MRS: { city: "Marseille", eurostar: false },   // TGV via Paris
+  LYS: { city: "Lyon", eurostar: false },
+  TLS: { city: "Toulouse", eurostar: false },
+  BOD: { city: "Bordeaux", eurostar: false },
+  MUC: { city: "Munich", eurostar: false },
+  BER: { city: "Berlin", eurostar: false },
+  HAM: { city: "Hamburg", eurostar: false },
+  CGN: { city: "Cologne", eurostar: false },
+  PRG: { city: "Prague", eurostar: false },
+  VIE: { city: "Vienna", eurostar: false },
+  BUD: { city: "Budapest", eurostar: false },
+  ZRH: { city: "Zurich", eurostar: false },
+  GVA: { city: "Geneva", eurostar: false },
+  BCN: { city: "Barcelona", eurostar: false },
+  MAD: { city: "Madrid", eurostar: false },
+  LIS: { city: "Lisbon", eurostar: false },
+};
+
+function trainlineLink(city: string, outDate: string, inDate: string) {
+  // Trainline deep link — pre-fills origin as London, destination as city
+  const params = new URLSearchParams({
+    origin: "london",
+    destination: city.toLowerCase(),
+    outwardDate: outDate,
+    returnDate: inDate,
+    adults: "1",
+  });
+  return `https://www.thetrainline.com/book/results?${params}`;
+}
+
+function eurostarLink(city: string, outDate: string, inDate: string) {
+  return `https://www.eurostar.com/uk-en/train/london-to-${city.toLowerCase()}?outwardDate=${outDate}&returnDate=${inDate}&adults=1`;
+}
+
 export default function BookingPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
@@ -282,6 +325,42 @@ export default function BookingPage() {
           </div>
         )}
 
+        {/* Train alternatives — shown for Eurostar/rail-accessible destinations */}
+        {destIata && TRAIN_DESTINATIONS[destIata] && (
+          <div className="rounded-xl border bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-gray-900 mb-2">🚄 Train alternatives</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              {TRAIN_DESTINATIONS[destIata].city} is reachable by train from London —
+              sometimes faster door-to-door and often cheaper than flying.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {TRAIN_DESTINATIONS[destIata].eurostar && (
+                <a
+                  href={eurostarLink(TRAIN_DESTINATIONS[destIata].city, checkIn, checkOut)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-800 hover:border-blue-400 hover:bg-blue-50"
+                >
+                  <span className="text-lg">⭐</span>
+                  <span>Eurostar</span>
+                </a>
+              )}
+              <a
+                href={trainlineLink(TRAIN_DESTINATIONS[destIata].city, checkIn, checkOut)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-800 hover:border-blue-400 hover:bg-blue-50"
+              >
+                <span className="text-lg">🚆</span>
+                <span>Trainline</span>
+              </a>
+            </div>
+            <p className="mt-3 text-xs text-gray-400">
+              Each person books separately. Trainline searches return via London unless you&apos;re already on the continent.
+            </p>
+          </div>
+        )}
+
         {/* Flight links per person */}
         {destResult && destResult.people.length > 0 && (
           <div className="rounded-xl border bg-white p-6 shadow-sm">
@@ -377,6 +456,31 @@ export default function BookingPage() {
             ))}
           </div>
         </div>
+
+        {/* Share results link — visible to everyone */}
+        {destIata && (
+          <div className="rounded-xl border bg-white p-5 shadow-sm">
+            <h2 className="text-base font-semibold text-gray-900 mb-1">📤 Share trip summary</h2>
+            <p className="text-sm text-gray-500 mb-3">
+              Send this link to anyone (no account needed) — they&apos;ll see the destination, dates, and estimated cost.
+            </p>
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/room/${slug}/results`;
+                if (navigator.share) {
+                  navigator.share({ title: room.name, url });
+                } else {
+                  navigator.clipboard.writeText(url).then(() =>
+                    toast.success("Results link copied!")
+                  );
+                }
+              }}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              📋 Copy results link
+            </button>
+          </div>
+        )}
 
         {/* Admin: mark done */}
         {room.is_admin && (

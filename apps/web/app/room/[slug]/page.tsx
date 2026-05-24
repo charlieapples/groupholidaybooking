@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
 import { normalisePostcode } from "@/lib/postcode";
+import FeedbackButton from "@/components/FeedbackButton";
 
 // Lazy-load the chat widget so it doesn't block initial render
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
@@ -598,6 +599,7 @@ export default function RoomPage() {
 
       {/* Chat widget — only rendered when token available */}
       {token && <ChatWidget token={token} roomSlug={slug} />}
+      <FeedbackButton token={token} page="room" roomSlug={slug} />
     </main>
   );
 }

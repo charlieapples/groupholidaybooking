@@ -14,6 +14,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
+import FeedbackButton from "@/components/FeedbackButton";
 
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
@@ -365,6 +366,7 @@ export default function FlightsPage() {
       </div>
 
       {token && <ChatWidget token={token} roomSlug={slug} />}
+      <FeedbackButton token={token} page="flights" roomSlug={slug} />
     </main>
   );
 }

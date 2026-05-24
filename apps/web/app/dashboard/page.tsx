@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { normalisePostcode } from "@/lib/postcode";
+import FeedbackButton from "@/components/FeedbackButton";
 
 export default function Dashboard() {
   // Stable client — don't recreate on every render
@@ -216,6 +217,59 @@ export default function Dashboard() {
             + New Holiday
           </button>
         </div>
+
+        {/* Upcoming trips countdown — rooms in booking/done step with agreed dates */}
+        {(() => {
+          const upcoming = rooms.filter(
+            (r) => (r.current_step === "booking" || r.current_step === "done") && r.agreed_start
+          );
+          if (!upcoming.length) return null;
+          return (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">Upcoming Trips</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {upcoming.map((room) => {
+                  const daysUntil = room.agreed_start
+                    ? Math.ceil((new Date(room.agreed_start).getTime() - Date.now()) / 86_400_000)
+                    : null;
+                  const destEmoji = room.destination_iata ? "🌍" : "🏖️";
+                  const destLabel = room.destination_iata ?? "Destination TBC";
+                  const countdownLabel =
+                    daysUntil === null ? "" :
+                    daysUntil < 0 ? "Trip in progress!" :
+                    daysUntil === 0 ? "Today! 🎉" :
+                    daysUntil === 1 ? "Tomorrow! 🎉" :
+                    `in ${daysUntil} days`;
+                  return (
+                    <button
+                      key={room.slug}
+                      onClick={() => router.push(`/room/${room.slug}`)}
+                      className="rounded-xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 text-left hover:border-blue-400 hover:shadow-md transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-gray-900">{room.name}</p>
+                          <p className="text-sm text-blue-700 font-medium mt-0.5">
+                            {destEmoji} {destLabel} {countdownLabel && `· ${countdownLabel}`}
+                          </p>
+                          {room.agreed_start && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {new Date(room.agreed_start).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                              {room.agreed_end ? ` – ${new Date(room.agreed_end).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-3xl">
+                          {daysUntil !== null && daysUntil <= 7 ? "🎉" : daysUntil !== null && daysUntil <= 30 ? "⏳" : "✈️"}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Room list */}
         {rooms.length === 0 ? (
@@ -425,6 +479,8 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      <FeedbackButton token={token} page="dashboard" />
     </main>
   );
 }

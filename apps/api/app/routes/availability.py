@@ -15,6 +15,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+import os
+
+from ..core.email import availability_complete_email, send_email
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user
 from .rooms import _assert_member, _get_room_by_slug
@@ -184,6 +187,36 @@ def submit_availability(
             {"room_id": room["id"], "user_id": user.id},
             on_conflict="room_id,user_id",
         ).execute()
+
+        # Check if everyone has now submitted — if so, email the admin
+        all_members = db.table("room_members").select("user_id, is_admin").eq("room_id", room["id"]).execute()
+        submitted = db.table("availability_submissions").select("user_id").eq("room_id", room["id"]).execute()
+        submitted_ids = {s["user_id"] for s in (submitted.data or [])}
+        all_ids = {m["user_id"] for m in (all_members.data or [])}
+
+        if submitted_ids >= all_ids and all_ids:
+            # Find the admin's email
+            admin_row = next((m for m in (all_members.data or []) if m.get("is_admin")), None)
+            if admin_row:
+                admin_profile = (
+                    db.table("profiles")
+                    .select("email, display_name")
+                    .eq("id", admin_row["user_id"])
+                    .single()
+                    .execute()
+                )
+                if admin_profile.data and admin_profile.data.get("email"):
+                    admin_email = admin_profile.data["email"]
+                    admin_name = admin_profile.data.get("display_name") or "there"
+                    app_url = os.getenv("APP_URL", "https://groupholidaybooking.vercel.app")
+                    subject, html = availability_complete_email(
+                        admin_name=admin_name,
+                        room_name=room["name"],
+                        room_slug=slug,
+                        member_count=len(all_ids),
+                        app_url=app_url,
+                    )
+                    send_email(to=admin_email, subject=subject, html=html)
 
     return {"ok": True, "blocks_saved": len(rows), "submitted": body.mark_submitted}
 

@@ -22,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-from .routes import availability, chat, destinations, flights, health, optimise, profile, rooms
+from .routes import availability, chat, destinations, feedback, flights, health, optimise, profile, rooms
 
 
 @asynccontextmanager
@@ -64,3 +64,4 @@ app.include_router(availability.router, prefix="/api/rooms/{slug}/availability",
 app.include_router(destinations.router, prefix="/api/rooms/{slug}/destinations", tags=["destinations"])
 app.include_router(flights.router, prefix="/api/rooms/{slug}/flights", tags=["flights"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])

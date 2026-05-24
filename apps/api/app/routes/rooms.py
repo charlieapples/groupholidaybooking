@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from ..db.supabase import get_client
-from ..deps.auth import UserInfo, current_user
+from ..deps.auth import UserInfo, current_user, optional_user
 
 router = APIRouter()
 
@@ -444,3 +444,53 @@ def advance_step(slug: str, user: UserInfo = Depends(current_user)):
         .execute()
     )
     return _room_with_member_count(db, updated.data[0], user.id)
+
+
+# ── Public shareable summary (no auth required) ───────────────────────────────
+
+class PublicRoomSummary(BaseModel):
+    name: str
+    destination_iata: Optional[str]
+    agreed_start: Optional[str]
+    agreed_end: Optional[str]
+    member_count: int
+    avg_cost_pp: Optional[float]
+    destination_name: Optional[str]
+
+
+@router.get("/{slug}/summary", response_model=PublicRoomSummary)
+def get_public_summary(slug: str, _user=Depends(optional_user)):
+    """Return a sanitised public summary of a Holiday — no auth required.
+
+    Omits member names, postcodes, and individual flight costs.
+    Safe to share with people outside the group.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+
+    count_res = db.table("room_members").select("*", count="exact").eq("room_id", room["id"]).execute()
+    member_count = count_res.count or 0
+
+    avg_cost = None
+    dest_name = None
+    results_res = db.table("flight_results").select("result_json").eq("room_id", room["id"]).execute()
+    if results_res.data:
+        import json as _json
+        all_results = _json.loads(results_res.data[0]["result_json"])
+        dest_iata = room.get("destination_iata")
+        match = next((r for r in all_results if r.get("destination") == dest_iata), None)
+        if match is None and all_results:
+            match = all_results[0]
+        if match:
+            avg_cost = match.get("avg_individual_cost")
+            dest_name = match.get("destination_name")
+
+    return PublicRoomSummary(
+        name=room["name"],
+        destination_iata=room.get("destination_iata"),
+        agreed_start=room.get("agreed_start"),
+        agreed_end=room.get("agreed_end"),
+        member_count=member_count,
+        avg_cost_pp=avg_cost,
+        destination_name=dest_name,
+    )

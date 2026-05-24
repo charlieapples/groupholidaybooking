@@ -345,6 +345,39 @@ export function getFlightResults(token: string, slug: string) {
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
+// ── Public room summary (no auth) ─────────────────────────────────────────────
+
+export interface PublicRoomSummary {
+  name: string;
+  destination_iata: string | null;
+  agreed_start: string | null;
+  agreed_end: string | null;
+  member_count: number;
+  avg_cost_pp: number | null;
+  destination_name: string | null;
+}
+
+export async function getPublicRoomSummary(slug: string): Promise<PublicRoomSummary> {
+  const res = await fetch(`/api/rooms/${slug}/summary`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `API error ${res.status}`);
+  }
+  return res.json();
+}
+
+// ── Feedback ──────────────────────────────────────────────────────────────────
+
+export function submitFeedback(
+  token: string,
+  body: { rating: number; comment?: string; page?: string; room_slug?: string }
+) {
+  return apiFetch<void>("/feedback", token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function sendChatMessage(
   token: string,
   message: string,
