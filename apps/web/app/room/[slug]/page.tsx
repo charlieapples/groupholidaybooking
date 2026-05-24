@@ -6,6 +6,7 @@ import {
   listMembers,
   getSubmissionStatus,
   updateMyPostcode,
+  updateRoom,
   deleteRoom,
   leaveRoom,
   kickMember,
@@ -60,6 +61,9 @@ export default function RoomPage() {
   const [showPostcodeEdit, setShowPostcodeEdit] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [reminding, setReminding] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -202,6 +206,21 @@ export default function RoomPage() {
     }
   }
 
+  async function handleRename() {
+    if (!token || !room?.is_admin || !newName.trim()) return;
+    setSavingName(true);
+    try {
+      const updated = await updateRoom(token, slug, { name: newName.trim() });
+      setRoom(updated);
+      setEditingName(false);
+      toast.success("Holiday renamed!");
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Failed to rename Holiday"));
+    } finally {
+      setSavingName(false);
+    }
+  }
+
   async function shareLink() {
     const url = `${window.location.origin}/room/${slug}/join`;
     const shareText = `Join my holiday planning room "${room?.name ?? slug}" on Group Holiday`;
@@ -251,7 +270,40 @@ export default function RoomPage() {
           <button onClick={() => router.push("/dashboard")} className="text-sm text-gray-500 hover:text-gray-900">
             ← Dashboard
           </button>
-          <span className="font-semibold text-gray-900">{room.name}</span>
+          {editingName ? (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleRename();
+                  if (e.key === "Escape") setEditingName(false);
+                }}
+                className="rounded-lg border border-gray-300 px-2 py-1 text-sm font-semibold text-gray-900 focus:border-blue-500 focus:outline-none w-48"
+              />
+              <button onClick={handleRename} disabled={savingName} className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50">
+                {savingName ? "…" : "Save"}
+              </button>
+              <button onClick={() => setEditingName(false)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-gray-900">{room.name}</span>
+              {room.is_admin && (
+                <button
+                  onClick={() => { setNewName(room.name); setEditingName(true); }}
+                  title="Rename this Holiday"
+                  className="rounded p-0.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+              )}
+            </div>
+          )}
           <button
             onClick={shareLink}
             className="rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
