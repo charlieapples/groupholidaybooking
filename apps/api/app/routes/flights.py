@@ -16,8 +16,11 @@ from fastapi import APIRouter, Depends, HTTPException
 log = logging.getLogger("flights")
 from pydantic import BaseModel
 
+import os
+
 from ..core.config import Config, DateWindow, Person
 from ..core.destinations import label as label_dest
+from ..core.email import flights_ready_email, send_email
 from ..core.optimiser import optimise
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user
@@ -228,6 +231,39 @@ def run_optimiser(slug: str, user: UserInfo = Depends(current_user)):
             ).execute()
         except Exception:
             log.warning("Failed to cache flight result for %s (continuing)", dto.destination)
+
+    # Fire-and-forget: notify all non-admin members that flight results are ready.
+    # This runs after caching so a notification failure never breaks the API response.
+    try:
+        best = next((d for d in dtos if d.is_fully_viable), dtos[0] if dtos else None)
+        if best:
+            app_url = os.getenv("APP_URL", "https://groupholidaybooking.vercel.app")
+            # Fetch all member emails (join profiles)
+            member_emails_res = (
+                db.table("room_members")
+                .select("user_id, is_admin, profiles(display_name, email)")
+                .eq("room_id", room["id"])
+                .execute()
+            )
+            for m in member_emails_res.data:
+                if m.get("is_admin"):
+                    continue  # don't notify the person who just ran it
+                profile = m.get("profiles") or {}
+                email_addr = profile.get("email")
+                member_name = profile.get("display_name") or "there"
+                if not email_addr:
+                    continue
+                subject, html = flights_ready_email(
+                    member_name=member_name,
+                    room_name=room["name"],
+                    room_slug=slug,
+                    best_dest_name=best.destination_name,
+                    best_avg_cost=best.avg_individual_cost,
+                    app_url=app_url,
+                )
+                send_email(to=email_addr, subject=subject, html=html)
+    except Exception:
+        log.warning("Failed to send flight results notification emails (continuing)")
 
     return dtos
 

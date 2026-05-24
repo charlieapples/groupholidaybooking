@@ -91,3 +91,41 @@ def availability_complete_email(
     </div>
     """
     return subject, html
+
+
+def flights_ready_email(
+    member_name: str,
+    room_name: str,
+    room_slug: str,
+    best_dest_name: str,
+    best_avg_cost: float,
+    app_url: str,
+) -> tuple[str, str]:
+    """Return (subject, html) for the 'flight results are ready' notification.
+
+    Sent to every group member (except the admin who triggered the run).
+    """
+    flights_url = f"{app_url}/room/{room_slug}/flights"
+    subject = f"✈️ Flight results are in for {room_name}!"
+    html = f"""
+    <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
+      <h2 style="color: #1d4ed8;">✈️ Group Holiday</h2>
+      <h3 style="color: #111827;">Your flight results are ready!</h3>
+      <p style="color: #374151;">
+        Hi {member_name},<br><br>
+        The admin has run the flight search for <strong>{room_name}</strong>.
+        The top result is <strong>{best_dest_name}</strong> at approximately
+        <strong>£{best_avg_cost:.0f} per person</strong> (flights only).
+      </p>
+      <a href="{flights_url}"
+         style="display:inline-block; margin-top:16px; padding:12px 24px;
+                background:#2563eb; color:#fff; border-radius:10px;
+                text-decoration:none; font-weight:600;">
+        View flight options →
+      </a>
+      <p style="color:#9ca3af; font-size:12px; margin-top:32px;">
+        Group Holiday · <a href="{app_url}" style="color:#9ca3af;">groupholiday.app</a>
+      </p>
+    </div>
+    """
+    return subject, html
