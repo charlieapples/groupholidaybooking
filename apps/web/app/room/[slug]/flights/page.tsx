@@ -321,6 +321,7 @@ export default function FlightsPage() {
                 isAdmin={!!room.is_admin}
                 memberCount={room.member_count ?? 0}
                 nights={tripNights}
+                budgetGbp={room.budget_gbp}
                 choosingDest={choosingDest}
                 handleChooseDestination={handleChooseDestination}
               />
@@ -387,6 +388,7 @@ export default function FlightsPage() {
                               isAdmin={!!room.is_admin}
                               memberCount={room.member_count ?? 0}
                               nights={tripNights}
+                              budgetGbp={room.budget_gbp}
                               choosingDest={choosingDest}
                               handleChooseDestination={handleChooseDestination}
                             />
@@ -428,6 +430,7 @@ export default function FlightsPage() {
                       isAdmin={!!room.is_admin}
                       memberCount={room.member_count ?? 0}
                       nights={tripNights}
+                      budgetGbp={room.budget_gbp}
                       choosingDest={choosingDest}
                       handleChooseDestination={handleChooseDestination}
                     />
@@ -479,6 +482,7 @@ interface ResultsListProps {
   isAdmin: boolean;
   memberCount: number;
   nights?: number;
+  budgetGbp?: number | null;
   choosingDest: string | null;
   handleChooseDestination: (iata: string) => void;
 }
@@ -491,6 +495,7 @@ function ResultsList({
   isAdmin,
   memberCount,
   nights,
+  budgetGbp,
   choosingDest,
   handleChooseDestination,
 }: ResultsListProps) {
@@ -518,6 +523,11 @@ function ResultsList({
                   {!r.is_fully_viable && (
                     <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                       {r.viable_count}/{memberCount} can go
+                    </span>
+                  )}
+                  {budgetGbp && Math.round(r.avg_individual_cost) > budgetGbp && (
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                      Over budget
                     </span>
                   )}
                 </div>
