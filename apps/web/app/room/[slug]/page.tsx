@@ -413,7 +413,7 @@ export default function RoomPage() {
                   <p className="text-gray-600">
                     Time to book! Everyone books their own flights and you coordinate accommodation together.
                     {room.destination_iata && (
-                      <span className="font-semibold"> Destination: {room.destination_iata}</span>
+                      <span className="font-semibold"> Destination: {destName(room.destination_iata)}</span>
                     )}
                   </p>
                   <button

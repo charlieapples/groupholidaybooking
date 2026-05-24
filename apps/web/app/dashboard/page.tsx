@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { normalisePostcode } from "@/lib/postcode";
+import { destName } from "@/lib/destinations";
 import FeedbackButton from "@/components/FeedbackButton";
 
 export default function Dashboard() {
@@ -235,7 +236,7 @@ export default function Dashboard() {
                     ? Math.ceil((new Date(room.agreed_start).getTime() - Date.now()) / 86_400_000)
                     : null;
                   const destEmoji = room.destination_iata ? "🌍" : "🏖️";
-                  const destLabel = room.destination_iata ?? "Destination TBC";
+                  const destLabel = room.destination_iata ? destName(room.destination_iata) : "Destination TBC";
                   const countdownLabel =
                     daysUntil === null ? "" :
                     daysUntil < 0 ? "Trip in progress!" :
@@ -319,7 +320,15 @@ export default function Dashboard() {
                       )}
                     </div>
                     <span className="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-                      {room.current_step}
+                      {({
+                        availability: "📅 Availability",
+                        duration: "🗓️ Duration",
+                        budget: "💷 Budget",
+                        destination: "🗺️ Destinations",
+                        flights: "✈️ Flights",
+                        booking: "🎫 Booking",
+                        done: "✅ Done",
+                      } as Record<string, string>)[room.current_step] ?? room.current_step}
                     </span>
                   </div>
                   <p className="mt-3 text-sm text-gray-500">
