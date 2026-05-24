@@ -196,6 +196,7 @@ export default function PreferencesPage() {
                   placeholder="e.g. 5"
                   value={minNights}
                   onChange={(e) => setMinNights(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSave()}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -209,6 +210,7 @@ export default function PreferencesPage() {
                   placeholder="e.g. 10"
                   value={maxNights}
                   onChange={(e) => setMaxNights(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSave()}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -225,6 +227,7 @@ export default function PreferencesPage() {
               placeholder="Leave blank to just rank by cheapest"
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSave()}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
             />
             <p className="mt-1 text-xs text-gray-500">
@@ -374,6 +377,7 @@ export default function PreferencesPage() {
                   min={1}
                   value={agreedMin}
                   onChange={(e) => setAgreedMin(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAdvance()}
                   className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -384,6 +388,7 @@ export default function PreferencesPage() {
                   min={1}
                   value={agreedMax}
                   onChange={(e) => setAgreedMax(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAdvance()}
                   className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
                 />
               </div>
@@ -410,6 +415,7 @@ export default function PreferencesPage() {
                 placeholder="Leave blank for no cap"
                 value={agreedBudget}
                 onChange={(e) => setAgreedBudget(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAdvance()}
                 className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
               />
             </div>
