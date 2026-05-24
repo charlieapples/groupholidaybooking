@@ -603,8 +603,24 @@ export default function AvailabilityPage() {
 
       <div className="mx-auto max-w-3xl space-y-6 px-6 py-10">
 
+        {/* Step already done banner — show if room has moved past availability */}
+        {room?.agreed_start && (
+          <div className="rounded-xl border-2 border-green-200 bg-green-50 p-4 flex items-start gap-3">
+            <span className="text-2xl leading-none">✅</span>
+            <div>
+              <p className="font-semibold text-green-900">Availability step complete!</p>
+              <p className="text-sm text-green-800 mt-0.5">
+                The group agreed on <strong>{room.agreed_start} → {room.agreed_end}</strong>.{" "}
+                <button onClick={() => router.push(`/room/${slug}`)} className="underline hover:text-green-700">
+                  Continue planning →
+                </button>
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Status banner */}
-        {status && (
+        {status && !room?.agreed_start && (
           <div
             className={`rounded-xl p-4 text-sm font-medium ${
               status.all_submitted

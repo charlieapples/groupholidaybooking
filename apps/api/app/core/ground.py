@@ -18,6 +18,7 @@ _COST_PER_KM = {
     "driving": 0.25,   # fuel + wear
 }
 _DEFAULT_MODE = "transit"
+_MIN_COST_GBP = 8.0   # minimum ground cost — even a short taxi/bus is at least £8
 
 
 @dataclass
@@ -83,7 +84,7 @@ def ground_leg(
     distance_km = leg["distance"]["value"] / 1000
     duration_hours = leg["duration"]["value"] / 3600
     cost_per_km = _COST_PER_KM.get(mode, _COST_PER_KM["transit"])
-    estimated_cost = round(distance_km * cost_per_km, 2)
+    estimated_cost = round(max(distance_km * cost_per_km, _MIN_COST_GBP), 2)
 
     result = GroundLeg(
         origin=origin,

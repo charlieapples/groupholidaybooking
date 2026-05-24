@@ -552,14 +552,19 @@ export default function RoomPage() {
             {/* Share card */}
             <div className="rounded-xl border bg-blue-50 p-6">
               <h3 className="font-semibold text-blue-900 mb-2">Invite friends</h3>
-              <p className="text-sm text-blue-700 mb-3">
-                Holiday code: <span className="font-mono font-bold">{slug}</span>
+              <p className="text-sm text-blue-700 mb-1">
+                Send this link — they can join without an account first.
               </p>
+              <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2">
+                <span className="flex-1 truncate text-xs text-gray-500 font-mono">
+                  {typeof window !== "undefined" ? `${window.location.origin}/room/${slug}/join` : `/room/${slug}/join`}
+                </span>
+              </div>
               <button
                 onClick={shareLink}
                 className="w-full rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700"
               >
-                Copy invite link
+                📋 Copy invite link
               </button>
             </div>
 
