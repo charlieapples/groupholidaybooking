@@ -30,6 +30,86 @@ const AVOID_OPTIONS = [
   "expensive cities",
 ];
 
+// Rough IATA prefix → country flag emoji. Not 100% accurate (some prefixes
+// span countries) but close enough for visual flair on the destination cards.
+const FLAG_BY_IATA: Record<string, string> = {
+  // UK
+  EDI: "🇬🇧", MAN: "🇬🇧", LHR: "🇬🇧", LGW: "🇬🇧", STN: "🇬🇧",
+  // Ireland
+  DUB: "🇮🇪", ORK: "🇮🇪",
+  // Spain
+  BCN: "🇪🇸", MAD: "🇪🇸", PMI: "🇪🇸", AGP: "🇪🇸", ALC: "🇪🇸",
+  IBZ: "🇪🇸", BIO: "🇪🇸", SVQ: "🇪🇸", VLC: "🇪🇸",
+  TFS: "🇪🇸", TFN: "🇪🇸", LPA: "🇪🇸", ACE: "🇪🇸", FUE: "🇪🇸",
+  // Portugal
+  LIS: "🇵🇹", OPO: "🇵🇹", FAO: "🇵🇹", FNC: "🇵🇹",
+  // France
+  CDG: "🇫🇷", ORY: "🇫🇷", NCE: "🇫🇷", TLS: "🇫🇷", BOD: "🇫🇷",
+  MRS: "🇫🇷", LYS: "🇫🇷", BIQ: "🇫🇷",
+  // Italy
+  FCO: "🇮🇹", MXP: "🇮🇹", VCE: "🇮🇹", NAP: "🇮🇹", TRN: "🇮🇹",
+  BLQ: "🇮🇹", FLR: "🇮🇹", PSA: "🇮🇹", CTA: "🇮🇹", PMO: "🇮🇹",
+  CAG: "🇮🇹", BRI: "🇮🇹",
+  // Netherlands
+  AMS: "🇳🇱",
+  // Germany
+  MUC: "🇩🇪", BER: "🇩🇪", HAM: "🇩🇪", FRA: "🇩🇪",
+  // Switzerland
+  GVA: "🇨🇭", ZRH: "🇨🇭",
+  // Scandinavia
+  CPH: "🇩🇰", ARN: "🇸🇪", OSL: "🇳🇴", HEL: "🇫🇮",
+  // Iceland
+  REK: "🇮🇸", KEF: "🇮🇸",
+  // Central / Eastern Europe
+  PRG: "🇨🇿", VIE: "🇦🇹", BUD: "🇭🇺", KRK: "🇵🇱", WAW: "🇵🇱", GDN: "🇵🇱",
+  TLL: "🇪🇪", RIX: "🇱🇻", VNO: "🇱🇹", BEG: "🇷🇸", SOF: "🇧🇬", OTP: "🇷🇴",
+  ZAG: "🇭🇷", LJU: "🇸🇮", BTS: "🇸🇰", TIA: "🇦🇱", SKP: "🇲🇰", SJJ: "🇧🇦",
+  // Greece / Cyprus / Malta
+  ATH: "🇬🇷", SKG: "🇬🇷", HER: "🇬🇷", RHO: "🇬🇷", CFU: "🇬🇷",
+  JMK: "🇬🇷", JTR: "🇬🇷",
+  LCA: "🇨🇾", PFO: "🇨🇾", MLA: "🇲🇹",
+  // Croatia
+  ZAD: "🇭🇷", SPU: "🇭🇷", DBV: "🇭🇷",
+  // North Africa
+  AGA: "🇲🇦", RAK: "🇲🇦", CMN: "🇲🇦", TUN: "🇹🇳",
+  CAI: "🇪🇬", HRG: "🇪🇬", SSH: "🇪🇬",
+  // Turkey / Middle East
+  IST: "🇹🇷", SAW: "🇹🇷", AYT: "🇹🇷", ESB: "🇹🇷",
+  DXB: "🇦🇪", AUH: "🇦🇪", DOH: "🇶🇦", AMM: "🇯🇴",
+  TLV: "🇮🇱", BEY: "🇱🇧", JED: "🇸🇦", RUH: "🇸🇦",
+  // Asia
+  BKK: "🇹🇭", DMK: "🇹🇭", HKT: "🇹🇭", CNX: "🇹🇭",
+  SIN: "🇸🇬", KUL: "🇲🇾", DPS: "🇮🇩", CGK: "🇮🇩", MNL: "🇵🇭",
+  HAN: "🇻🇳", SGN: "🇻🇳", HKG: "🇭🇰", TPE: "🇹🇼", ICN: "🇰🇷",
+  NRT: "🇯🇵", HND: "🇯🇵", KIX: "🇯🇵",
+  PEK: "🇨🇳", PVG: "🇨🇳", CTU: "🇨🇳",
+  DEL: "🇮🇳", BOM: "🇮🇳", GOI: "🇮🇳",
+  CMB: "🇱🇰", MLE: "🇲🇻", KTM: "🇳🇵",
+  // North America
+  JFK: "🇺🇸", LGA: "🇺🇸", EWR: "🇺🇸", BOS: "🇺🇸", PHL: "🇺🇸",
+  DCA: "🇺🇸", MIA: "🇺🇸", FLL: "🇺🇸", MCO: "🇺🇸", ATL: "🇺🇸",
+  ORD: "🇺🇸", MSP: "🇺🇸", DEN: "🇺🇸", LAX: "🇺🇸", SFO: "🇺🇸",
+  SAN: "🇺🇸", LAS: "🇺🇸", SEA: "🇺🇸", PDX: "🇺🇸",
+  YYZ: "🇨🇦", YUL: "🇨🇦", YVR: "🇨🇦",
+  MEX: "🇲🇽", CUN: "🇲🇽", SJD: "🇲🇽", PVR: "🇲🇽",
+  // Central America / Caribbean
+  PTY: "🇵🇦", SJO: "🇨🇷", HAV: "🇨🇺", NAS: "🇧🇸",
+  MBJ: "🇯🇲", PUJ: "🇩🇴", SDQ: "🇩🇴", BGI: "🇧🇧", SXM: "🇸🇽",
+  // South America
+  GRU: "🇧🇷", GIG: "🇧🇷", EZE: "🇦🇷", SCL: "🇨🇱", LIM: "🇵🇪",
+  BOG: "🇨🇴", MVD: "🇺🇾", UIO: "🇪🇨", CUZ: "🇵🇪",
+  // Africa
+  JNB: "🇿🇦", CPT: "🇿🇦", NBO: "🇰🇪", ZNZ: "🇹🇿", DAR: "🇹🇿",
+  ADD: "🇪🇹", LOS: "🇳🇬", MRU: "🇲🇺", SEZ: "🇸🇨",
+  // Oceania
+  SYD: "🇦🇺", MEL: "🇦🇺", BNE: "🇦🇺", PER: "🇦🇺",
+  AKL: "🇳🇿", WLG: "🇳🇿", NAN: "🇫🇯", PPT: "🇵🇫",
+};
+
+function flagFor(iata: string): string {
+  return FLAG_BY_IATA[iata] || "🌍";
+}
+
 // Worldwide destination list — kept in sync with apps/api/app/core/destinations.py
 // (single source of truth would be the API, but duplicating here keeps the propose
 // dropdown instant; backend accepts any IATA via the "custom code" option anyway).
@@ -487,12 +567,15 @@ export default function DestinationsPage() {
                   key={c.id}
                   className="flex items-center justify-between rounded-xl border bg-gray-50 px-4 py-3"
                 >
-                  <div>
-                    <p className="font-semibold text-gray-900">{c.name}</p>
-                    <p className="text-xs text-gray-400">
-                      {c.proposed_by ? "Proposed by member" : "Algorithm suggestion"}
-                      {c.total_cost_gbp ? ` · ~£${c.total_cost_gbp.toLocaleString()} pp` : ""}
-                    </p>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-2xl shrink-0" aria-hidden="true">{flagFor(c.iata_code)}</span>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900 truncate">{c.name}</p>
+                      <p className="text-xs text-gray-400">
+                        {c.proposed_by ? "Proposed by member" : "AI suggestion"}
+                        {c.total_cost_gbp ? ` · ~£${c.total_cost_gbp.toLocaleString()} pp` : ""}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="min-w-8 text-center text-sm font-bold text-gray-900">

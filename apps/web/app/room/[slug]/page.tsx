@@ -87,7 +87,35 @@ export default function RoomPage() {
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
       if (session?.access_token) setToken(session.access_token);
     });
-    return () => sub.subscription.unsubscribe();
+    // Refresh room + members + submission status when the user comes back to
+    // the tab — so they see new joiners and new availability submissions
+    // without having to manually reload.
+    function handleVisibilityChange() {
+      if (document.visibilityState !== "visible") return;
+      supabase.auth.getSession().then(async ({ data }) => {
+        if (!data.session) return;
+        const t = data.session.access_token;
+        try {
+          const [r, m] = await Promise.all([
+            getRoom(t, slug),
+            listMembers(t, slug),
+          ]);
+          setRoom(r);
+          setMembers(m);
+          if (r.current_step === "availability") {
+            const status = await getSubmissionStatus(t, slug).catch(() => null);
+            if (status) setSubmissionStatus(status);
+          }
+        } catch {
+          // Don't kick the user out on a transient refresh failure.
+        }
+      });
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      sub.subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [slug, router, supabase]);
 
   async function handleSavePostcode() {
