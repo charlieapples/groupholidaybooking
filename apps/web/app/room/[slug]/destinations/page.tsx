@@ -15,7 +15,7 @@ import {
   type DestinationCandidate,
 } from "@/lib/api";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
 import { DEST_NAMES, flagFor } from "@/lib/destinations";
@@ -67,6 +67,10 @@ export default function DestinationsPage() {
   // Advance
   const [advancing, setAdvancing] = useState(false);
 
+  // Keep a ref so realtime callbacks always have the latest token
+  const tokenRef = useRef<string | null>(null);
+  useEffect(() => { tokenRef.current = token; }, [token]);
+
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: s }) => {
       if (!s.session) { router.replace("/"); return; }
@@ -110,6 +114,33 @@ export default function DestinationsPage() {
     if (room?.name) document.title = `Destinations – ${room.name} | Group Holiday`;
     return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
   }, [room?.name]);
+
+  // ── Realtime: live vote count updates ─────────────────────────────────────────
+  // Refresh the candidate list when any vote changes so all members see
+  // live vote tallies without needing to reload the page.
+  useEffect(() => {
+    if (!room?.id) return;
+
+    const channel = supabase
+      .channel(`dest-votes-${room.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "destination_votes",
+        },
+        async () => {
+          const t = tokenRef.current;
+          if (!t) return;
+          // Refetch full candidate list so vote counts are accurate
+          listDestinations(t, slug).then(setCandidates).catch(() => {});
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [room?.id, supabase, slug]);
 
   async function handleSaveQuestionnaire() {
     if (!token) return;

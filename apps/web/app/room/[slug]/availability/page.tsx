@@ -519,6 +519,46 @@ export default function AvailabilityPage() {
   const [lockingWindow, setLockingWindow] = useState<number | null>(null);
   const [reminding, setReminding] = useState(false);
 
+  // Keep a ref so realtime callbacks always have the latest token without
+  // needing to close over the token state directly (which would be stale).
+  const tokenRef = useRef<string | null>(null);
+  useEffect(() => { tokenRef.current = token; }, [token]);
+
+  // ── Realtime: live submission counter ─────────────────────────────────────────
+  // When another member submits, the counter ticks up instantly and the free
+  // windows auto-appear for everyone the moment the last member submits —
+  // no manual refresh needed.
+  useEffect(() => {
+    if (!room?.id) return;
+
+    const channel = supabase
+      .channel(`avail-subs-${room.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "availability_submissions",
+          filter: `room_id=eq.${room.id}`,
+        },
+        async () => {
+          const t = tokenRef.current;
+          if (!t) return;
+          try {
+            const s = await getSubmissionStatus(t, slug);
+            setStatus(s);
+            if (s.all_submitted) {
+              const w = await getFreeWindows(t, slug).catch(() => null);
+              setWindows(w);
+            }
+          } catch { /* non-fatal — tab-visibility poll catches failures */ }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [room?.id, supabase, slug]);
+
   // Derive the month range from the room's rough_window
   const { windowStart, windowEnd, months } = useMemo(() => {
     const { start, end } = parseRoughWindow(room?.rough_window ?? null);
