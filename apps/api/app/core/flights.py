@@ -10,6 +10,7 @@ inside the window, return plausibly within max_nights * 2 as a soft cap).
 """
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -17,7 +18,9 @@ from typing import Optional
 
 import diskcache
 import httpx
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import RetryError, retry, stop_after_attempt, wait_exponential
+
+log = logging.getLogger("flights.core")
 
 _CACHE = diskcache.Cache(".cache/flights")
 _BASE = "https://api.travelpayouts.com"
@@ -95,7 +98,14 @@ def _fetch_route_bucket(
             # When no destination specified, return the whole thing so caller
             # can pick its target. Caller code handles this case.
             result = all_dests
-    except httpx.HTTPStatusError:
+    except (httpx.HTTPStatusError, RetryError, httpx.RequestError) as exc:
+        # Tenacity wraps the last HTTPStatusError in a RetryError after 3
+        # failed attempts. Catch all three so a single bad route doesn't
+        # crash the whole optimiser — just return empty for this bucket.
+        log.warning(
+            "Travelpayouts query failed for origin=%s dest=%s month=%s: %s",
+            origin, destination, month, exc,
+        )
         result = {}
 
     _CACHE.set(cache_key, result, expire=3600)
@@ -278,7 +288,8 @@ def cheapest_one_way(
                 "one_way": "true",
                 "currency": currency,
             })
-        except httpx.HTTPStatusError:
+        except (httpx.HTTPStatusError, RetryError, httpx.RequestError) as exc:
+            log.warning("One-way query failed %s→%s %s: %s", origin, destination, month, exc)
             continue
 
         dest_bucket = (data.get("data") or {}).get(destination, {})
