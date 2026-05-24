@@ -289,16 +289,21 @@ def get_results(slug: str, user: UserInfo = Depends(current_user)):
     dtos = []
     for row in res.data:
         people_data = json.loads(row["per_person_results"]) if row["per_person_results"] else []
+        viable_people = [p for p in people_data if p.get("viable")]
+        # Compute avg from actual money costs (not time-weighted total_group_cost)
+        money_costs = [p.get("total_money_gbp", 0) for p in viable_people]
+        avg_money_cost = sum(money_costs) / len(money_costs) if money_costs else 0
+        group_money_total = sum(money_costs)
         dtos.append(
             DestinationResultDTO(
                 destination=row["destination_iata"],
                 destination_name=label_dest(row["destination_iata"], "name"),
                 is_fully_viable=all(p.get("viable", False) for p in people_data),
-                viable_count=sum(1 for p in people_data if p.get("viable")),
-                total_group_money_cost=row.get("total_group_cost_gbp") or 0,
-                total_group_cost=row.get("total_group_cost_gbp") or 0,
-                avg_individual_cost=(row.get("total_group_cost_gbp") or 0) / max(len(people_data), 1),
-                max_individual_cost=max((p.get("total_money_gbp", 0) for p in people_data), default=0),
+                viable_count=len(viable_people),
+                total_group_money_cost=group_money_total,
+                total_group_cost=row.get("total_group_cost_gbp") or group_money_total,
+                avg_individual_cost=avg_money_cost,
+                max_individual_cost=max(money_costs, default=0),
                 fairness_ratio=1.0,
                 shared_out_date=str(row["shared_out_date"]) if row.get("shared_out_date") else None,
                 shared_return_date=str(row["shared_return_date"]) if row.get("shared_return_date") else None,
