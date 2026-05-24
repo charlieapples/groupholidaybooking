@@ -83,6 +83,60 @@ function cityFor(iata: string): string {
   return DEST_TO_CITY[iata] || destName(iata) || iata;
 }
 
+// ── Accommodation cost tiers (£/night per room, rough budget hotel) ────────────
+// Tier A: budget Eastern European / long-haul beach: £40-70
+// Tier B: mid-range European (south/central): £65-110
+// Tier C: Western Europe / Scandinavia / premium: £90-160
+// Tier D: very expensive (Switzerland, Nordics peak): £120-220
+// Tier L: long-haul Asia/LatAm: £45-90
+
+const ACCOMMODATION_TIER: Record<string, [number, number]> = {
+  // Tier A — budget
+  SOF: [40, 70], BEG: [40, 70], OTP: [40, 70], SKP: [40, 70], TIA: [40, 70],
+  SJJ: [40, 70], KRK: [45, 75], WAW: [45, 75], GDN: [45, 75],
+  TLL: [50, 80], RIX: [50, 80], VNO: [50, 80], BTS: [45, 75],
+  // Tier B — mid
+  ATH: [65, 110], HER: [55, 95], SKG: [55, 90], RHO: [60, 100],
+  CFU: [65, 110], JMK: [80, 140], JTR: [80, 150],
+  PRG: [60, 100], BUD: [55, 95], ZAG: [55, 90], LJU: [60, 100],
+  LCA: [60, 100], PFO: [55, 90], MLA: [55, 90],
+  LIS: [70, 120], OPO: [65, 110], FAO: [60, 100],
+  BCN: [80, 140], MAD: [75, 130], AGP: [55, 100], ALC: [50, 90],
+  PMI: [65, 110], IBZ: [80, 160], SVQ: [60, 100], VLC: [60, 100],
+  TFS: [60, 110], LPA: [55, 100], ACE: [55, 95], FUE: [55, 95],
+  FCO: [75, 130], NAP: [65, 110], TRN: [65, 100], BLQ: [65, 105],
+  CTA: [60, 100], PMO: [55, 90], CAG: [55, 90], PSA: [60, 95], FLR: [75, 130],
+  AGA: [40, 75], RAK: [45, 80], CMN: [45, 75], TUN: [35, 65],
+  AYT: [50, 90], SAW: [55, 95],
+  DXB: [75, 140], AUH: [70, 130], DOH: [75, 140],
+  // Tier C — western Europe / popular cities
+  AMS: [90, 160], CDG: [90, 165], ORY: [80, 150], NCE: [85, 155],
+  TLS: [70, 120], BOD: [70, 120], MRS: [70, 120], LYS: [70, 115],
+  MXP: [80, 140], VCE: [90, 165], BRI: [55, 95],
+  MUC: [90, 150], BER: [75, 130], HAM: [80, 130], FRA: [90, 155],
+  VIE: [80, 140], CPH: [100, 175], ARN: [100, 175],
+  DUB: [90, 160], BRU: [80, 140], IST: [55, 100], ESB: [50, 85],
+  // Tier D — premium
+  GVA: [130, 220], ZRH: [130, 220], OSL: [110, 185], HEL: [95, 160],
+  // Long haul
+  BKK: [35, 75], HKT: [45, 90], CNX: [35, 70],
+  SIN: [80, 160], KUL: [40, 80], DPS: [45, 95],
+  NRT: [70, 140], HND: [70, 140], KIX: [60, 120],
+  ICN: [60, 110], TPE: [55, 100], HKG: [80, 150],
+  DEL: [35, 70], BOM: [50, 100], GOI: [40, 80],
+  JFK: [120, 210], LAX: [110, 190], MIA: [95, 165], MCO: [70, 130],
+  LAS: [70, 150], ORD: [90, 160],
+  CUN: [65, 130], PUJ: [60, 120],
+  GIG: [55, 100], EZE: [50, 90],
+  CAI: [40, 75], HRG: [40, 75], SSH: [40, 75],
+  JNB: [60, 110], CPT: [65, 120],
+};
+
+/** Return [budgetNightly, midNightly] estimates for one room (split between group). */
+function accomEstimate(iata: string): [number, number] | null {
+  return ACCOMMODATION_TIER[iata] ?? null;
+}
+
 function bookingComLink(iata: string, checkIn: string, checkOut: string, guests: number) {
   const params = new URLSearchParams({
     ss: cityFor(iata),
@@ -324,6 +378,31 @@ export default function BookingPage() {
             <p className="mt-3 text-xs text-gray-400">
               We don&apos;t take commission from these searches yet — pick whichever you trust.
             </p>
+
+            {/* Static accommodation cost estimate */}
+            {(() => {
+              const est = accomEstimate(destIata!);
+              if (!est) return null;
+              const nights = (checkIn && checkOut)
+                ? Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86_400_000)
+                : null;
+              const [budgetNight, midNight] = est;
+              return (
+                <div className="mt-4 rounded-lg bg-gray-50 border px-4 py-3 text-xs text-gray-600">
+                  <p className="font-medium text-gray-800 mb-1">Typical accommodation cost for {cityFor(destIata!)}:</p>
+                  <div className="flex flex-wrap gap-4">
+                    <span>🏨 Budget hotel: ~£{budgetNight}–{midNight}/night</span>
+                    {nights && (
+                      <span className="font-medium">
+                        = ~£{Math.round(budgetNight * nights)}–£{Math.round(midNight * nights)} for {nights} nights
+                        {" "}(£{Math.round(budgetNight * nights / Math.max(guestCount, 1))}–£{Math.round(midNight * nights / Math.max(guestCount, 1))} pp)
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-gray-400">Based on typical Booking.com prices — actual cost depends on dates, room type, and group size.</p>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -361,6 +440,44 @@ export default function BookingPage() {
               Each person books separately. Trainline searches return via London unless you&apos;re already on the continent.
             </p>
           </div>
+        )}
+
+        {/* Total trip cost estimate */}
+        {destResult && destIata && checkIn && checkOut && (
+          (() => {
+            const est = accomEstimate(destIata);
+            const nights = Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86_400_000);
+            const avgFlight = Math.round(destResult.avg_individual_cost);
+            if (!est || nights <= 0) return null;
+            const [budgetNight, midNight] = est;
+            const accomBudgetPP = Math.round(budgetNight * nights / Math.max(members.length, 1));
+            const accomMidPP = Math.round(midNight * nights / Math.max(members.length, 1));
+            const totalBudget = avgFlight + accomBudgetPP;
+            const totalMid = avgFlight + accomMidPP;
+            return (
+              <div className="rounded-xl border-2 border-blue-100 bg-blue-50 p-5 shadow-sm">
+                <h2 className="text-base font-semibold text-blue-900 mb-3">💰 Estimated total cost per person</h2>
+                <div className="grid grid-cols-2 gap-3 mb-2">
+                  <div className="rounded-lg bg-white p-3 text-center">
+                    <p className="text-xs text-gray-500 mb-0.5">Budget trip</p>
+                    <p className="text-2xl font-bold text-gray-900">~£{totalBudget.toLocaleString()}</p>
+                    <p className="text-xs text-gray-400">flights + budget hotel</p>
+                  </div>
+                  <div className="rounded-lg bg-white p-3 text-center">
+                    <p className="text-xs text-gray-500 mb-0.5">Mid-range trip</p>
+                    <p className="text-2xl font-bold text-gray-900">~£{totalMid.toLocaleString()}</p>
+                    <p className="text-xs text-gray-400">flights + mid hotel</p>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Avg flight: £{avgFlight} · Hotel estimate: £{accomBudgetPP}–£{accomMidPP}/person · {nights} nights in {cityFor(destIata)}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Does not include spending money, activities, transfers, or hold luggage.
+                </p>
+              </div>
+            );
+          })()
         )}
 
         {/* Flight links per person */}
