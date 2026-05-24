@@ -26,6 +26,7 @@ Apply in numbered order:
 | `004_destinations.sql` | `destination_candidates`, `destination_votes` |
 | `005_results.sql` | `flight_results` cache |
 | `006_rls.sql` | Row Level Security policies (members can only see their own room) |
+| `007_feedback.sql` | `feedback` table (star rating + comment, per user/page) |
 
 ## Realtime
 
