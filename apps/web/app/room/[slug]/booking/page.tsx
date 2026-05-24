@@ -14,6 +14,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
+import FeedbackButton from "@/components/FeedbackButton";
 
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
@@ -450,6 +451,17 @@ export default function BookingPage() {
           </div>
         )}
 
+        {/* Copy group plan */}
+        {destResult && destResult.people.filter(p => p.viable).length > 0 && (
+          <div className="rounded-xl border bg-white p-5 shadow-sm">
+            <h2 className="text-base font-semibold text-gray-900 mb-1">📋 Copy group plan</h2>
+            <p className="text-sm text-gray-500 mb-3">
+              One-tap copy of the full group booking summary — paste into WhatsApp, email, or Slack.
+            </p>
+            <CopyGroupPlanButton room={room} destResult={destResult} destIata={destIata ?? null} toast={toast} />
+          </div>
+        )}
+
         {/* Checklist */}
         <div className="rounded-xl border bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900 mb-4">✅ Booking checklist</h2>
@@ -513,6 +525,65 @@ export default function BookingPage() {
       </div>
 
       {token && <ChatWidget token={token} roomSlug={slug} />}
+      <FeedbackButton token={token} page="booking" roomSlug={slug} />
     </main>
+  );
+}
+
+// ── Copy group plan button ─────────────────────────────────────────────────────
+
+function CopyGroupPlanButton({
+  room,
+  destResult,
+  destIata,
+  toast,
+}: {
+  room: Room;
+  destResult: FlightResult;
+  destIata: string | null;
+  toast: { success: (m: string) => void; error: (m: string) => void };
+}) {
+  function buildPlanText(): string {
+    const lines: string[] = [];
+    lines.push(`✈️ ${room.name} — Group Holiday Plan`);
+    if (destIata) lines.push(`📍 Destination: ${destIata}`);
+    if (destResult.shared_out_date) {
+      lines.push(`📅 Dates: ${destResult.shared_out_date} → ${destResult.shared_return_date}`);
+    }
+    lines.push("");
+    lines.push("💰 Per person:");
+    for (const p of destResult.people) {
+      if (!p.viable) {
+        lines.push(`  ${p.person_name}: ❌ no flights found`);
+        continue;
+      }
+      const parts = [`£${Math.round(p.total_money_gbp)}`];
+      if (p.chosen_airport) parts.push(`from ${p.chosen_airport}`);
+      if (p.booking_link) parts.push(`→ ${p.booking_link}`);
+      lines.push(`  ${p.person_name}: ${parts.join(" — ")}`);
+    }
+    const viable = destResult.people.filter(p => p.viable);
+    if (viable.length > 1) {
+      const total = viable.reduce((s, p) => s + p.total_money_gbp, 0);
+      lines.push(`  Group total: £${Math.round(total)}`);
+    }
+    lines.push("");
+    lines.push("Each person books their own flights using the links above.");
+    return lines.join("\n");
+  }
+
+  return (
+    <button
+      onClick={() => {
+        const text = buildPlanText();
+        navigator.clipboard.writeText(text).then(
+          () => toast.success("Plan copied to clipboard!"),
+          () => toast.error("Clipboard copy failed — try manually selecting the text"),
+        );
+      }}
+      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+    >
+      📋 Copy group plan to clipboard
+    </button>
   );
 }

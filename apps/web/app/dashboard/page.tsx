@@ -198,7 +198,9 @@ export default function Dashboard() {
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <span className="text-xl font-bold text-blue-600">✈️ Group Holiday</span>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user?.name || user?.email}</span>
+            <button onClick={() => router.push("/profile")} className="text-sm text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline">
+              {user?.name || user?.email}
+            </button>
             <button onClick={signOut} className="text-sm text-gray-500 hover:text-gray-900">
               Sign out
             </button>

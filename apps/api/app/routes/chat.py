@@ -121,6 +121,35 @@ def _load_room_context(slug: str) -> str:
         if room.get("destination_iata"):
             lines.append(f"Chosen destination: {room['destination_iata']}")
 
+        # Include latest flight results if available
+        try:
+            flight_res = (
+                db.table("flight_results")
+                .select("destination_iata, shared_out_date, shared_return_date, total_group_cost_gbp, per_person_results")
+                .eq("room_id", room["id"])
+                .order("total_group_cost_gbp")
+                .limit(5)
+                .execute()
+            )
+            if flight_res.data:
+                import json as _json
+                flight_lines = []
+                for fr in flight_res.data:
+                    people_data = _json.loads(fr["per_person_results"]) if fr.get("per_person_results") else []
+                    viable = [p for p in people_data if p.get("viable")]
+                    people_str = "; ".join(
+                        f"{p['person_name']} £{p.get('total_money_gbp', 0):.0f} from {p.get('chosen_airport', '?')}"
+                        f"{' ('+str(round(p.get('ground_hours',0),1))+'h ground)' if p.get('ground_hours', 0) > 0.5 else ''}"
+                        for p in viable
+                    )
+                    flight_lines.append(
+                        f"  {fr['destination_iata']} ({fr.get('shared_out_date','')} → {fr.get('shared_return_date','')}):"
+                        f" group total £{fr.get('total_group_cost_gbp', 0):.0f} — {people_str}"
+                    )
+                lines.append("Latest flight results:\n" + "\n".join(flight_lines))
+        except Exception:
+            pass
+
         # Include availability submission status if in that step
         if room.get("current_step") == "availability":
             try:
