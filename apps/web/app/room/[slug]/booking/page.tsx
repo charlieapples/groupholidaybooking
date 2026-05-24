@@ -14,73 +14,15 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
-import { destName, accomEstimate, totalTripEstimate } from "@/lib/destinations";
+import { destName, accomEstimate, totalTripEstimate, cityName } from "@/lib/destinations";
 import FeedbackButton from "@/components/FeedbackButton";
 
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
-// IATA → city name we hand to accommodation search sites. Any IATA we don't
-// know explicitly falls back to passing the IATA itself, which most sites
-// resolve correctly via fuzzy matching.
-const DEST_TO_CITY: Record<string, string> = {
-  AMS: "Amsterdam", BCN: "Barcelona", DUB: "Dublin", LIS: "Lisbon",
-  FCO: "Rome", CDG: "Paris", ORY: "Paris", PMI: "Palma", AGP: "Malaga",
-  FAO: "Faro", OPO: "Porto", NCE: "Nice", MAD: "Madrid", MXP: "Milan",
-  VCE: "Venice", NAP: "Naples", MLA: "Malta", IBZ: "Ibiza", ALC: "Alicante",
-  GVA: "Geneva", ZRH: "Zurich", MUC: "Munich", BER: "Berlin", HAM: "Hamburg",
-  CPH: "Copenhagen", ARN: "Stockholm", OSL: "Oslo", HEL: "Helsinki",
-  BIO: "Bilbao", SVQ: "Seville", VLC: "Valencia", TLS: "Toulouse",
-  BOD: "Bordeaux", MRS: "Marseille", LYS: "Lyon", BIQ: "Biarritz",
-  TRN: "Turin", BLQ: "Bologna", FLR: "Florence", PSA: "Pisa",
-  CTA: "Catania", PMO: "Palermo", CAG: "Cagliari", BRI: "Bari",
-  PRG: "Prague", VIE: "Vienna", BUD: "Budapest", KRK: "Krakow",
-  WAW: "Warsaw", GDN: "Gdansk", TLL: "Tallinn", RIX: "Riga",
-  VNO: "Vilnius", BEG: "Belgrade", SOF: "Sofia", OTP: "Bucharest",
-  ZAG: "Zagreb", LJU: "Ljubljana", BTS: "Bratislava", TIA: "Tirana",
-  SKP: "Skopje", SJJ: "Sarajevo",
-  ATH: "Athens", SKG: "Thessaloniki", HER: "Heraklion", RHO: "Rhodes",
-  CFU: "Corfu", JMK: "Mykonos", JTR: "Santorini",
-  LCA: "Larnaca", PFO: "Paphos",
-  ZAD: "Zadar", SPU: "Split", DBV: "Dubrovnik",
-  TFS: "Tenerife", TFN: "Tenerife", LPA: "Gran Canaria",
-  ACE: "Lanzarote", FUE: "Fuerteventura", FNC: "Madeira",
-  REK: "Reykjavik", KEF: "Reykjavik",
-  AGA: "Agadir", RAK: "Marrakech", CMN: "Casablanca", TUN: "Tunis",
-  IST: "Istanbul", SAW: "Istanbul", AYT: "Antalya", ESB: "Ankara",
-  DXB: "Dubai", AUH: "Abu Dhabi", DOH: "Doha", AMM: "Amman",
-  TLV: "Tel Aviv", BEY: "Beirut", JED: "Jeddah", RUH: "Riyadh",
-  BKK: "Bangkok", DMK: "Bangkok", HKT: "Phuket", CNX: "Chiang Mai",
-  SIN: "Singapore", KUL: "Kuala Lumpur", DPS: "Bali",
-  CGK: "Jakarta", MNL: "Manila", HAN: "Hanoi", SGN: "Ho Chi Minh City",
-  HKG: "Hong Kong", TPE: "Taipei", ICN: "Seoul",
-  NRT: "Tokyo", HND: "Tokyo", KIX: "Osaka",
-  PEK: "Beijing", PVG: "Shanghai", CTU: "Chengdu",
-  DEL: "Delhi", BOM: "Mumbai", GOI: "Goa",
-  CMB: "Colombo", MLE: "Maldives", KTM: "Kathmandu",
-  JFK: "New York", LGA: "New York", EWR: "New York",
-  BOS: "Boston", PHL: "Philadelphia", DCA: "Washington DC",
-  MIA: "Miami", FLL: "Fort Lauderdale", MCO: "Orlando", ATL: "Atlanta",
-  ORD: "Chicago", MSP: "Minneapolis", DEN: "Denver", LAX: "Los Angeles",
-  SFO: "San Francisco", SAN: "San Diego", LAS: "Las Vegas",
-  SEA: "Seattle", PDX: "Portland", YYZ: "Toronto", YUL: "Montreal",
-  YVR: "Vancouver", MEX: "Mexico City", CUN: "Cancun",
-  SJD: "Los Cabos", PVR: "Puerto Vallarta",
-  PTY: "Panama City", SJO: "San Jose Costa Rica", HAV: "Havana",
-  NAS: "Nassau", MBJ: "Montego Bay", PUJ: "Punta Cana",
-  SDQ: "Santo Domingo", BGI: "Barbados", SXM: "St Maarten",
-  GRU: "Sao Paulo", GIG: "Rio de Janeiro", EZE: "Buenos Aires",
-  SCL: "Santiago", LIM: "Lima", BOG: "Bogota", MVD: "Montevideo",
-  UIO: "Quito", CUZ: "Cusco",
-  CAI: "Cairo", HRG: "Hurghada", SSH: "Sharm El Sheikh",
-  JNB: "Johannesburg", CPT: "Cape Town", NBO: "Nairobi",
-  ZNZ: "Zanzibar", ADD: "Addis Ababa", LOS: "Lagos", DAR: "Dar es Salaam",
-  MRU: "Mauritius", SEZ: "Seychelles",
-  SYD: "Sydney", MEL: "Melbourne", BNE: "Brisbane", PER: "Perth",
-  AKL: "Auckland", WLG: "Wellington", NAN: "Nadi", PPT: "Tahiti",
-};
-
+// City names imported from shared lib — cityName() returns clean names like
+// "Rome" (not "Rome Fiumicino") for use in accommodation search deep-links.
 function cityFor(iata: string): string {
-  return DEST_TO_CITY[iata] || destName(iata) || iata;
+  return cityName(iata);
 }
 
 function bookingComLink(iata: string, checkIn: string, checkOut: string, guests: number) {

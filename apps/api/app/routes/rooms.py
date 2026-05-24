@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from ..core.destinations import label as label_dest
-from ..core.email import member_joined_email, send_email
+from ..core.email import member_joined_email, send_email, step_advance_email
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user, optional_user
 
@@ -172,21 +172,27 @@ def list_rooms(user: UserInfo = Depends(current_user)):
         .execute()
     )
 
+    # Single query for all member counts — avoids N+1 (one DB hit per room).
+    all_members_res = (
+        db.table("room_members")
+        .select("room_id")
+        .in_("room_id", room_ids)
+        .execute()
+    )
+    count_by_room: dict[str, int] = {}
+    for m in (all_members_res.data or []):
+        rid = m["room_id"]
+        count_by_room[rid] = count_by_room.get(rid, 0) + 1
+
     result = []
     for room in rooms_res.data:
-        count_res = (
-            db.table("room_members")
-            .select("*", count="exact")
-            .eq("room_id", room["id"])
-            .execute()
-        )
         result.append(RoomResponse(
             id=room["id"],
             slug=room["slug"],
             name=room["name"],
             current_step=room["current_step"],
             rough_window=room.get("rough_window"),
-            member_count=count_res.count or 0,
+            member_count=count_by_room.get(room["id"], 0),
             is_admin=admin_map.get(room["id"], False),
             search_start=room.get("search_start"),
             search_end=room.get("search_end"),
@@ -544,6 +550,37 @@ def advance_step(slug: str, user: UserInfo = Depends(current_user)):
         .eq("id", room["id"])
         .execute()
     )
+
+    # Fire-and-forget: notify all non-admin members of the step change.
+    # step_advance_email() returns None for steps that don't warrant an email.
+    try:
+        app_url = os.getenv("APP_URL", "https://groupholidaybooking.vercel.app")
+        members_res = (
+            db.table("room_members")
+            .select("user_id, is_admin, profiles(email, display_name)")
+            .eq("room_id", room["id"])
+            .execute()
+        )
+        for m in (members_res.data or []):
+            if m["user_id"] == user.id:
+                continue  # don't email the admin who triggered the advance
+            profile = m.get("profiles") or {}
+            email_addr = profile.get("email")
+            if not email_addr:
+                continue
+            member_name = profile.get("display_name") or email_addr.split("@")[0] or "there"
+            result = step_advance_email(
+                member_name=member_name,
+                room_name=room["name"],
+                room_slug=slug,
+                new_step=next_step,
+                app_url=app_url,
+            )
+            if result:
+                send_email(to=email_addr, subject=result[0], html=result[1])
+    except Exception:
+        log.warning("Failed to send step-advance notifications (continuing)")
+
     return _room_with_member_count(db, updated.data[0], user.id)
 
 

@@ -127,6 +127,73 @@ def member_joined_email(
     return subject, html
 
 
+def step_advance_email(
+    member_name: str,
+    room_name: str,
+    room_slug: str,
+    new_step: str,
+    app_url: str,
+) -> tuple[str, str] | None:
+    """Return (subject, html) for a step-advance notification, or None if we
+    don't send a notification for this particular step transition.
+
+    Covers: duration, destination, booking.
+    Skips: availability (handled by availability_complete_email),
+           flights (handled by flights_ready_email), done.
+    """
+    room_url = f"{app_url}/room/{room_slug}"
+
+    if new_step == "duration":
+        subject = f"📅 Dates are locked in for {room_name} — submit your trip length"
+        cta_label = "Set trip length →"
+        cta_url = f"{room_url}/preferences"
+        body = (
+            f"Hi {member_name},<br><br>"
+            f"The admin has locked in travel dates for <strong>{room_name}</strong>. "
+            f"Please submit your preferred trip length (minimum and maximum nights) "
+            f"so the group can agree on a duration."
+        )
+    elif new_step == "destination":
+        subject = f"🗺️ Time to vote on destinations for {room_name}!"
+        cta_label = "Vote on destinations →"
+        cta_url = f"{room_url}/destinations"
+        body = (
+            f"Hi {member_name},<br><br>"
+            f"Duration and budget are agreed for <strong>{room_name}</strong>. "
+            f"It's now time to vote on where you'd like to go — head to the "
+            f"destinations page to answer a quick questionnaire and cast your votes."
+        )
+    elif new_step == "booking":
+        subject = f"✈️ Flight results are ready for {room_name} — time to book!"
+        cta_label = "View booking options →"
+        cta_url = f"{room_url}/booking"
+        body = (
+            f"Hi {member_name},<br><br>"
+            f"The flight search for <strong>{room_name}</strong> is done and the "
+            f"admin has moved you to the booking step. Head to the booking page to "
+            f"see your personalised flight link and accommodation options."
+        )
+    else:
+        return None
+
+    html = f"""
+    <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
+      <h2 style="color: #1d4ed8;">✈️ Group Holiday</h2>
+      <p style="color: #374151;">{body}</p>
+      <a href="{cta_url}"
+         style="display:inline-block; margin-top:16px; padding:12px 24px;
+                background:#2563eb; color:#fff; border-radius:10px;
+                text-decoration:none; font-weight:600;">
+        {cta_label}
+      </a>
+      <p style="color:#9ca3af; font-size:12px; margin-top:32px;">
+        Group Holiday · <a href="{app_url}" style="color:#9ca3af;">groupholiday.app</a>
+      </p>
+    </div>
+    """
+    return subject, html
+
+
 def flights_ready_email(
     member_name: str,
     room_name: str,

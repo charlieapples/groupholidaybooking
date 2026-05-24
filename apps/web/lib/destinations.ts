@@ -246,6 +246,101 @@ export const ACCOMMODATION_TIER: Record<string, [number, number]> = {
 };
 
 /**
+ * IATA → clean city name (no airport suffix).
+ * Used for accommodation search deep-links (Booking.com, Airbnb, etc.) where
+ * "Rome" works better than "Rome Fiumicino". Falls back to destName() then IATA.
+ */
+export const CITY_NAMES: Record<string, string> = {
+  // UK
+  LHR: "London", LGW: "London", STN: "London", LTN: "London", LCY: "London",
+  MAN: "Manchester", BHX: "Birmingham", EDI: "Edinburgh", GLA: "Glasgow",
+  BRS: "Bristol", NCL: "Newcastle", LBA: "Leeds", ABZ: "Aberdeen",
+  BFS: "Belfast", SOU: "Southampton", EXT: "Exeter",
+  // Ireland
+  DUB: "Dublin", ORK: "Cork",
+  // France
+  CDG: "Paris", ORY: "Paris", NCE: "Nice", TLS: "Toulouse",
+  BOD: "Bordeaux", MRS: "Marseille", LYS: "Lyon", BIQ: "Biarritz",
+  // Spain
+  BCN: "Barcelona", MAD: "Madrid", PMI: "Palma", AGP: "Malaga",
+  ALC: "Alicante", IBZ: "Ibiza", BIO: "Bilbao", SVQ: "Seville", VLC: "Valencia",
+  TFS: "Tenerife", TFN: "Tenerife", LPA: "Gran Canaria",
+  ACE: "Lanzarote", FUE: "Fuerteventura",
+  // Portugal
+  LIS: "Lisbon", OPO: "Porto", FAO: "Faro", FNC: "Madeira",
+  // Italy
+  FCO: "Rome", MXP: "Milan", VCE: "Venice", NAP: "Naples", TRN: "Turin",
+  BLQ: "Bologna", FLR: "Florence", PSA: "Pisa", CTA: "Catania",
+  PMO: "Palermo", CAG: "Cagliari", BRI: "Bari",
+  // Netherlands / Belgium
+  AMS: "Amsterdam", BRU: "Brussels",
+  // Germany
+  MUC: "Munich", BER: "Berlin", HAM: "Hamburg", FRA: "Frankfurt",
+  // Switzerland / Austria
+  GVA: "Geneva", ZRH: "Zurich", VIE: "Vienna",
+  // Scandinavia
+  CPH: "Copenhagen", ARN: "Stockholm", OSL: "Oslo", HEL: "Helsinki",
+  REK: "Reykjavik", KEF: "Reykjavik",
+  // Central / Eastern Europe
+  PRG: "Prague", BUD: "Budapest", WAW: "Warsaw", KRK: "Krakow",
+  GDN: "Gdansk", TLL: "Tallinn", RIX: "Riga", VNO: "Vilnius",
+  BEG: "Belgrade", SOF: "Sofia", OTP: "Bucharest", ZAG: "Zagreb",
+  LJU: "Ljubljana", BTS: "Bratislava", TIA: "Tirana", SKP: "Skopje", SJJ: "Sarajevo",
+  // Greece / Cyprus / Malta
+  ATH: "Athens", SKG: "Thessaloniki", HER: "Heraklion", RHO: "Rhodes",
+  CFU: "Corfu", JMK: "Mykonos", JTR: "Santorini",
+  LCA: "Larnaca", PFO: "Paphos", MLA: "Malta",
+  // Croatia
+  ZAD: "Zadar", SPU: "Split", DBV: "Dubrovnik",
+  // North Africa / Middle East
+  AGA: "Agadir", RAK: "Marrakech", CMN: "Casablanca", TUN: "Tunis",
+  CAI: "Cairo", HRG: "Hurghada", SSH: "Sharm El Sheikh",
+  IST: "Istanbul", SAW: "Istanbul", AYT: "Antalya", ESB: "Ankara",
+  DXB: "Dubai", AUH: "Abu Dhabi", DOH: "Doha", AMM: "Amman",
+  TLV: "Tel Aviv", BEY: "Beirut", JED: "Jeddah", RUH: "Riyadh",
+  // Sub-Saharan Africa
+  JNB: "Johannesburg", CPT: "Cape Town", NBO: "Nairobi",
+  ZNZ: "Zanzibar", ADD: "Addis Ababa", LOS: "Lagos", DAR: "Dar es Salaam",
+  MRU: "Mauritius", SEZ: "Seychelles",
+  // Asia
+  BKK: "Bangkok", DMK: "Bangkok", HKT: "Phuket", CNX: "Chiang Mai",
+  SIN: "Singapore", KUL: "Kuala Lumpur", DPS: "Bali",
+  CGK: "Jakarta", MNL: "Manila",
+  HAN: "Hanoi", SGN: "Ho Chi Minh City",
+  HKG: "Hong Kong", TPE: "Taipei", ICN: "Seoul",
+  NRT: "Tokyo", HND: "Tokyo", KIX: "Osaka",
+  PEK: "Beijing", PVG: "Shanghai", CTU: "Chengdu",
+  DEL: "Delhi", BOM: "Mumbai", GOI: "Goa",
+  CMB: "Colombo", MLE: "Maldives", KTM: "Kathmandu",
+  // North America
+  JFK: "New York", LGA: "New York", EWR: "New York",
+  BOS: "Boston", PHL: "Philadelphia", DCA: "Washington DC",
+  MIA: "Miami", FLL: "Fort Lauderdale", MCO: "Orlando", ATL: "Atlanta",
+  ORD: "Chicago", MSP: "Minneapolis", DEN: "Denver",
+  LAX: "Los Angeles", SFO: "San Francisco", SAN: "San Diego",
+  LAS: "Las Vegas", SEA: "Seattle", PDX: "Portland",
+  YYZ: "Toronto", YUL: "Montreal", YVR: "Vancouver",
+  MEX: "Mexico City", CUN: "Cancun", SJD: "Los Cabos", PVR: "Puerto Vallarta",
+  // Central America / Caribbean
+  PTY: "Panama City", SJO: "San Jose", HAV: "Havana",
+  NAS: "Nassau", MBJ: "Montego Bay", PUJ: "Punta Cana",
+  SDQ: "Santo Domingo", BGI: "Barbados", SXM: "St Maarten",
+  // South America
+  GRU: "Sao Paulo", GIG: "Rio de Janeiro", EZE: "Buenos Aires",
+  SCL: "Santiago", LIM: "Lima", BOG: "Bogota", MVD: "Montevideo",
+  UIO: "Quito", CUZ: "Cusco",
+  // Australia / Pacific
+  SYD: "Sydney", MEL: "Melbourne", BNE: "Brisbane", PER: "Perth",
+  AKL: "Auckland", WLG: "Wellington", NAN: "Nadi", PPT: "Tahiti",
+};
+
+/** Return the clean city name for an IATA code (no airport suffix).
+ *  Falls back to destName() then the raw IATA. Used for accommodation search links. */
+export function cityName(iata: string): string {
+  return CITY_NAMES[iata] ?? destName(iata);
+}
+
+/**
  * Return [budgetNightly, midNightly] room price estimates for a destination.
  * Returns null if we don't have data for that IATA code.
  */
