@@ -10,7 +10,7 @@ import {
   type Room,
   type FlightResult,
 } from "@/lib/api";
-import { totalTripEstimate } from "@/lib/destinations";
+import { totalTripEstimate, destName, AIRPORT_DISPLAY } from "@/lib/destinations";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -452,7 +452,8 @@ export default function FlightsPage() {
         )}
         {room.destination_iata && (
           <div className="rounded-xl border-2 border-green-200 bg-green-50 p-6">
-            <p className="font-semibold text-green-800">Destination locked in: {room.destination_iata}</p>
+            <p className="font-semibold text-green-800">✅ Destination locked in: {destName(room.destination_iata)}</p>
+            <p className="text-xs text-green-600 font-mono mt-0.5">{room.destination_iata}</p>
           </div>
         )}
       </div>
@@ -463,14 +464,7 @@ export default function FlightsPage() {
   );
 }
 
-// ── Airport display names ──────────────────────────────────────────────────────
-const AIRPORT_NAMES: Record<string, string> = {
-  LHR: "Heathrow", LGW: "Gatwick", STN: "Stansted", LTN: "Luton",
-  LCY: "London City", MAN: "Manchester", BHX: "Birmingham", EDI: "Edinburgh",
-  GLA: "Glasgow", BRS: "Bristol", LBA: "Leeds Bradford", NCL: "Newcastle",
-  BFS: "Belfast Intl", SOU: "Southampton", EXT: "Exeter", NWI: "Norwich",
-  HUY: "Humberside", MME: "Teesside", ABZ: "Aberdeen", INV: "Inverness",
-};
+// Airport display names imported from shared lib (AIRPORT_DISPLAY)
 
 // ── Sub-component: renders a list of FlightResult cards ───────────────────────
 
@@ -593,7 +587,7 @@ function ResultsList({
                     </div>
                     {p.viable && (
                       <div className="text-xs text-gray-500 space-y-0.5">
-                        {p.chosen_airport && <p>Flying from: <strong>{AIRPORT_NAMES[p.chosen_airport] ?? p.chosen_airport}</strong> ({p.chosen_airport})</p>}
+                        {p.chosen_airport && <p>Flying from: <strong>{AIRPORT_DISPLAY[p.chosen_airport] ?? p.chosen_airport}</strong> ({p.chosen_airport})</p>}
                         {p.outbound_date && <p>Out: {p.outbound_date} · In: {p.inbound_date}</p>}
                         <div className="flex gap-3 flex-wrap">
                           {p.outbound_cost_gbp > 0 && (

@@ -549,8 +549,10 @@ def get_public_summary(slug: str, _user=Depends(optional_user)):
             match = results_res.data[0]
         if match:
             people_data = json.loads(match.get("per_person_results") or "[]")
-            if people_data:
-                avg_cost = sum(p.get("total_money_gbp", 0) for p in people_data) / len(people_data)
+            # Only average over viable people (same logic as flights GET /results)
+            viable = [p for p in people_data if p.get("viable")]
+            if viable:
+                avg_cost = sum(p.get("total_money_gbp", 0) for p in viable) / len(viable)
             dest_name = label_dest(match.get("destination_iata", ""), "name")
 
     return PublicRoomSummary(
