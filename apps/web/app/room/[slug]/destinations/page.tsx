@@ -481,13 +481,13 @@ export default function DestinationsPage() {
                       👍
                     </button>
                     <button
-                      onClick={() => handleVote(c.id, c.my_vote === 0 ? 1 : 0)}
+                      onClick={() => handleVote(c.id, 0)}
                       className={`rounded-full p-1.5 transition-colors text-sm ${
                         c.my_vote === 0
                           ? "bg-gray-200 text-gray-600 border border-gray-400"
                           : "bg-white border border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-600"
                       }`}
-                      title="Neutral / don't mind"
+                      title="Neutral / clear my vote"
                     >
                       😐
                     </button>
