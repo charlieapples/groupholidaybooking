@@ -364,6 +364,18 @@ export function getFlightResults(token: string, slug: string) {
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
+export function sendChatMessage(
+  token: string,
+  message: string,
+  room_slug?: string,
+  history: { role: string; content: string }[] = []
+) {
+  return apiFetch<{ reply: string }>("/chat", token, {
+    method: "POST",
+    body: JSON.stringify({ message, room_slug, history }),
+  });
+}
+
 // ── Public room summary (no auth) ─────────────────────────────────────────────
 
 export interface PublicRoomSummary {
@@ -394,17 +406,5 @@ export function submitFeedback(
   return apiFetch<void>("/feedback", token, {
     method: "POST",
     body: JSON.stringify(body),
-  });
-}
-
-export function sendChatMessage(
-  token: string,
-  message: string,
-  room_slug?: string,
-  history: { role: string; content: string }[] = []
-) {
-  return apiFetch<{ reply: string }>("/chat", token, {
-    method: "POST",
-    body: JSON.stringify({ message, room_slug, history }),
   });
 }
