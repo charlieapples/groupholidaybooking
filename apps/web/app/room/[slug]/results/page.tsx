@@ -16,7 +16,8 @@ import { getPublicRoomSummary, type PublicRoomSummary } from "@/lib/api";
 import { flagFor } from "@/lib/destinations";
 
 function formatDate(d: string) {
-  return new Date(d).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
+  // Parse as UTC to avoid off-by-one errors from timezone shifts on ISO date strings
+  return new Date(d).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
 function nightsBetween(start: string, end: string) {

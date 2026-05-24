@@ -748,11 +748,11 @@ export default function AvailabilityPage() {
                   <div className="flex-1">
                     <p className="font-semibold text-gray-900">
                       {new Date(w.start_date).toLocaleDateString("en-GB", {
-                        day: "numeric", month: "short",
+                        day: "numeric", month: "short", timeZone: "UTC",
                       })}
                       {" – "}
                       {new Date(w.end_date).toLocaleDateString("en-GB", {
-                        day: "numeric", month: "short", year: "numeric",
+                        day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
                       })}
                     </p>
                     <p className="text-sm text-gray-500">{w.days} days free</p>

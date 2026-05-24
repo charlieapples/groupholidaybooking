@@ -464,7 +464,7 @@ export default function RoomPage() {
                         See you in <span className="font-semibold">{destName(room.destination_iata)}</span>{" "}
                         on{" "}
                         <span className="font-semibold">
-                          {new Date(room.agreed_start).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+                          {new Date(room.agreed_start).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}
                         </span>
                         {" "}— have an amazing time! 🌴
                       </>
@@ -509,9 +509,9 @@ export default function RoomPage() {
                 <div className="rounded-xl border bg-white p-4 shadow-sm">
                   <h3 className="text-xs font-medium text-gray-500 mb-1">Agreed dates</h3>
                   <p className="font-semibold text-gray-900 text-sm">
-                    {new Date(room.agreed_start).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                    {new Date(room.agreed_start).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}
                     {" – "}
-                    {new Date(room.agreed_end!).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    {new Date(room.agreed_end!).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
                   </p>
                 </div>
               )}

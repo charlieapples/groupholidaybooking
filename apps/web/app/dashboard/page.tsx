@@ -257,8 +257,8 @@ export default function Dashboard() {
                           </p>
                           {room.agreed_start && (
                             <p className="text-xs text-gray-500 mt-1">
-                              {new Date(room.agreed_start).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                              {room.agreed_end ? ` – ${new Date(room.agreed_end).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
+                              {new Date(room.agreed_start).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
+                              {room.agreed_end ? ` – ${new Date(room.agreed_end).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}` : ""}
                             </p>
                           )}
                         </div>

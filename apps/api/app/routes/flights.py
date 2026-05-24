@@ -293,7 +293,10 @@ def get_results(slug: str, user: UserInfo = Depends(current_user)):
         # Compute avg from actual money costs (not time-weighted total_group_cost)
         money_costs = [p.get("total_money_gbp", 0) for p in viable_people]
         avg_money_cost = sum(money_costs) / len(money_costs) if money_costs else 0
+        max_money_cost = max(money_costs, default=0)
         group_money_total = sum(money_costs)
+        # fairness_ratio = max / avg — ratio of 1.0 means perfectly equal cost
+        fairness_ratio = (max_money_cost / avg_money_cost) if avg_money_cost > 0 else 1.0
         dtos.append(
             DestinationResultDTO(
                 destination=row["destination_iata"],
@@ -303,8 +306,8 @@ def get_results(slug: str, user: UserInfo = Depends(current_user)):
                 total_group_money_cost=group_money_total,
                 total_group_cost=row.get("total_group_cost_gbp") or group_money_total,
                 avg_individual_cost=avg_money_cost,
-                max_individual_cost=max(money_costs, default=0),
-                fairness_ratio=1.0,
+                max_individual_cost=max_money_cost,
+                fairness_ratio=fairness_ratio,
                 shared_out_date=str(row["shared_out_date"]) if row.get("shared_out_date") else None,
                 shared_return_date=str(row["shared_return_date"]) if row.get("shared_return_date") else None,
                 computed_at=str(row.get("computed_at") or ""),
