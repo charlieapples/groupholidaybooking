@@ -735,6 +735,7 @@ export default function RoomPage() {
                     placeholder="e.g. M1 1AE"
                     value={myPostcode}
                     onChange={(e) => setMyPostcode(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSavePostcode(); }}
                     className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
                   />
                   <button
