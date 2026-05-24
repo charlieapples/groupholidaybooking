@@ -60,6 +60,7 @@ class DestinationResultDTO(BaseModel):
     shared_return_date: Optional[str] = None
     date_spread_days: int = 0
     note: str = ""
+    computed_at: Optional[str] = None
     people: list[PersonResultDTO]
 
 
@@ -81,6 +82,7 @@ def _serialise(dr) -> DestinationResultDTO:
         shared_return_date=str(dr.shared_return_date) if dr.shared_return_date else None,
         date_spread_days=dr.date_spread_days,
         note=dr.note,
+        computed_at=None,  # freshly computed — no cache timestamp
         people=[
             PersonResultDTO(
                 person_name=p.person_name,
@@ -264,6 +266,7 @@ def get_results(slug: str, user: UserInfo = Depends(current_user)):
                 fairness_ratio=1.0,
                 shared_out_date=str(row["shared_out_date"]) if row.get("shared_out_date") else None,
                 shared_return_date=str(row["shared_return_date"]) if row.get("shared_return_date") else None,
+                computed_at=str(row.get("computed_at") or ""),
                 people=[PersonResultDTO(**p) for p in people_data],
             )
         )

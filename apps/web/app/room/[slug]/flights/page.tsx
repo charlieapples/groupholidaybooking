@@ -249,12 +249,22 @@ export default function FlightsPage() {
         {/* Results */}
         {viableResults.length > 0 && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-xl font-bold text-gray-900">Results</h2>
-              <p className="text-sm text-gray-500">
-                {fullyViable.length} of {results.length} {results.length === 1 ? "destination" : "destinations"} work for everyone
-                {hiddenCount > 0 && ` · ${hiddenCount} hidden (no flights found)`}
-              </p>
+              <div className="text-right">
+                <p className="text-sm text-gray-500">
+                  {fullyViable.length} of {results.length} {results.length === 1 ? "destination" : "destinations"} work for everyone
+                  {hiddenCount > 0 && ` · ${hiddenCount} hidden (no flights)`}
+                </p>
+                {(() => {
+                  const ts = results.find(r => r.computed_at)?.computed_at;
+                  if (!ts) return null;
+                  const d = new Date(ts);
+                  const minsAgo = Math.round((Date.now() - d.getTime()) / 60000);
+                  const label = minsAgo < 2 ? "just now" : minsAgo < 60 ? `${minsAgo}m ago` : `${Math.round(minsAgo/60)}h ago`;
+                  return <p className="text-xs text-gray-400">Prices from {label} — may vary at checkout</p>;
+                })()}
+              </div>
             </div>
 
             {/* Fully viable destinations */}

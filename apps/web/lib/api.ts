@@ -314,6 +314,7 @@ export interface FlightResult {
   shared_return_date: string | null;
   date_spread_days: number;
   note: string;
+  computed_at?: string | null;
   people: PersonResult[];
 }
 

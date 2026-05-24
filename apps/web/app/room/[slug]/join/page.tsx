@@ -1,7 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { getRoom, joinRoom, type Room } from "@/lib/api";
+import { getRoom, joinRoom, getMyProfile, type Room } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { normalisePostcode } from "@/lib/postcode";
@@ -29,14 +29,19 @@ export default function JoinRoomPage() {
       const t = data.session.access_token;
       setToken(t);
 
+      // Pre-fill postcode from saved profile
+      try {
+        const profile = await getMyProfile(t);
+        if (profile.default_home_postcode) setPostcode(profile.default_home_postcode);
+      } catch { /* non-fatal */ }
+
       // Try to fetch the room (will work even if not a member since join is public)
       try {
         const r = await getRoom(t, slug);
         setRoom(r);
         setAlreadyMember(true); // getRoom succeeded → already a member
       } catch {
-        // 403 means not a member yet — fetch basic info another way
-        // We'll just show the join form without room name
+        // 403 means not a member yet — show the join form without room name
       }
       setLoading(false);
     });
