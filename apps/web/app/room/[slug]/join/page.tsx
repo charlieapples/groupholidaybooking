@@ -1,7 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { getRoom, joinRoom, getMyProfile, type Room } from "@/lib/api";
+import { getRoom, joinRoom, getMyProfile, getPublicRoomSummary, type Room } from "@/lib/api";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { normalisePostcode } from "@/lib/postcode";
@@ -13,6 +13,7 @@ export default function JoinRoomPage() {
 
   const [token, setToken] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
+  const [roomName, setRoomName] = useState<string | null>(null);
   const [postcode, setPostcode] = useState("");
   const [joining, setJoining] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -41,7 +42,8 @@ export default function JoinRoomPage() {
         setRoom(r);
         setAlreadyMember(true); // getRoom succeeded → already a member
       } catch {
-        // 403 means not a member yet — show the join form without room name
+        // 403 means not a member yet — fetch public summary to show room name
+        getPublicRoomSummary(slug).then((s) => setRoomName(s.name)).catch(() => {});
       }
       setLoading(false);
     });
@@ -103,8 +105,14 @@ export default function JoinRoomPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="text-5xl mb-3">✈️</div>
-          <h1 className="text-2xl font-bold text-gray-900">Join a Holiday</h1>
-          <p className="text-gray-500 mt-1">Holiday code: <span className="font-mono font-bold text-blue-600">{slug}</span></p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {roomName ? `Join "${roomName}"` : "Join a Holiday"}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {roomName
+              ? "You've been invited to join this group holiday."
+              : <>Holiday code: <span className="font-mono font-bold text-blue-600">{slug}</span></>}
+          </p>
         </div>
 
         <div className="rounded-2xl bg-white p-8 shadow-xl space-y-5">
@@ -135,7 +143,7 @@ export default function JoinRoomPage() {
             disabled={joining}
             className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {joining ? "Joining…" : "Join room"}
+            {joining ? "Joining…" : "Join Holiday"}
           </button>
 
           <button
