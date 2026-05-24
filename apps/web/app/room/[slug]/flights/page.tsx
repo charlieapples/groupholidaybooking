@@ -208,6 +208,40 @@ export default function FlightsPage() {
               Searches for the best flights from each member&apos;s nearest airport to all destination candidates.
               This can take 15–30 seconds.
             </p>
+
+            {/* Pre-flight checklist */}
+            {!running && (
+              <div className="mb-4 grid gap-1.5">
+                {[
+                  {
+                    ok: !!room.agreed_start,
+                    label: "Agreed travel dates",
+                    fix: "availability",
+                    fixLabel: "Set availability",
+                  },
+                  {
+                    ok: !!room.min_nights,
+                    label: "Trip duration set",
+                    fix: "preferences",
+                    fixLabel: "Set duration",
+                  },
+                ].map(({ ok, label, fix, fixLabel }) => (
+                  <div key={label} className={`flex items-center gap-2 text-xs rounded-lg px-3 py-1.5 ${ok ? "text-green-700 bg-green-50" : "text-amber-700 bg-amber-50"}`}>
+                    <span>{ok ? "✓" : "⚠"}</span>
+                    <span className="flex-1">{label}</span>
+                    {!ok && (
+                      <button
+                        onClick={() => router.push(`/room/${slug}/${fix}`)}
+                        className="underline font-medium hover:opacity-75"
+                      >
+                        {fixLabel} →
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {error && (
               <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
                 {error}
