@@ -46,6 +46,11 @@ function LandingPageContent() {
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         scopes: "email profile openid",
+        queryParams: {
+          // Always show the Google account picker so users can switch accounts
+          // without having to sign out first (especially useful for group testing).
+          prompt: "select_account",
+        },
       },
     });
   }
