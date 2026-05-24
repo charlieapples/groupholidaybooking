@@ -9,6 +9,7 @@ Flow:
 from __future__ import annotations
 
 import re
+import time
 from datetime import date, timedelta
 from typing import Optional
 
@@ -16,6 +17,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 import os
+
+# ── Rate limiting for the /remind endpoint ────────────────────────────────────
+# Prevent admins from accidentally spamming pending members.
+# In-memory per-room: at most 1 reminder per 5 minutes.
+_REMIND_COOLDOWN_SEC = 300  # 5 minutes
+_last_remind: dict[str, float] = {}  # room_id → last remind timestamp
 
 from ..core.email import availability_complete_email, availability_reminder_email, send_email
 from ..db.supabase import get_client
@@ -233,14 +240,27 @@ def submit_availability(
 def remind_pending_members(slug: str, user: UserInfo = Depends(current_user)):
     """Admin: email all members who haven't submitted availability yet.
 
-    Returns the count of reminders sent.  Idempotent — safe to call again
-    but callers should debounce in the UI to avoid spamming members.
+    Returns the count of reminders sent.  Rate-limited to 1 call per 5 minutes
+    per room to avoid accidentally spamming members.
     """
     db = get_client()
     room = _get_room_by_slug(db, slug)
     membership = _assert_member(db, room["id"], user.id)
     if not membership.get("is_admin"):
         raise HTTPException(403, "Only room admins can send reminders.")
+
+    # Rate limit: 1 reminder per COOLDOWN window per room
+    room_id = room["id"]
+    now = time.time()
+    last = _last_remind.get(room_id, 0.0)
+    wait = int(_REMIND_COOLDOWN_SEC - (now - last))
+    if wait > 0:
+        raise HTTPException(
+            429,
+            f"Reminders are rate-limited to once every 5 minutes. "
+            f"Please wait {wait} more second{'s' if wait != 1 else ''} before sending again.",
+        )
+    _last_remind[room_id] = now
 
     # Get all members and who has submitted
     members_res = (
