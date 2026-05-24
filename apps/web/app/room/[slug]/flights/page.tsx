@@ -277,7 +277,7 @@ export default function FlightsPage() {
                                   rel="noopener noreferrer"
                                   className="inline-block mt-1 text-blue-600 hover:underline"
                                 >
-                                  Book outbound flight →
+                                  Book return on Aviasales →
                                 </a>
                               )}
                             </div>

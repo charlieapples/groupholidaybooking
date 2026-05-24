@@ -221,21 +221,36 @@ export default function BookingPage() {
                         )}
                       </div>
                       {p.booking_link ? (
-                        <div className="flex gap-2">
-                          <a
-                            href={p.booking_link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
-                          >
-                            Book outbound flight
-                          </a>
-                          <button
-                            onClick={() => copyLink(p.booking_link!, p.person_name)}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
-                          >
-                            {copied === p.person_name ? "Copied!" : "Copy link"}
-                          </button>
+                        <div className="space-y-1.5">
+                          <div className="flex gap-2 flex-wrap">
+                            <a
+                              href={p.booking_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                            >
+                              Book return on Aviasales
+                            </a>
+                            {p.chosen_airport && destIata && p.outbound_date && p.inbound_date && (
+                              <a
+                                href={`https://www.skyscanner.net/transport/flights/${p.chosen_airport.toLowerCase()}/${destIata.toLowerCase()}/${p.outbound_date.slice(2).replace(/-/g, "")}/${p.inbound_date.slice(2).replace(/-/g, "")}/`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                Compare on Skyscanner
+                              </a>
+                            )}
+                            <button
+                              onClick={() => copyLink(p.booking_link!, p.person_name)}
+                              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+                            >
+                              {copied === p.person_name ? "Copied!" : "Copy link"}
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-gray-400">
+                            Prices cached up to ~24h — live price on Aviasales may differ slightly.
+                          </p>
                         </div>
                       ) : (
                         <p className="text-xs text-gray-400">No direct booking link available — search manually.</p>
