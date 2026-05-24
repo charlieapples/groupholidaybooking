@@ -312,6 +312,7 @@ export interface PersonResult {
   chosen_airport: string | null;
   outbound_cost_gbp: number;
   inbound_cost_gbp: number;
+  baggage_cost_gbp: number;
   ground_cost_gbp: number;
   ground_hours: number;
   outbound_date: string | null;

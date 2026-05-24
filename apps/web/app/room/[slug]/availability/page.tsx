@@ -196,39 +196,64 @@ function ImportPanel({
     setGcalStatus("syncing");
     setGcalError("");
     try {
-      const url = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
-      url.searchParams.set("timeMin", windowStart.toISOString());
-      url.searchParams.set("timeMax", windowEnd.toISOString());
-      url.searchParams.set("singleEvents", "true");
-      url.searchParams.set("maxResults", "2500");
-
-      const resp = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${providerToken}` },
-      });
-
-      if (resp.status === 403 || resp.status === 401) {
+      // Step 1: list ALL the user's calendars (primary + work + shared + etc.)
+      // so a single sync pulls events from every calendar, not just primary.
+      const listResp = await fetch(
+        "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
+        { headers: { Authorization: `Bearer ${providerToken}` } },
+      );
+      if (listResp.status === 403 || listResp.status === 401) {
         setGcalStatus("needs_grant");
         return;
       }
+      const listData = await listResp.json();
+      const calendarIds: string[] = (listData.items ?? [])
+        // Skip calendars the user has hidden in the Google UI — they probably
+        // don't want them counted as "busy" (e.g. holidays in your country).
+        .filter((c: { selected?: boolean; id?: string }) => c.selected !== false && c.id)
+        .map((c: { id: string }) => c.id);
 
-      const data = await resp.json();
-      const busy: string[] = [];
+      if (calendarIds.length === 0) calendarIds.push("primary");
 
-      for (const ev of data.items ?? []) {
-        if (ev.status === "cancelled") continue;
-        const start: string = ev.start?.date ?? ev.start?.dateTime?.slice(0, 10);
-        const end: string   = ev.end?.date   ?? ev.end?.dateTime?.slice(0, 10);
-        if (!start || !end) continue;
+      // Step 2: fetch events from each calendar in parallel and merge.
+      const allBusy = new Set<string>();
+      const results = await Promise.allSettled(
+        calendarIds.map(async (id) => {
+          const url = new URL(
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(id)}/events`,
+          );
+          url.searchParams.set("timeMin", windowStart.toISOString());
+          url.searchParams.set("timeMax", windowEnd.toISOString());
+          url.searchParams.set("singleEvents", "true");
+          url.searchParams.set("maxResults", "2500");
+          const r = await fetch(url.toString(), {
+            headers: { Authorization: `Bearer ${providerToken}` },
+          });
+          if (!r.ok) return;
+          const d = await r.json();
+          for (const ev of d.items ?? []) {
+            if (ev.status === "cancelled") continue;
+            // transparency: "transparent" = "available", skip it
+            if (ev.transparency === "transparent") continue;
+            const start: string = ev.start?.date ?? ev.start?.dateTime?.slice(0, 10);
+            const end: string   = ev.end?.date   ?? ev.end?.dateTime?.slice(0, 10);
+            if (!start || !end) continue;
+            const cur = new Date(start);
+            const stop = new Date(end);
+            while (cur < stop) {
+              allBusy.add(cur.toISOString().slice(0, 10));
+              cur.setDate(cur.getDate() + 1);
+            }
+          }
+        }),
+      );
 
-        const cur = new Date(start);
-        const stop = new Date(end);
-        while (cur < stop) {
-          busy.push(cur.toISOString().slice(0, 10));
-          cur.setDate(cur.getDate() + 1);
-        }
+      // If every fetch failed, surface that as an error
+      if (results.every((r) => r.status === "rejected")) {
+        throw new Error("All calendar fetches failed");
       }
 
-      onImport(busy);
+      onImport(Array.from(allBusy));
       setGcalStatus("done");
     } catch {
       setGcalStatus("error");
@@ -294,7 +319,7 @@ function ImportPanel({
           {activeTab === "google" && (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-gray-600">
-                Syncs your primary Google Calendar automatically — marks anything you have
+                Syncs all your Google Calendars (primary, work, shared) — marks anything you have
                 scheduled in the holiday window as busy.
               </p>
 

@@ -37,6 +37,7 @@ class PersonResultDTO(BaseModel):
     ground_hours: float = 0.0
     outbound_cost_gbp: float = 0.0
     inbound_cost_gbp: float = 0.0
+    baggage_cost_gbp: float = 0.0
     outbound_date: Optional[str] = None
     inbound_date: Optional[str] = None
     total_money_gbp: float = 0.0
@@ -89,6 +90,7 @@ def _serialise(dr) -> DestinationResultDTO:
                 ground_hours=p.ground_hours,
                 outbound_cost_gbp=p.outbound_cost,
                 inbound_cost_gbp=p.inbound_cost,
+                baggage_cost_gbp=p.baggage_cost_gbp,
                 outbound_date=str(p.out_date) if p.out_date else None,
                 inbound_date=str(p.return_date) if p.return_date else None,
                 total_money_gbp=p.flight_plus_ground_gbp,

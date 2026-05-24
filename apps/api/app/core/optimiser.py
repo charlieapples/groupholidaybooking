@@ -26,8 +26,9 @@ class PersonResult:
     outbound: Optional[Fare]
     inbound: Optional[Fare]
     total_cost_gbp: float           # money + time value (used for ranking)
-    flight_plus_ground_gbp: float   # raw money only
+    flight_plus_ground_gbp: float   # raw money only (incl baggage uplift)
     viable: bool
+    baggage_cost_gbp: float = 0.0   # the carry-on/hold-bag uplift applied
     note: str = ""
 
     @property
@@ -128,7 +129,11 @@ def _options_for_person(
         if outbound is None or inbound is None:
             continue
 
-        money_cost = ground.estimated_cost_gbp + outbound.price_gbp + inbound.price_gbp
+        # Baggage uplift: Travelpayouts returns "personal item only" fares.
+        # Real-world travellers will add a carry-on (or hold bag). Adding a
+        # flat uplift here keeps the budget cap and ranking realistic.
+        baggage = config.baggage_uplift_gbp
+        money_cost = ground.estimated_cost_gbp + outbound.price_gbp + inbound.price_gbp + baggage
         time_cost = ground.duration_hours * 2 * config.time_value_per_hour
         total = money_cost + time_cost
 
@@ -144,6 +149,7 @@ def _build_result(
     person_name: str,
     option: Optional[tuple[str, GroundLeg, Fare, Fare, float, float]],
     note: str = "",
+    baggage_uplift_gbp: float = 0.0,
 ) -> PersonResult:
     if option is None:
         return PersonResult(
@@ -166,6 +172,7 @@ def _build_result(
         inbound=inn,
         total_cost_gbp=round(total, 2),
         flight_plus_ground_gbp=round(money, 2),
+        baggage_cost_gbp=round(baggage_uplift_gbp, 2),
         viable=True,
     )
 
@@ -186,7 +193,7 @@ def _optimise_destination_individual(
             continue
 
         best = min(options, key=lambda o: o[5])
-        pr = _build_result(person.name, best)
+        pr = _build_result(person.name, best, baggage_uplift_gbp=config.baggage_uplift_gbp)
         dest_result.person_results.append(pr)
         if pr.out_date:
             out_dates.append(pr.out_date)
@@ -273,7 +280,7 @@ def _optimise_destination_shared(
             )
             dest_result.person_results.append(_build_result(person.name, None, note))
         else:
-            dest_result.person_results.append(_build_result(person.name, opt))
+            dest_result.person_results.append(_build_result(person.name, opt, baggage_uplift_gbp=config.baggage_uplift_gbp))
 
     return dest_result
 
