@@ -93,6 +93,40 @@ def availability_complete_email(
     return subject, html
 
 
+def member_joined_email(
+    admin_name: str,
+    member_name: str,
+    room_name: str,
+    room_slug: str,
+    member_count: int,
+    app_url: str,
+) -> tuple[str, str]:
+    """Return (subject, html) for the 'new member joined' notification sent to the admin."""
+    room_url = f"{app_url}/room/{room_slug}"
+    subject = f"🙋 {member_name} just joined {room_name}!"
+    html = f"""
+    <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
+      <h2 style="color: #1d4ed8;">✈️ Group Holiday</h2>
+      <h3 style="color: #111827;">New member joined!</h3>
+      <p style="color: #374151;">
+        Hi {admin_name},<br><br>
+        <strong>{member_name}</strong> has just joined <strong>{room_name}</strong>.
+        You now have <strong>{member_count} member{'' if member_count == 1 else 's'}</strong> in the group.
+      </p>
+      <a href="{room_url}"
+         style="display:inline-block; margin-top:16px; padding:12px 24px;
+                background:#2563eb; color:#fff; border-radius:10px;
+                text-decoration:none; font-weight:600;">
+        View your Holiday →
+      </a>
+      <p style="color:#9ca3af; font-size:12px; margin-top:32px;">
+        Group Holiday · <a href="{app_url}" style="color:#9ca3af;">groupholiday.app</a>
+      </p>
+    </div>
+    """
+    return subject, html
+
+
 def flights_ready_email(
     member_name: str,
     room_name: str,

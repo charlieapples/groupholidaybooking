@@ -6,6 +6,8 @@ The creator becomes admin. Members submit availability, preferences, and votes.
 from __future__ import annotations
 
 import json
+import logging
+import os
 import secrets
 import string
 from typing import Any, Optional
@@ -14,8 +16,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from ..core.destinations import label as label_dest
+from ..core.email import member_joined_email, send_email
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user, optional_user
+
+log = logging.getLogger("rooms")
 
 router = APIRouter()
 
@@ -328,7 +333,8 @@ def join_room(
         .eq("user_id", user.id)
         .execute()
     )
-    if not existing.data:
+    is_new_member = not existing.data
+    if is_new_member:
         db.table("room_members").insert(
             {
                 "room_id": room["id"],
@@ -338,7 +344,42 @@ def join_room(
             }
         ).execute()
 
-    return _room_with_member_count(db, room, user.id)
+    result = _room_with_member_count(db, room, user.id)
+
+    # Fire-and-forget: notify the admin that a new member joined.
+    # Only send for genuinely new joins (not idempotent re-joins).
+    if is_new_member:
+        try:
+            admin_row = (
+                db.table("room_members")
+                .select("user_id, profiles(email, display_name)")
+                .eq("room_id", room["id"])
+                .eq("is_admin", True)
+                .execute()
+            )
+            for a in (admin_row.data or []):
+                if a["user_id"] == user.id:
+                    continue  # admin joining their own room — skip
+                profile = a.get("profiles") or {}
+                admin_email = profile.get("email")
+                admin_name = profile.get("display_name") or "there"
+                if not admin_email:
+                    continue
+                app_url = os.getenv("APP_URL", "https://groupholidaybooking.vercel.app")
+                joiner_name = user.display_name or (user.email or "").split("@")[0] or "Someone"
+                subject, html = member_joined_email(
+                    admin_name=admin_name,
+                    member_name=joiner_name,
+                    room_name=room["name"],
+                    room_slug=slug,
+                    member_count=result.member_count,
+                    app_url=app_url,
+                )
+                send_email(to=admin_email, subject=subject, html=html)
+        except Exception:
+            log.warning("Failed to send member-joined notification (continuing)")
+
+    return result
 
 
 @router.patch("/{slug}/join")
