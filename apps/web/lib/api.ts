@@ -171,6 +171,7 @@ export interface SubmissionStatus {
   total: number;
   members_pending: string[];
   all_submitted: boolean;
+  user_submitted: boolean;   // whether the calling user has already submitted
 }
 
 export function submitAvailability(

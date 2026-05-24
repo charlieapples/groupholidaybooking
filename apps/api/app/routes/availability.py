@@ -89,6 +89,7 @@ class SubmissionStatusResponse(BaseModel):
     total: int
     members_pending: list[str]   # display names — safe to share
     all_submitted: bool
+    user_submitted: bool = False  # whether the calling user has already submitted
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -268,6 +269,7 @@ def submission_status(slug: str, user: UserInfo = Depends(current_user)):
         total=len(all_members),
         members_pending=pending_names,
         all_submitted=len(submitted_ids) == len(all_members),
+        user_submitted=user.id in submitted_ids,
     )
 
 

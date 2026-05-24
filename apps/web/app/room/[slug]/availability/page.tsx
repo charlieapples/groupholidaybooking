@@ -471,6 +471,9 @@ export default function AvailabilityPage() {
         setRoom(r);
         if (s) {
           setStatus(s);
+          // If this user has already submitted, skip the form and show the
+          // post-submit state — prevents confusing "empty calendar" on revisit.
+          if (s.user_submitted) setSubmitted(true);
           if (s.all_submitted) {
             const w = await getFreeWindows(t, slug).catch(() => null);
             setWindows(w);
