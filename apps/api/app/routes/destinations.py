@@ -9,7 +9,11 @@ All modes feed into the same destination_candidates + destination_votes tables.
 """
 from __future__ import annotations
 
+import json as _json
+import logging
+import os
 import random
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -21,6 +25,100 @@ from ..deps.auth import UserInfo, current_user
 from .rooms import _assert_member, _get_room_by_slug
 
 router = APIRouter()
+log = logging.getLogger("destinations")
+
+
+def _gemini_suggestions(
+    prefs_list: list[dict],
+    room: dict,
+    top_n: int,
+) -> Optional[list[str]]:
+    """Ask Gemini to pick the best `top_n` IATA codes for the group.
+
+    Returns a list of IATA codes (subset of DEST_NAMES) or None if Gemini
+    isn't available or returned something unusable. Callers should fall back
+    to the rule-based scorer.
+    """
+    if not os.getenv("GEMINI_API_KEY"):
+        return None
+
+    try:
+        # Imported lazily so the destinations route still works if the SDK
+        # isn't installed in a test environment.
+        from google import genai
+        from google.genai import types as genai_types
+
+        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    except Exception as exc:
+        log.warning("Could not create Gemini client: %s", exc)
+        return None
+
+    # Build a compact prompt with the group's preferences + the candidate pool.
+    catalogue = "\n".join(f"  {iata}  {name}" for iata, name in DEST_NAMES.items())
+    prefs_summary = _json.dumps(prefs_list, ensure_ascii=False, indent=2)
+    trip_summary = []
+    if room.get("agreed_start") and room.get("agreed_end"):
+        trip_summary.append(f"Dates: {room['agreed_start']} to {room['agreed_end']}")
+    if room.get("min_nights"):
+        trip_summary.append(
+            f"Length: {room['min_nights']}-{room.get('max_nights', room['min_nights'])} nights"
+        )
+    if room.get("budget_gbp"):
+        trip_summary.append(f"Per-person budget cap: £{room['budget_gbp']:.0f} (incl. flights)")
+
+    prompt = (
+        "You're a travel planner picking destinations for a group of UK-based "
+        "friends planning a Holiday together. Pick the BEST destinations from "
+        "the catalogue below, matched to the group's combined preferences.\n\n"
+        f"Group preferences (one entry per member):\n{prefs_summary}\n\n"
+        f"Trip details:\n" + ("\n".join(trip_summary) or "(no extra constraints)") + "\n\n"
+        f"Destination catalogue (IATA code  city):\n{catalogue}\n\n"
+        f"Pick the {top_n} destinations that best match the group's vibe — "
+        "diverse picks are good (don't suggest 5 beach resorts if the group is "
+        "mixed). Respect any 'avoid' tags strongly.\n\n"
+        "Respond with ONLY a JSON array of IATA codes from the catalogue, in "
+        "rank order (best first). No prose, no markdown. Example: "
+        '["BCN","LIS","PRG","DUB","ATH"]'
+    )
+
+    try:
+        resp = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[
+                genai_types.Content(role="user", parts=[genai_types.Part(text=prompt)]),
+            ],
+        )
+        text = (resp.text or "").strip()
+    except Exception as exc:
+        log.warning("Gemini suggestion call failed: %s", exc)
+        return None
+
+    # Extract the JSON array — model sometimes wraps in ```json``` despite instructions.
+    match = re.search(r"\[[^\]]*\]", text)
+    if not match:
+        log.warning("Gemini response had no JSON array: %s", text[:200])
+        return None
+    try:
+        codes_raw = _json.loads(match.group(0))
+    except Exception as exc:
+        log.warning("Failed to parse Gemini JSON: %s | %s", exc, text[:200])
+        return None
+    if not isinstance(codes_raw, list):
+        return None
+
+    # Keep only codes that are actually in our catalogue, preserve order, dedupe.
+    seen: set[str] = set()
+    out: list[str] = []
+    for c in codes_raw:
+        if not isinstance(c, str):
+            continue
+        code = c.strip().upper()
+        if code in DEST_NAMES and code not in seen:
+            seen.add(code)
+            out.append(code)
+        if len(out) >= top_n:
+            break
+    return out or None
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
@@ -354,15 +452,12 @@ def suggest_destinations(
     top_n: int = 5,
     user: UserInfo = Depends(current_user),
 ):
-    """Score all destinations against aggregated member preferences and add
-    the top results as algorithm-proposed candidates.
+    """Pick destinations for the group, preferring Gemini suggestions if
+    available, falling back to the rule-based scorer, then to popular defaults.
 
     Reads pref_destination_answers from trip_preferences for all room members.
-    Falls back to returning popular destinations if no preferences submitted yet.
-    Returns the updated candidate list (sorted by vote count, algorithm suggestions last).
+    Returns the updated candidate list (sorted by vote count).
     """
-    import json as _json
-
     db = get_client()
     room = _get_room_by_slug(db, slug)
     _assert_member(db, room["id"], user.id)
@@ -388,21 +483,27 @@ def suggest_destinations(
         elif isinstance(raw, dict):
             prefs_list.append(raw)
 
-    if not prefs_list:
-        # No preferences submitted yet — suggest popular defaults
-        top = list(POPULAR_LABELS.values())[:top_n]
-    else:
-        # Score every destination against aggregated member answers
+    top: list[str] = []
+
+    # Path 1: Gemini (requires GEMINI_API_KEY + at least one preference set)
+    if prefs_list:
+        gemini_picks = _gemini_suggestions(prefs_list, room, top_n)
+        if gemini_picks:
+            top = gemini_picks
+            log.info("Gemini suggested %d destinations for room %s", len(top), slug)
+
+    # Path 2: rule-based scorer fallback
+    if not top and prefs_list:
         scored = [
             (iata, score_destination(iata, prefs_list))
             for iata in DEST_NAMES
         ]
         scored.sort(key=lambda x: -x[1])
-        # Keep only positively-scored destinations
         top = [iata for iata, s in scored if s > 0][:top_n]
-        # Fall back to popular if scoring returns nothing (very restrictive avoids)
-        if not top:
-            top = list(POPULAR_LABELS.values())[:top_n]
+
+    # Path 3: popular defaults (no preferences submitted, or both above empty)
+    if not top:
+        top = list(POPULAR_LABELS.values())[:top_n]
 
     # Upsert algorithm-suggested candidates (proposed_by = null = algorithm)
     for iata in top:

@@ -17,23 +17,73 @@ import { useToast, errorMessage } from "@/components/Toast";
 
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
-// Destination → approx Booking.com city name for search
-const DEST_TO_BOOKING: Record<string, string> = {
+// IATA → city name we hand to accommodation search sites. Any IATA we don't
+// know explicitly falls back to passing the IATA itself, which most sites
+// resolve correctly via fuzzy matching.
+const DEST_TO_CITY: Record<string, string> = {
   AMS: "Amsterdam", BCN: "Barcelona", DUB: "Dublin", LIS: "Lisbon",
-  FCO: "Rome", CDG: "Paris", PMI: "Palma", AGP: "Malaga", FAO: "Faro",
-  OPO: "Porto", NCE: "Nice", MAD: "Madrid", MXP: "Milan", VCE: "Venice",
-  NAP: "Naples", MLA: "Malta", IBZ: "Ibiza", ALC: "Alicante",
+  FCO: "Rome", CDG: "Paris", ORY: "Paris", PMI: "Palma", AGP: "Malaga",
+  FAO: "Faro", OPO: "Porto", NCE: "Nice", MAD: "Madrid", MXP: "Milan",
+  VCE: "Venice", NAP: "Naples", MLA: "Malta", IBZ: "Ibiza", ALC: "Alicante",
+  GVA: "Geneva", ZRH: "Zurich", MUC: "Munich", BER: "Berlin", HAM: "Hamburg",
+  CPH: "Copenhagen", ARN: "Stockholm", OSL: "Oslo", HEL: "Helsinki",
+  BIO: "Bilbao", SVQ: "Seville", VLC: "Valencia", TLS: "Toulouse",
+  BOD: "Bordeaux", MRS: "Marseille", LYS: "Lyon", BIQ: "Biarritz",
+  TRN: "Turin", BLQ: "Bologna", FLR: "Florence", PSA: "Pisa",
+  CTA: "Catania", PMO: "Palermo", CAG: "Cagliari", BRI: "Bari",
   PRG: "Prague", VIE: "Vienna", BUD: "Budapest", KRK: "Krakow",
-  ATH: "Athens", HER: "Heraklion", RHO: "Rhodes", JMK: "Mykonos", JTR: "Santorini",
-  DBV: "Dubrovnik", SPU: "Split", ZAD: "Zadar",
-  TFS: "Tenerife", LPA: "Gran Canaria", ACE: "Lanzarote", FUE: "Fuerteventura",
-  FNC: "Madeira", IST: "Istanbul",
+  WAW: "Warsaw", GDN: "Gdansk", TLL: "Tallinn", RIX: "Riga",
+  VNO: "Vilnius", BEG: "Belgrade", SOF: "Sofia", OTP: "Bucharest",
+  ZAG: "Zagreb", LJU: "Ljubljana", BTS: "Bratislava", TIA: "Tirana",
+  SKP: "Skopje", SJJ: "Sarajevo",
+  ATH: "Athens", SKG: "Thessaloniki", HER: "Heraklion", RHO: "Rhodes",
+  CFU: "Corfu", JMK: "Mykonos", JTR: "Santorini",
+  LCA: "Larnaca", PFO: "Paphos",
+  ZAD: "Zadar", SPU: "Split", DBV: "Dubrovnik",
+  TFS: "Tenerife", TFN: "Tenerife", LPA: "Gran Canaria",
+  ACE: "Lanzarote", FUE: "Fuerteventura", FNC: "Madeira",
+  REK: "Reykjavik", KEF: "Reykjavik",
+  AGA: "Agadir", RAK: "Marrakech", CMN: "Casablanca", TUN: "Tunis",
+  IST: "Istanbul", SAW: "Istanbul", AYT: "Antalya", ESB: "Ankara",
+  DXB: "Dubai", AUH: "Abu Dhabi", DOH: "Doha", AMM: "Amman",
+  TLV: "Tel Aviv", BEY: "Beirut", JED: "Jeddah", RUH: "Riyadh",
+  BKK: "Bangkok", DMK: "Bangkok", HKT: "Phuket", CNX: "Chiang Mai",
+  SIN: "Singapore", KUL: "Kuala Lumpur", DPS: "Bali",
+  CGK: "Jakarta", MNL: "Manila", HAN: "Hanoi", SGN: "Ho Chi Minh City",
+  HKG: "Hong Kong", TPE: "Taipei", ICN: "Seoul",
+  NRT: "Tokyo", HND: "Tokyo", KIX: "Osaka",
+  PEK: "Beijing", PVG: "Shanghai", CTU: "Chengdu",
+  DEL: "Delhi", BOM: "Mumbai", GOI: "Goa",
+  CMB: "Colombo", MLE: "Maldives", KTM: "Kathmandu",
+  JFK: "New York", LGA: "New York", EWR: "New York",
+  BOS: "Boston", PHL: "Philadelphia", DCA: "Washington DC",
+  MIA: "Miami", FLL: "Fort Lauderdale", MCO: "Orlando", ATL: "Atlanta",
+  ORD: "Chicago", MSP: "Minneapolis", DEN: "Denver", LAX: "Los Angeles",
+  SFO: "San Francisco", SAN: "San Diego", LAS: "Las Vegas",
+  SEA: "Seattle", PDX: "Portland", YYZ: "Toronto", YUL: "Montreal",
+  YVR: "Vancouver", MEX: "Mexico City", CUN: "Cancun",
+  SJD: "Los Cabos", PVR: "Puerto Vallarta",
+  PTY: "Panama City", SJO: "San Jose Costa Rica", HAV: "Havana",
+  NAS: "Nassau", MBJ: "Montego Bay", PUJ: "Punta Cana",
+  SDQ: "Santo Domingo", BGI: "Barbados", SXM: "St Maarten",
+  GRU: "Sao Paulo", GIG: "Rio de Janeiro", EZE: "Buenos Aires",
+  SCL: "Santiago", LIM: "Lima", BOG: "Bogota", MVD: "Montevideo",
+  UIO: "Quito", CUZ: "Cusco",
+  CAI: "Cairo", HRG: "Hurghada", SSH: "Sharm El Sheikh",
+  JNB: "Johannesburg", CPT: "Cape Town", NBO: "Nairobi",
+  ZNZ: "Zanzibar", ADD: "Addis Ababa", LOS: "Lagos", DAR: "Dar es Salaam",
+  MRU: "Mauritius", SEZ: "Seychelles",
+  SYD: "Sydney", MEL: "Melbourne", BNE: "Brisbane", PER: "Perth",
+  AKL: "Auckland", WLG: "Wellington", NAN: "Nadi", PPT: "Tahiti",
 };
 
+function cityFor(iata: string): string {
+  return DEST_TO_CITY[iata] || iata;
+}
+
 function bookingComLink(iata: string, checkIn: string, checkOut: string, guests: number) {
-  const city = DEST_TO_BOOKING[iata] || iata;
   const params = new URLSearchParams({
-    ss: city,
+    ss: cityFor(iata),
     checkin: checkIn,
     checkout: checkOut,
     group_adults: String(guests),
@@ -41,6 +91,35 @@ function bookingComLink(iata: string, checkIn: string, checkOut: string, guests:
     order: "price",
   });
   return `https://www.booking.com/searchresults.html?${params}`;
+}
+
+function airbnbLink(iata: string, checkIn: string, checkOut: string, guests: number) {
+  return `https://www.airbnb.com/s/${encodeURIComponent(cityFor(iata))}/homes?checkin=${checkIn}&checkout=${checkOut}&adults=${guests}`;
+}
+
+function hotelsComLink(iata: string, checkIn: string, checkOut: string, guests: number) {
+  const params = new URLSearchParams({
+    "q-destination": cityFor(iata),
+    "q-check-in": checkIn,
+    "q-check-out": checkOut,
+    "q-rooms": "1",
+    "q-room-0-adults": String(guests),
+  });
+  return `https://uk.hotels.com/Hotel-Search?${params}`;
+}
+
+function vrboLink(iata: string, checkIn: string, checkOut: string, guests: number) {
+  const params = new URLSearchParams({
+    destination: cityFor(iata),
+    startDate: checkIn,
+    endDate: checkOut,
+    adults: String(guests),
+  });
+  return `https://www.vrbo.com/search?${params}`;
+}
+
+function skyscannerHotelsLink(iata: string, checkIn: string, checkOut: string, guests: number) {
+  return `https://www.skyscanner.net/hotels/search?entity_name=${encodeURIComponent(cityFor(iata))}&checkin=${checkIn}&checkout=${checkOut}&adults=${guests}`;
 }
 
 export default function BookingPage() {
@@ -117,9 +196,16 @@ export default function BookingPage() {
   const destResult = results.find(r => r.destination === destIata) ?? results[0] ?? null;
   const checkIn = room.agreed_start ?? destResult?.shared_out_date ?? "";
   const checkOut = room.agreed_end ?? destResult?.shared_return_date ?? "";
-  const accommodationLink = destIata
-    ? bookingComLink(destIata, checkIn, checkOut, members.length)
-    : null;
+  const guestCount = Math.max(members.length, 1);
+  const providers = destIata
+    ? [
+        { name: "Booking.com", url: bookingComLink(destIata, checkIn, checkOut, guestCount), emoji: "🏨" },
+        { name: "Airbnb", url: airbnbLink(destIata, checkIn, checkOut, guestCount), emoji: "🏠" },
+        { name: "Hotels.com", url: hotelsComLink(destIata, checkIn, checkOut, guestCount), emoji: "🛏️" },
+        { name: "Vrbo", url: vrboLink(destIata, checkIn, checkOut, guestCount), emoji: "🏡" },
+        { name: "Skyscanner", url: skyscannerHotelsLink(destIata, checkIn, checkOut, guestCount), emoji: "🧭" },
+      ]
+    : [];
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -165,29 +251,31 @@ export default function BookingPage() {
         )}
 
         {/* Accommodation */}
-        {accommodationLink && (
+        {providers.length > 0 && destIata && (
           <div className="rounded-xl border bg-white p-6 shadow-sm">
             <h2 className="text-lg font-bold text-gray-900 mb-3">🏨 Accommodation</h2>
             <p className="text-sm text-gray-600 mb-4">
-              Search for {DEST_TO_BOOKING[destIata!] ?? destIata} accommodation for {members.length}{" "}
-              people — {checkIn} to {checkOut}.
+              Searches are pre-filled for <strong>{cityFor(destIata)}</strong>,{" "}
+              {checkIn} → {checkOut}, {guestCount} guest{guestCount !== 1 ? "s" : ""}.
+              Compare a few — prices vary a lot between platforms.
             </p>
-            <div className="flex gap-3 flex-wrap">
-              <a
-                href={accommodationLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-              >
-                Search on Booking.com
-              </a>
-              <button
-                onClick={() => copyLink(accommodationLink, "accommodation")}
-                className="rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              >
-                {copied === "accommodation" ? "Copied!" : "Copy link"}
-              </button>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {providers.map((p) => (
+                <a
+                  key={p.name}
+                  href={p.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-800 hover:border-blue-400 hover:bg-blue-50"
+                >
+                  <span className="text-lg">{p.emoji}</span>
+                  <span>{p.name}</span>
+                </a>
+              ))}
             </div>
+            <p className="mt-3 text-xs text-gray-400">
+              We don&apos;t take commission from these searches yet — pick whichever you trust.
+            </p>
           </div>
         )}
 

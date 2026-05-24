@@ -30,17 +30,76 @@ const AVOID_OPTIONS = [
   "expensive cities",
 ];
 
+// Worldwide destination list — kept in sync with apps/api/app/core/destinations.py
+// (single source of truth would be the API, but duplicating here keeps the propose
+// dropdown instant; backend accepts any IATA via the "custom code" option anyway).
 const DEST_NAMES: Record<string, string> = {
+  // Western Europe
   AMS: "Amsterdam", BCN: "Barcelona", DUB: "Dublin", LIS: "Lisbon",
-  FCO: "Rome", CDG: "Paris", PMI: "Palma", AGP: "Malaga", FAO: "Faro",
-  OPO: "Porto", NCE: "Nice", MAD: "Madrid", MXP: "Milan", VCE: "Venice",
-  NAP: "Naples", MLA: "Malta", IBZ: "Ibiza", ALC: "Alicante", GVA: "Geneva",
-  ZRH: "Zurich", MUC: "Munich", BER: "Berlin", HAM: "Hamburg", CPH: "Copenhagen",
-  ARN: "Stockholm", OSL: "Oslo", HEL: "Helsinki", PRG: "Prague", VIE: "Vienna",
-  BUD: "Budapest", KRK: "Krakow", WAW: "Warsaw", ATH: "Athens", HER: "Heraklion",
-  RHO: "Rhodes", CFU: "Corfu", JMK: "Mykonos", JTR: "Santorini", ZAD: "Zadar",
-  SPU: "Split", DBV: "Dubrovnik", TFS: "Tenerife (S)", LPA: "Gran Canaria",
-  ACE: "Lanzarote", FUE: "Fuerteventura", FNC: "Madeira", IST: "Istanbul",
+  FCO: "Rome", CDG: "Paris", ORY: "Paris-Orly", PMI: "Palma", AGP: "Malaga",
+  FAO: "Faro", OPO: "Porto", NCE: "Nice", MAD: "Madrid", MXP: "Milan",
+  VCE: "Venice", NAP: "Naples", MLA: "Malta", IBZ: "Ibiza", ALC: "Alicante",
+  GVA: "Geneva", ZRH: "Zurich", MUC: "Munich", BER: "Berlin", HAM: "Hamburg",
+  CPH: "Copenhagen", ARN: "Stockholm", OSL: "Oslo", HEL: "Helsinki",
+  BIO: "Bilbao", SVQ: "Seville", VLC: "Valencia", TLS: "Toulouse",
+  BOD: "Bordeaux", MRS: "Marseille", LYS: "Lyon", BIQ: "Biarritz",
+  TRN: "Turin", BLQ: "Bologna", FLR: "Florence", PSA: "Pisa",
+  CTA: "Catania", PMO: "Palermo", CAG: "Cagliari", BRI: "Bari",
+  // Central / Eastern Europe
+  PRG: "Prague", VIE: "Vienna", BUD: "Budapest", KRK: "Krakow",
+  WAW: "Warsaw", GDN: "Gdansk", TLL: "Tallinn", RIX: "Riga",
+  VNO: "Vilnius", BEG: "Belgrade", SOF: "Sofia", OTP: "Bucharest",
+  ZAG: "Zagreb", LJU: "Ljubljana", BTS: "Bratislava", TIA: "Tirana",
+  SKP: "Skopje", SJJ: "Sarajevo",
+  // Greece / Med islands / Cyprus
+  ATH: "Athens", SKG: "Thessaloniki", HER: "Heraklion", RHO: "Rhodes",
+  CFU: "Corfu", JMK: "Mykonos", JTR: "Santorini",
+  LCA: "Larnaca", PFO: "Paphos",
+  // Croatia
+  ZAD: "Zadar", SPU: "Split", DBV: "Dubrovnik",
+  // Canaries / Atlantic
+  TFS: "Tenerife (S)", TFN: "Tenerife (N)", LPA: "Gran Canaria",
+  ACE: "Lanzarote", FUE: "Fuerteventura", FNC: "Madeira",
+  REK: "Reykjavik", KEF: "Reykjavik (Keflavik)",
+  // North Africa
+  AGA: "Agadir", RAK: "Marrakech", CMN: "Casablanca", TUN: "Tunis",
+  // Middle East
+  IST: "Istanbul", SAW: "Istanbul (SAW)", AYT: "Antalya", ESB: "Ankara",
+  DXB: "Dubai", AUH: "Abu Dhabi", DOH: "Doha", AMM: "Amman",
+  TLV: "Tel Aviv", BEY: "Beirut", JED: "Jeddah", RUH: "Riyadh",
+  // Asia
+  BKK: "Bangkok", DMK: "Bangkok (DMK)", HKT: "Phuket", CNX: "Chiang Mai",
+  SIN: "Singapore", KUL: "Kuala Lumpur", DPS: "Bali (Denpasar)",
+  CGK: "Jakarta", MNL: "Manila", HAN: "Hanoi", SGN: "Ho Chi Minh City",
+  HKG: "Hong Kong", TPE: "Taipei", ICN: "Seoul", NRT: "Tokyo (Narita)",
+  HND: "Tokyo (Haneda)", KIX: "Osaka", PEK: "Beijing", PVG: "Shanghai",
+  CTU: "Chengdu", DEL: "Delhi", BOM: "Mumbai", GOI: "Goa",
+  CMB: "Colombo", MLE: "Maldives", KTM: "Kathmandu",
+  // North America
+  JFK: "New York (JFK)", LGA: "New York (LGA)", EWR: "New York (EWR)",
+  BOS: "Boston", PHL: "Philadelphia", DCA: "Washington DC",
+  MIA: "Miami", FLL: "Fort Lauderdale", MCO: "Orlando", ATL: "Atlanta",
+  ORD: "Chicago", MSP: "Minneapolis", DEN: "Denver", LAX: "Los Angeles",
+  SFO: "San Francisco", SAN: "San Diego", LAS: "Las Vegas",
+  SEA: "Seattle", PDX: "Portland", YYZ: "Toronto", YUL: "Montreal",
+  YVR: "Vancouver", MEX: "Mexico City", CUN: "Cancun",
+  SJD: "Los Cabos", PVR: "Puerto Vallarta",
+  // Central America / Caribbean
+  PTY: "Panama City", SJO: "San Jose (CR)", HAV: "Havana",
+  NAS: "Nassau", MBJ: "Montego Bay", PUJ: "Punta Cana",
+  SDQ: "Santo Domingo", BGI: "Barbados", SXM: "St Maarten",
+  // South America
+  GRU: "Sao Paulo", GIG: "Rio de Janeiro", EZE: "Buenos Aires",
+  SCL: "Santiago", LIM: "Lima", BOG: "Bogota", MVD: "Montevideo",
+  UIO: "Quito", CUZ: "Cusco",
+  // Africa
+  CAI: "Cairo", HRG: "Hurghada", SSH: "Sharm El Sheikh",
+  JNB: "Johannesburg", CPT: "Cape Town", NBO: "Nairobi",
+  ZNZ: "Zanzibar", ADD: "Addis Ababa", LOS: "Lagos", DAR: "Dar es Salaam",
+  MRU: "Mauritius", SEZ: "Seychelles",
+  // Oceania
+  SYD: "Sydney", MEL: "Melbourne", BNE: "Brisbane", PER: "Perth",
+  AKL: "Auckland", WLG: "Wellington", NAN: "Nadi (Fiji)", PPT: "Tahiti",
 };
 
 export default function DestinationsPage() {
@@ -409,11 +468,11 @@ export default function DestinationsPage() {
               disabled={suggesting}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              {suggesting ? "Finding matches…" : candidates.length > 0 ? "✨ Refresh suggestions" : "✨ Get suggestions"}
+              {suggesting ? "Asking Gemini…" : candidates.length > 0 ? "✨ Refresh AI suggestions" : "✨ Get AI suggestions"}
             </button>
           </div>
           <p className="text-xs text-gray-500 mb-4">
-            Suggestions are matched to the group&apos;s questionnaire answers. Tap 👍 or 👎 to vote — votes update live for everyone.
+            Gemini picks destinations matched to the group&apos;s combined questionnaire answers, dates, and budget. Tap 👍 or 👎 to vote — votes update live for everyone.
           </p>
 
           {candidates.length === 0 ? (
