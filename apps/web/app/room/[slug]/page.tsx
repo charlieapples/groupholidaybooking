@@ -496,13 +496,20 @@ export default function RoomPage() {
                           <span className="ml-1 text-xs text-gray-400">(admin)</span>
                         )}
                       </p>
-                      {m.home_postcode && (
-                        <p className="text-xs text-gray-500">{m.home_postcode}</p>
-                      )}
+                      {m.home_postcode
+                        ? <p className="text-xs text-gray-500">{m.home_postcode}</p>
+                        : <p className="text-xs text-amber-600">⚠️ No postcode</p>
+                      }
                     </div>
                   </li>
                 ))}
               </ul>
+              {/* Admin alert if anyone is missing a postcode */}
+              {room?.is_admin && members.some(m => !m.home_postcode) && (
+                <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                  ⚠️ <strong>{members.filter(m => !m.home_postcode).map(m => m.display_name || "Someone").join(", ")}</strong> {members.filter(m => !m.home_postcode).length === 1 ? "hasn't" : "haven't"} set a postcode — the flight search will fail until they do.
+                </div>
+              )}
             </div>
 
             {/* Postcode update */}

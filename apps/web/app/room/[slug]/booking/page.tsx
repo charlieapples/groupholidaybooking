@@ -394,7 +394,14 @@ export default function BookingPage() {
                           : <span className="text-green-600">Cabin bag incl.</span>
                         }
                         {p.ground_cost_gbp > 0 && (
-                          <span title="Estimated ground travel cost to/from the airport">Ground travel: £{Math.round(p.ground_cost_gbp)}</span>
+                          <span
+                            title="Estimated ground travel cost to/from the airport"
+                            className={p.ground_hours > 2.5 ? "text-amber-700 font-medium" : ""}
+                          >
+                            Ground travel: £{Math.round(p.ground_cost_gbp)}
+                            {p.ground_hours > 0 && ` (${p.ground_hours < 1 ? Math.round(p.ground_hours * 60) + "m" : Math.round(p.ground_hours * 10) / 10 + "h"})`}
+                            {p.ground_hours > 3 && " ⚠️ long journey"}
+                          </span>
                         )}
                       </div>
                       {p.booking_link ? (

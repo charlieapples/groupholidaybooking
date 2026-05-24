@@ -64,12 +64,25 @@ def update_profile(
     body: ProfileUpdateRequest,
     user: UserInfo = Depends(current_user),
 ):
-    """Update the calling user's profile (postcode and/or display name)."""
+    """Update the calling user's profile (postcode and/or display name).
+
+    When default_home_postcode changes, the new value is also propagated to
+    all room_members rows for this user so the flight optimiser picks it up
+    immediately without requiring the user to re-enter it per-room.
+    """
     db = get_client()
     _ensure_profile(db, user)
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     if updates:
         db.table("profiles").update(updates).eq("id", user.id).execute()
+
+    # Propagate new postcode to every room this user belongs to, so the
+    # flight optimiser always uses the freshest value.
+    if body.default_home_postcode:
+        db.table("room_members").update(
+            {"home_postcode": body.default_home_postcode}
+        ).eq("user_id", user.id).execute()
+
     p = db.table("profiles").select("*").eq("id", user.id).execute().data[0]
     return ProfileResponse(
         id=p["id"],

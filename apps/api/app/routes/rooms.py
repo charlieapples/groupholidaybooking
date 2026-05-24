@@ -345,13 +345,21 @@ def update_postcode(
     home_postcode: str,
     user: UserInfo = Depends(current_user),
 ):
-    """Update the caller's home postcode for this room."""
+    """Update the caller's home postcode for this room.
+
+    Also updates profiles.default_home_postcode so both stores stay in sync
+    and future rooms / the flight optimiser fallback always have fresh data.
+    """
     db = get_client()
     room = _get_room_by_slug(db, slug)
     _assert_member(db, room["id"], user.id)
     db.table("room_members").update({"home_postcode": home_postcode}).eq(
         "room_id", room["id"]
     ).eq("user_id", user.id).execute()
+    # Keep profile default in sync
+    db.table("profiles").update({"default_home_postcode": home_postcode}).eq(
+        "id", user.id
+    ).execute()
     return {"ok": True}
 
 

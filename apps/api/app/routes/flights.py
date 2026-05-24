@@ -132,22 +132,34 @@ def run_optimiser(slug: str, user: UserInfo = Depends(current_user)):
         )
 
     # Load members and postcodes
+    # Join profiles so we can fall back to default_home_postcode if the
+    # per-room postcode was never set (e.g. user updated profile after joining).
     members_res = (
         db.table("room_members")
-        .select("home_postcode, profiles(display_name)")
+        .select("user_id, home_postcode, profiles(display_name, default_home_postcode)")
         .eq("room_id", room["id"])
         .execute()
     )
     people: list[Person] = []
     for m in members_res.data:
-        postcode = m.get("home_postcode")
-        name = (m.get("profiles") or {}).get("display_name", "Unknown")
+        profile = m.get("profiles") or {}
+        name = profile.get("display_name", "Unknown")
+        # Prefer per-room postcode; fall back to profile default
+        postcode = m.get("home_postcode") or profile.get("default_home_postcode")
         if not postcode:
             raise HTTPException(
                 422,
                 f"Member '{name}' has no home postcode set. "
-                "All members must enter their postcode before running the optimiser.",
+                "All members must enter their postcode in their profile before running the optimiser.",
             )
+        # If we used the fallback, backfill it so future runs don't need the join
+        if not m.get("home_postcode") and postcode:
+            try:
+                db.table("room_members").update({"home_postcode": postcode}).eq(
+                    "room_id", room["id"]
+                ).eq("user_id", m["user_id"]).execute()
+            except Exception:
+                pass  # non-fatal
         people.append(Person(name=name, home=postcode))
 
     # Load destination candidates

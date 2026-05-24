@@ -403,6 +403,15 @@ export default function FlightsPage() {
   );
 }
 
+// ── Airport display names ──────────────────────────────────────────────────────
+const AIRPORT_NAMES: Record<string, string> = {
+  LHR: "Heathrow", LGW: "Gatwick", STN: "Stansted", LTN: "Luton",
+  LCY: "London City", MAN: "Manchester", BHX: "Birmingham", EDI: "Edinburgh",
+  GLA: "Glasgow", BRS: "Bristol", LBA: "Leeds Bradford", NCL: "Newcastle",
+  BFS: "Belfast Intl", SOU: "Southampton", EXT: "Exeter", NWI: "Norwich",
+  HUY: "Humberside", MME: "Teesside", ABZ: "Aberdeen", INV: "Inverness",
+};
+
 // ── Sub-component: renders a list of FlightResult cards ───────────────────────
 
 interface ResultsListProps {
@@ -506,18 +515,22 @@ function ResultsList({
                     </div>
                     {p.viable && (
                       <div className="text-xs text-gray-500 space-y-0.5">
-                        {p.chosen_airport && <p>From: {p.chosen_airport}</p>}
+                        {p.chosen_airport && <p>Flying from: <strong>{AIRPORT_NAMES[p.chosen_airport] ?? p.chosen_airport}</strong> ({p.chosen_airport})</p>}
                         {p.outbound_date && <p>Out: {p.outbound_date} · In: {p.inbound_date}</p>}
                         <div className="flex gap-3 flex-wrap">
                           {p.outbound_cost_gbp > 0 && (
                             <span>Flights: £{Math.round(p.outbound_cost_gbp + p.inbound_cost_gbp)}</span>
                           )}
                           {p.baggage_cost_gbp > 0
-                            ? <span>Carry-on: £{Math.round(p.baggage_cost_gbp)}</span>
+                            ? <span title="Estimated cabin bag add-on for this airline">Cabin bag est.: £{Math.round(p.baggage_cost_gbp)}</span>
                             : <span className="text-green-600">Cabin bag incl.</span>
                           }
                           {p.ground_cost_gbp > 0 && (
-                            <span>Ground: £{Math.round(p.ground_cost_gbp)}</span>
+                            <span className={p.ground_hours > 2.5 ? "text-amber-700 font-medium" : ""}>
+                              Ground: £{Math.round(p.ground_cost_gbp)}
+                              {p.ground_hours > 0 && ` (${p.ground_hours < 1 ? Math.round(p.ground_hours * 60) + "m" : Math.round(p.ground_hours * 10) / 10 + "h"})`}
+                              {p.ground_hours > 3 && " ⚠️"}
+                            </span>
                           )}
                         </div>
                         {p.booking_link && (
