@@ -723,6 +723,12 @@ export default function AvailabilityPage() {
                 ? "Everyone is in — check the free windows below."
                 : `Waiting for ${status?.members_pending?.join(", ")} to submit.`}
             </p>
+            <button
+              onClick={() => setSubmitted(false)}
+              className="mt-4 text-xs text-green-600 hover:text-green-800 underline underline-offset-2"
+            >
+              Made a mistake? Edit my availability →
+            </button>
           </div>
         )}
 
