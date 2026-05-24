@@ -31,6 +31,23 @@ export default function FlightsPage() {
   const [error, setError] = useState<string | null>(null);
   const [choosingDest, setChoosingDest] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Rotating progress hint while the optimiser is running (15-30s).
+  // Cosmetic only — doesn't reflect actual progress, just keeps the user engaged.
+  const [hintIdx, setHintIdx] = useState(0);
+  const HINTS = useMemo(() => [
+    "Looking up the nearest airport for each member…",
+    "Asking Travelpayouts for cheapest fares in the date window…",
+    "Comparing every member's airport options…",
+    "Picking the date pair that minimises group total cost…",
+    "Adding ground travel + baggage to each person's total…",
+    "Ranking destinations by group spend…",
+  ], []);
+  useEffect(() => {
+    if (!running) return;
+    setHintIdx(0);
+    const id = setInterval(() => setHintIdx((i) => (i + 1) % HINTS.length), 3500);
+    return () => clearInterval(id);
+  }, [running, HINTS.length]);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: s }) => {
@@ -180,6 +197,11 @@ export default function FlightsPage() {
                 "🔍 Find flights"
               )}
             </button>
+            {running && (
+              <p className="mt-3 text-sm text-gray-500 italic" key={hintIdx}>
+                {HINTS[hintIdx]}
+              </p>
+            )}
           </div>
         )}
 
@@ -187,6 +209,18 @@ export default function FlightsPage() {
           <div className="rounded-xl border bg-white p-8 text-center text-gray-500">
             <div className="text-3xl mb-2">⏳</div>
             <p>Waiting for the admin to run the flight search…</p>
+          </div>
+        )}
+
+        {/* Empty results after a run finished — admin-side only */}
+        {room.is_admin && !running && results.length === 0 && !error && (
+          <div className="rounded-xl border bg-white p-8 text-center text-gray-600 space-y-2">
+            <div className="text-3xl">🔍</div>
+            <p className="font-medium text-gray-900">No results yet — click <strong>Find flights</strong> above.</p>
+            <p className="text-sm">
+              You need: agreed dates (from availability), trip length (from duration & budget),
+              at least one destination candidate, and every member&apos;s postcode set.
+            </p>
           </div>
         )}
 

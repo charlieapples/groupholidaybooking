@@ -301,11 +301,14 @@ export default function BookingPage() {
 
                   {p.viable ? (
                     <div className="space-y-2">
-                      <div className="text-xs text-gray-500 flex gap-4">
+                      <div className="text-xs text-gray-500 flex gap-4 flex-wrap">
                         {p.outbound_date && <span>Out: {p.outbound_date}</span>}
                         {p.inbound_date && <span>Return: {p.inbound_date}</span>}
                         {p.outbound_cost_gbp + p.inbound_cost_gbp > 0 && (
                           <span>Flights: £{Math.round(p.outbound_cost_gbp + p.inbound_cost_gbp)}</span>
+                        )}
+                        {p.baggage_cost_gbp > 0 && (
+                          <span>Baggage: £{Math.round(p.baggage_cost_gbp)}</span>
                         )}
                       </div>
                       {p.booking_link ? (
