@@ -18,6 +18,7 @@ import {
   getRoom,
   updateRoom,
   advanceStep,
+  remindPendingMembers,
   type Room,
   type SubmissionStatus,
   type FreeWindow,
@@ -516,6 +517,7 @@ export default function AvailabilityPage() {
 
   const [autoSync, setAutoSync] = useState(false);
   const [lockingWindow, setLockingWindow] = useState<number | null>(null);
+  const [reminding, setReminding] = useState(false);
 
   // Derive the month range from the room's rough_window
   const { windowStart, windowEnd, months } = useMemo(() => {
@@ -561,6 +563,20 @@ export default function AvailabilityPage() {
     } catch (e: unknown) {
       toast.error(errorMessage(e, "Failed to lock in window"));
       setLockingWindow(null);
+    }
+  }
+
+  async function handleRemind() {
+    if (!token) return;
+    setReminding(true);
+    try {
+      const result = await remindPendingMembers(token, slug);
+      const n = result.reminders_sent;
+      toast.success(n > 0 ? `Reminder sent to ${n} member${n !== 1 ? "s" : ""} 📬` : "No pending members to remind.");
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Failed to send reminders"));
+    } finally {
+      setReminding(false);
     }
   }
 
@@ -729,6 +745,15 @@ export default function AvailabilityPage() {
                 ? "Everyone is in — check the free windows below."
                 : `Waiting for ${status?.members_pending?.join(", ")} to submit.`}
             </p>
+            {room?.is_admin && !status?.all_submitted && (
+              <button
+                onClick={handleRemind}
+                disabled={reminding}
+                className="mt-4 rounded-lg bg-amber-500 px-5 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-60"
+              >
+                {reminding ? "Sending…" : "📬 Send reminder to pending members"}
+              </button>
+            )}
             <button
               onClick={() => setSubmitted(false)}
               className="mt-4 text-xs text-green-600 hover:text-green-800 underline underline-offset-2"
