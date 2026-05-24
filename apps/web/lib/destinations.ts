@@ -96,6 +96,90 @@ export function destName(iata: string): string {
   return DEST_NAMES[iata] ?? iata;
 }
 
+/** IATA airport code → country flag emoji. Used on destination cards and results pages. */
+export const FLAG_BY_IATA: Record<string, string> = {
+  // UK
+  LHR: "🇬🇧", LGW: "🇬🇧", STN: "🇬🇧", LTN: "🇬🇧", LCY: "🇬🇧",
+  MAN: "🇬🇧", BHX: "🇬🇧", EDI: "🇬🇧", GLA: "🇬🇧", BRS: "🇬🇧",
+  NCL: "🇬🇧", LBA: "🇬🇧", ABZ: "🇬🇧", MME: "🇬🇧", HUY: "🇬🇧",
+  BFS: "🇬🇧", SOU: "🇬🇧", EXT: "🇬🇧", NWI: "🇬🇧", INV: "🇬🇧",
+  // Ireland
+  DUB: "🇮🇪", ORK: "🇮🇪",
+  // France
+  CDG: "🇫🇷", ORY: "🇫🇷", NCE: "🇫🇷", TLS: "🇫🇷", BOD: "🇫🇷",
+  MRS: "🇫🇷", LYS: "🇫🇷", BIQ: "🇫🇷",
+  // Spain
+  BCN: "🇪🇸", MAD: "🇪🇸", PMI: "🇪🇸", AGP: "🇪🇸", ALC: "🇪🇸",
+  IBZ: "🇪🇸", BIO: "🇪🇸", SVQ: "🇪🇸", VLC: "🇪🇸",
+  TFS: "🇪🇸", TFN: "🇪🇸", LPA: "🇪🇸", ACE: "🇪🇸", FUE: "🇪🇸",
+  // Portugal
+  LIS: "🇵🇹", OPO: "🇵🇹", FAO: "🇵🇹", FNC: "🇵🇹",
+  // Italy
+  FCO: "🇮🇹", MXP: "🇮🇹", VCE: "🇮🇹", NAP: "🇮🇹", TRN: "🇮🇹",
+  BLQ: "🇮🇹", FLR: "🇮🇹", PSA: "🇮🇹", CTA: "🇮🇹", PMO: "🇮🇹",
+  CAG: "🇮🇹", BRI: "🇮🇹",
+  // Netherlands / Belgium
+  AMS: "🇳🇱", BRU: "🇧🇪",
+  // Germany
+  MUC: "🇩🇪", BER: "🇩🇪", HAM: "🇩🇪", FRA: "🇩🇪",
+  // Switzerland / Austria
+  GVA: "🇨🇭", ZRH: "🇨🇭", VIE: "🇦🇹",
+  // Scandinavia
+  CPH: "🇩🇰", ARN: "🇸🇪", OSL: "🇳🇴", HEL: "🇫🇮",
+  // Iceland
+  REK: "🇮🇸", KEF: "🇮🇸",
+  // Central / Eastern Europe
+  PRG: "🇨🇿", BUD: "🇭🇺", WAW: "🇵🇱", KRK: "🇵🇱", GDN: "🇵🇱",
+  TLL: "🇪🇪", RIX: "🇱🇻", VNO: "🇱🇹",
+  BEG: "🇷🇸", SOF: "🇧🇬", OTP: "🇷🇴",
+  ZAG: "🇭🇷", LJU: "🇸🇮", BTS: "🇸🇰", TIA: "🇦🇱", SKP: "🇲🇰", SJJ: "🇧🇦",
+  // Greece / Cyprus / Malta
+  ATH: "🇬🇷", SKG: "🇬🇷", HER: "🇬🇷", RHO: "🇬🇷", CFU: "🇬🇷",
+  JMK: "🇬🇷", JTR: "🇬🇷",
+  LCA: "🇨🇾", PFO: "🇨🇾", MLA: "🇲🇹",
+  // Croatia
+  ZAD: "🇭🇷", SPU: "🇭🇷", DBV: "🇭🇷",
+  // North Africa
+  AGA: "🇲🇦", RAK: "🇲🇦", CMN: "🇲🇦", TUN: "🇹🇳",
+  CAI: "🇪🇬", HRG: "🇪🇬", SSH: "🇪🇬",
+  // Turkey / Middle East
+  IST: "🇹🇷", SAW: "🇹🇷", AYT: "🇹🇷", ESB: "🇹🇷",
+  DXB: "🇦🇪", AUH: "🇦🇪", DOH: "🇶🇦", AMM: "🇯🇴",
+  TLV: "🇮🇱", BEY: "🇱🇧", JED: "🇸🇦", RUH: "🇸🇦",
+  // Sub-Saharan Africa
+  JNB: "🇿🇦", CPT: "🇿🇦", NBO: "🇰🇪", ZNZ: "🇹🇿", DAR: "🇹🇿",
+  ADD: "🇪🇹", LOS: "🇳🇬", MRU: "🇲🇺", SEZ: "🇸🇨",
+  // Asia
+  BKK: "🇹🇭", DMK: "🇹🇭", HKT: "🇹🇭", CNX: "🇹🇭",
+  SIN: "🇸🇬", KUL: "🇲🇾", DPS: "🇮🇩", CGK: "🇮🇩", MNL: "🇵🇭",
+  HAN: "🇻🇳", SGN: "🇻🇳", HKG: "🇭🇰", TPE: "🇹🇼", ICN: "🇰🇷",
+  NRT: "🇯🇵", HND: "🇯🇵", KIX: "🇯🇵",
+  PEK: "🇨🇳", PVG: "🇨🇳", CTU: "🇨🇳",
+  DEL: "🇮🇳", BOM: "🇮🇳", GOI: "🇮🇳",
+  CMB: "🇱🇰", MLE: "🇲🇻", KTM: "🇳🇵",
+  // North America
+  JFK: "🇺🇸", LGA: "🇺🇸", EWR: "🇺🇸", BOS: "🇺🇸", PHL: "🇺🇸",
+  DCA: "🇺🇸", MIA: "🇺🇸", FLL: "🇺🇸", MCO: "🇺🇸", ATL: "🇺🇸",
+  ORD: "🇺🇸", MSP: "🇺🇸", DEN: "🇺🇸", LAX: "🇺🇸", SFO: "🇺🇸",
+  SAN: "🇺🇸", LAS: "🇺🇸", SEA: "🇺🇸", PDX: "🇺🇸",
+  YYZ: "🇨🇦", YUL: "🇨🇦", YVR: "🇨🇦",
+  MEX: "🇲🇽", CUN: "🇲🇽", SJD: "🇲🇽", PVR: "🇲🇽",
+  // Central America / Caribbean
+  PTY: "🇵🇦", SJO: "🇨🇷", HAV: "🇨🇺", NAS: "🇧🇸",
+  MBJ: "🇯🇲", PUJ: "🇩🇴", SDQ: "🇩🇴", BGI: "🇧🇧", SXM: "🇸🇽",
+  // South America
+  GRU: "🇧🇷", GIG: "🇧🇷", EZE: "🇦🇷", SCL: "🇨🇱", LIM: "🇵🇪",
+  BOG: "🇨🇴", MVD: "🇺🇾", UIO: "🇪🇨", CUZ: "🇵🇪",
+  // Oceania
+  SYD: "🇦🇺", MEL: "🇦🇺", BNE: "🇦🇺", PER: "🇦🇺",
+  AKL: "🇳🇿", WLG: "🇳🇿", NAN: "🇫🇯", PPT: "🇵🇫",
+};
+
+/** Return the country flag emoji for an IATA airport code. Falls back to 🌍. */
+export function flagFor(iata: string): string {
+  return FLAG_BY_IATA[iata] ?? "🌍";
+}
+
 /** Airport code → display name (e.g. for "Flying from:" in flight results). */
 export const AIRPORT_DISPLAY: Record<string, string> = {
   LHR: "Heathrow", LGW: "Gatwick", STN: "Stansted", LTN: "Luton",

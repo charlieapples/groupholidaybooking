@@ -13,53 +13,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getPublicRoomSummary, type PublicRoomSummary } from "@/lib/api";
-
-// Country flag from IATA code — reuse same approach as destinations page
-const FLAG_MAP: Record<string, string> = {
-  // Europe
-  FR: "🇫🇷", ES: "🇪🇸", PT: "🇵🇹", IT: "🇮🇹", DE: "🇩🇪", NL: "🇳🇱",
-  BE: "🇧🇪", AT: "🇦🇹", CH: "🇨🇭", GR: "🇬🇷", CY: "🇨🇾", HR: "🇭🇷",
-  CZ: "🇨🇿", HU: "🇭🇺", PL: "🇵🇱", SE: "🇸🇪", NO: "🇳🇴", DK: "🇩🇰",
-  FI: "🇫🇮", IE: "🇮🇪", IS: "🇮🇸", MT: "🇲🇹", TR: "🇹🇷",
-  // Non-EU common
-  US: "🇺🇸", TH: "🇹🇭", JP: "🇯🇵", AE: "🇦🇪", MA: "🇲🇦", TN: "🇹🇳",
-  QA: "🇶🇦", EG: "🇪🇬", ZA: "🇿🇦", KE: "🇰🇪", MU: "🇲🇺", SC: "🇸🇨",
-  AU: "🇦🇺", NZ: "🇳🇿", MX: "🇲🇽", BR: "🇧🇷", AR: "🇦🇷", CU: "🇨🇺", JM: "🇯🇲",
-  DO: "🇩🇴",
-};
-
-// Rough IATA → country code mapping for flag lookup
-const IATA_TO_COUNTRY: Record<string, string> = {
-  CDG: "FR", ORY: "FR", NCE: "FR", MRS: "FR", LYS: "FR", TLS: "FR", BOD: "FR", BIQ: "FR",
-  BCN: "ES", MAD: "ES", PMI: "ES", AGP: "ES", ALC: "ES", SVQ: "ES", VLC: "ES",
-  IBZ: "ES", TFS: "ES", TFN: "ES", LPA: "ES", ACE: "ES", FUE: "ES",
-  LIS: "PT", OPO: "PT", FAO: "PT", FNC: "PT",
-  FCO: "IT", MXP: "IT", VCE: "IT", NAP: "IT", TRN: "IT", BLQ: "IT",
-  FLR: "IT", PSA: "IT", CTA: "IT", PMO: "IT", CAG: "IT", BRI: "IT",
-  AMS: "NL", BRU: "BE", MUC: "DE", BER: "DE", HAM: "DE",
-  VIE: "AT", ZRH: "CH", GVA: "CH",
-  ATH: "GR", HER: "GR", SKG: "GR", RHO: "GR", CFU: "GR", JMK: "GR", JTR: "GR",
-  LCA: "CY", PFO: "CY",
-  ZAD: "HR", SPU: "HR", DBV: "HR",
-  PRG: "CZ", BUD: "HU", WAW: "PL", KRK: "PL",
-  ARN: "SE", OSL: "NO", CPH: "DK", HEL: "FI",
-  DUB: "IE", REK: "IS", KEF: "IS", MLA: "MT", IST: "TR", SAW: "TR", AYT: "TR",
-  JFK: "US", LAX: "US", MIA: "US", ORD: "US", LAS: "US",
-  BKK: "TH", HKT: "TH", CNX: "TH",
-  DXB: "AE", AUH: "AE", DOH: "QA",
-  RAK: "MA", CMN: "MA", AGA: "MA", TUN: "TN",
-  CAI: "EG", HRG: "EG", SSH: "EG",
-  JNB: "ZA", CPT: "ZA", NBO: "KE", MRU: "MU", SEZ: "SC",
-  SYD: "AU", MEL: "AU", BNE: "AU", AKL: "NZ",
-  CUN: "MX", PUJ: "DO", MBJ: "JM",
-  GIG: "BR", GRU: "BR", EZE: "AR",
-  HAV: "CU",
-};
-
-function flagFor(iata: string) {
-  const cc = IATA_TO_COUNTRY[iata];
-  return cc ? (FLAG_MAP[cc] ?? "🌍") : "🌍";
-}
+import { flagFor } from "@/lib/destinations";
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
