@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { normalisePostcode } from "@/lib/postcode";
-import { destName } from "@/lib/destinations";
+import { destName, flagFor } from "@/lib/destinations";
 import FeedbackButton from "@/components/FeedbackButton";
 
 export default function Dashboard() {
@@ -235,7 +235,7 @@ export default function Dashboard() {
                   const daysUntil = room.agreed_start
                     ? Math.ceil((new Date(room.agreed_start).getTime() - Date.now()) / 86_400_000)
                     : null;
-                  const destEmoji = room.destination_iata ? "🌍" : "🏖️";
+                  const destEmoji = room.destination_iata ? flagFor(room.destination_iata) : "🏖️";
                   const destLabel = room.destination_iata ? destName(room.destination_iata) : "Destination TBC";
                   const countdownLabel =
                     daysUntil === null ? "" :
