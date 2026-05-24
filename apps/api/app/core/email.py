@@ -127,6 +127,41 @@ def member_joined_email(
     return subject, html
 
 
+def availability_reminder_email(
+    member_name: str,
+    room_name: str,
+    room_slug: str,
+    admin_name: str,
+    app_url: str,
+) -> tuple[str, str]:
+    """Return (subject, html) for the 'please submit your availability' reminder."""
+    room_url = f"{app_url}/room/{room_slug}/availability"
+    subject = f"⏳ Reminder: please submit your availability for {room_name}"
+    html = f"""
+    <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
+      <h2 style="color: #1d4ed8;">✈️ Group Holiday</h2>
+      <h3 style="color: #111827;">Don't forget to submit your availability!</h3>
+      <p style="color: #374151;">
+        Hi {member_name},<br><br>
+        <strong>{admin_name}</strong> is waiting for you to submit your availability
+        for <strong>{room_name}</strong>. The group can't see the free windows until
+        everyone has submitted — so the sooner you do it, the sooner you can all start
+        planning!
+      </p>
+      <a href="{room_url}"
+         style="display:inline-block; margin-top:16px; padding:12px 24px;
+                background:#2563eb; color:#fff; border-radius:10px;
+                text-decoration:none; font-weight:600;">
+        Submit availability →
+      </a>
+      <p style="color:#9ca3af; font-size:12px; margin-top:32px;">
+        Group Holiday · <a href="{app_url}" style="color:#9ca3af;">groupholiday.app</a>
+      </p>
+    </div>
+    """
+    return subject, html
+
+
 def step_advance_email(
     member_name: str,
     room_name: str,
@@ -226,6 +261,58 @@ def flights_ready_email(
       </a>
       <p style="color:#9ca3af; font-size:12px; margin-top:32px;">
         Group Holiday · <a href="{app_url}" style="color:#9ca3af;">groupholiday.app</a>
+      </p>
+    </div>
+    """
+    return subject, html
+
+
+def member_welcome_email(
+    member_name: str,
+    room_name: str,
+    room_slug: str,
+    current_step: str,
+    app_url: str,
+) -> tuple[str, str]:
+    """Return (subject, html) welcoming a new member to a Holiday room.
+
+    Sent to the joining member to confirm the join and give them a direct
+    link to what they need to do next in the planning flow.
+    """
+    room_url = f"{app_url}/room/{room_slug}"
+    step_cta: dict[str, tuple[str, str]] = {
+        "availability": ("📅 Submit your availability", f"{room_url}/availability"),
+        "duration": ("🗓️ Set your trip length", f"{room_url}/preferences"),
+        "budget": ("💷 Set your budget", f"{room_url}/preferences"),
+        "destination": ("🗺️ Vote on destinations", f"{room_url}/destinations"),
+        "flights": ("✈️ View flight options", f"{room_url}/flights"),
+        "booking": ("🎫 View booking details", f"{room_url}/booking"),
+    }
+    cta_label, cta_url = step_cta.get(current_step, ("View the Holiday", room_url))
+
+    subject = f"✈️ You've joined {room_name}!"
+    html = f"""
+    <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
+      <h2 style="color: #1d4ed8;">✈️ Group Holiday</h2>
+      <h3 style="color: #111827;">Welcome to {room_name}!</h3>
+      <p style="color: #374151;">
+        Hi {member_name},<br><br>
+        You've successfully joined <strong>{room_name}</strong> on Group Holiday.
+        The group is currently at the <strong>{current_step}</strong> step &mdash;
+        click below to get started.
+      </p>
+      <a href="{cta_url}"
+         style="display:inline-block; margin-top:16px; padding:12px 24px;
+                background:#2563eb; color:#fff; border-radius:10px;
+                text-decoration:none; font-weight:600;">
+        {cta_label}
+      </a>
+      <p style="color:#374151; margin-top:20px; font-size:14px;">
+        You can return to the Holiday any time at:<br>
+        <a href="{room_url}" style="color:#2563eb;">{room_url}</a>
+      </p>
+      <p style="color:#9ca3af; font-size:12px; margin-top:32px;">
+        Group Holiday &middot; <a href="{app_url}" style="color:#9ca3af;">groupholiday.app</a>
       </p>
     </div>
     """

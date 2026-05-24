@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from ..core.destinations import label as label_dest
-from ..core.email import member_joined_email, send_email, step_advance_email
+from ..core.email import member_joined_email, member_welcome_email, send_email, step_advance_email
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user, optional_user
 
@@ -384,6 +384,23 @@ def join_room(
                 send_email(to=admin_email, subject=subject, html=html)
         except Exception:
             log.warning("Failed to send member-joined notification (continuing)")
+
+        # Send a welcome confirmation to the new member themselves
+        try:
+            joiner_email = user.email
+            if joiner_email:
+                app_url = os.getenv("APP_URL", "https://groupholidaybooking.vercel.app")
+                joiner_name = user.display_name or joiner_email.split("@")[0] or "there"
+                welcome_subject, welcome_html = member_welcome_email(
+                    member_name=joiner_name,
+                    room_name=room["name"],
+                    room_slug=slug,
+                    current_step=room["current_step"],
+                    app_url=app_url,
+                )
+                send_email(to=joiner_email, subject=welcome_subject, html=welcome_html)
+        except Exception:
+            log.warning("Failed to send member-welcome email (continuing)")
 
     return result
 
