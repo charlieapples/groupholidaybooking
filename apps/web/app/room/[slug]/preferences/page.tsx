@@ -71,6 +71,12 @@ export default function PreferencesPage() {
     return () => sub.subscription.unsubscribe();
   }, [slug, router, supabase]);
 
+  // Update browser tab title when the room name is known
+  useEffect(() => {
+    if (room?.name) document.title = `Duration & Budget – ${room.name} | Group Holiday`;
+    return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
+  }, [room?.name]);
+
   async function handleSave() {
     if (!token) return;
     setSaving(true);

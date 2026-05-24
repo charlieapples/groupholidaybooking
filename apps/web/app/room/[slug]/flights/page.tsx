@@ -77,6 +77,12 @@ export default function FlightsPage() {
     return () => sub.subscription.unsubscribe();
   }, [slug, router, supabase]);
 
+  // Update browser tab title when the room name is known
+  useEffect(() => {
+    if (room?.name) document.title = `Flights – ${room.name} | Group Holiday`;
+    return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
+  }, [room?.name]);
+
   async function handleRun() {
     if (!token) return;
     setRunning(true);

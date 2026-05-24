@@ -105,6 +105,12 @@ export default function DestinationsPage() {
     return () => sub.subscription.unsubscribe();
   }, [slug, router, supabase, toast]);
 
+  // Update browser tab title when the room name is known
+  useEffect(() => {
+    if (room?.name) document.title = `Destinations – ${room.name} | Group Holiday`;
+    return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
+  }, [room?.name]);
+
   async function handleSaveQuestionnaire() {
     if (!token) return;
     setQuestSaving(true);

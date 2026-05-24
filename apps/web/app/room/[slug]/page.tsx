@@ -146,6 +146,12 @@ export default function RoomPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, room?.current_step, slug, allSubmitted]);
 
+  // Update browser tab title when the room name is known
+  useEffect(() => {
+    if (room?.name) document.title = `${room.name} | Group Holiday`;
+    return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
+  }, [room?.name]);
+
   async function handleSavePostcode() {
     if (!token || !myPostcode.trim()) return;
     const normalised = normalisePostcode(myPostcode);

@@ -493,6 +493,12 @@ export default function AvailabilityPage() {
     return () => sub.subscription.unsubscribe();
   }, [slug, supabase, router]);
 
+  // Update browser tab title when the room name is known
+  useEffect(() => {
+    if (room?.name) document.title = `Availability – ${room.name} | Group Holiday`;
+    return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
+  }, [room?.name]);
+
   // If we've just returned from Google OAuth (sync_google=1), auto-trigger sync
   const autoSyncDone = useRef(false);
   useEffect(() => {

@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 import os
 
-from ..core.email import availability_complete_email, send_email
+from ..core.email import availability_complete_email, availability_reminder_email, send_email
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user
 from .rooms import _assert_member, _get_room_by_slug
@@ -227,6 +227,69 @@ def submit_availability(
             )
 
     return {"ok": True, "blocks_saved": len(rows), "submitted": body.mark_submitted}
+
+
+@router.post("/remind")
+def remind_pending_members(slug: str, user: UserInfo = Depends(current_user)):
+    """Admin: email all members who haven't submitted availability yet.
+
+    Returns the count of reminders sent.  Idempotent — safe to call again
+    but callers should debounce in the UI to avoid spamming members.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    membership = _assert_member(db, room["id"], user.id)
+    if not membership.get("is_admin"):
+        raise HTTPException(403, "Only room admins can send reminders.")
+
+    # Get all members and who has submitted
+    members_res = (
+        db.table("room_members")
+        .select("user_id, profiles(email, display_name)")
+        .eq("room_id", room["id"])
+        .execute()
+    )
+    submitted_res = (
+        db.table("availability_submissions")
+        .select("user_id")
+        .eq("room_id", room["id"])
+        .execute()
+    )
+    submitted_ids = {s["user_id"] for s in (submitted_res.data or [])}
+
+    # Fetch the admin's display name for the email
+    admin_profile = (
+        db.table("profiles")
+        .select("display_name")
+        .eq("id", user.id)
+        .single()
+        .execute()
+    )
+    admin_name = (admin_profile.data or {}).get("display_name") or "the organiser"
+    app_url = os.getenv("APP_URL", "https://groupholidaybooking.vercel.app")
+
+    sent = 0
+    for m in (members_res.data or []):
+        if m["user_id"] in submitted_ids:
+            continue   # already submitted — skip
+        if m["user_id"] == user.id:
+            continue   # don't email yourself
+        profile = m.get("profiles") or {}
+        email_addr = profile.get("email")
+        if not email_addr:
+            continue
+        member_name = profile.get("display_name") or email_addr.split("@")[0] or "there"
+        subject, html = availability_reminder_email(
+            member_name=member_name,
+            room_name=room["name"],
+            room_slug=slug,
+            admin_name=admin_name,
+            app_url=app_url,
+        )
+        if send_email(to=email_addr, subject=subject, html=html):
+            sent += 1
+
+    return {"ok": True, "reminders_sent": sent}
 
 
 @router.get("/status", response_model=SubmissionStatusResponse)

@@ -49,6 +49,13 @@ export default function JoinRoomPage() {
     });
   }, [slug, router, supabase]);
 
+  // Update browser tab title
+  useEffect(() => {
+    const name = room?.name ?? roomName;
+    document.title = name ? `Join ${name} | Group Holiday` : "Join a Holiday | Group Holiday";
+    return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
+  }, [room?.name, roomName]);
+
   async function handleJoin() {
     if (!token) return;
     let normalised: string | undefined;
@@ -125,6 +132,7 @@ export default function JoinRoomPage() {
               placeholder="e.g. M1 1AE"
               value={postcode}
               onChange={(e) => setPostcode(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleJoin(); }}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
             />
             <p className="mt-1 text-xs text-gray-500">

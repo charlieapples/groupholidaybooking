@@ -194,6 +194,14 @@ export function getFreeWindows(token: string, slug: string, min_days = 4) {
   return apiFetch<FreeWindow[]>(`/rooms/${slug}/availability/windows?min_days=${min_days}`, token);
 }
 
+export function remindPendingMembers(token: string, slug: string) {
+  return apiFetch<{ ok: boolean; reminders_sent: number }>(
+    `/rooms/${slug}/availability/remind`,
+    token,
+    { method: "POST" }
+  );
+}
+
 // ── Destinations ──────────────────────────────────────────────────────────────
 
 export interface DestinationCandidate {

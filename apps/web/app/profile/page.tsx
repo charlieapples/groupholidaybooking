@@ -42,6 +42,12 @@ export default function ProfilePage() {
     return () => sub.subscription.unsubscribe();
   }, [router, supabase]);
 
+  // Update browser tab title
+  useEffect(() => {
+    document.title = "Your Profile | Group Holiday";
+    return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
+  }, []);
+
   async function handleSave() {
     if (!token) return;
     // Validate postcode if provided
@@ -107,6 +113,7 @@ export default function ProfilePage() {
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
               placeholder="How should we show your name to the group?"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
             />
@@ -121,6 +128,7 @@ export default function ProfilePage() {
               type="text"
               value={postcode}
               onChange={(e) => setPostcode(e.target.value.toUpperCase())}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
               placeholder="e.g. DL2 3HB"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
             />
