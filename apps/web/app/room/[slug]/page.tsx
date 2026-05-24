@@ -9,6 +9,7 @@ import {
   deleteRoom,
   leaveRoom,
   kickMember,
+  remindPendingMembers,
   type Room,
   type Member,
   type SubmissionStatus,
@@ -58,6 +59,7 @@ export default function RoomPage() {
   const [savingPostcode, setSavingPostcode] = useState(false);
   const [showPostcodeEdit, setShowPostcodeEdit] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [reminding, setReminding] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -180,6 +182,23 @@ export default function RoomPage() {
       setMembers(m);
     } catch (e: unknown) {
       toast.error(errorMessage(e, "Failed to remove member"));
+    }
+  }
+
+  async function handleRemind() {
+    if (!token || reminding) return;
+    setReminding(true);
+    try {
+      const result = await remindPendingMembers(token, slug);
+      if (result.reminders_sent === 0) {
+        toast.info("No pending members to remind — everyone has already submitted.");
+      } else {
+        toast.success(`Reminder sent to ${result.reminders_sent} member${result.reminders_sent === 1 ? "" : "s"}`);
+      }
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Failed to send reminders"));
+    } finally {
+      setReminding(false);
     }
   }
 
@@ -334,6 +353,15 @@ export default function RoomPage() {
                   >
                     Submit my availability →
                   </button>
+                  {canAdvance && !availabilityReady && submissionStatus && submissionStatus.members_pending.length > 0 && (
+                    <button
+                      onClick={handleRemind}
+                      disabled={reminding}
+                      className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                    >
+                      {reminding ? "Sending…" : `⏰ Remind ${submissionStatus.members_pending.length} pending member${submissionStatus.members_pending.length === 1 ? "" : "s"}`}
+                    </button>
+                  )}
                   {canAdvance && availabilityReady && (
                     <div className="pt-2">
                       <p className="text-xs text-gray-500 mb-2">
