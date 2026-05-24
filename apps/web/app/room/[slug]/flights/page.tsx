@@ -10,6 +10,7 @@ import {
   type Room,
   type FlightResult,
 } from "@/lib/api";
+import { totalTripEstimate } from "@/lib/destinations";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -140,6 +141,15 @@ export default function FlightsPage() {
     : [];
 
   const bestResult = fullyViable[0] ?? (excludedPerson ? contingencyResults[0] : null);
+
+  // Compute typical trip nights from best result's dates or room min_nights
+  const tripNights = (() => {
+    const r = results[0];
+    if (r?.shared_out_date && r?.shared_return_date) {
+      return Math.round((new Date(r.shared_return_date).getTime() - new Date(r.shared_out_date).getTime()) / 86_400_000);
+    }
+    return room.min_nights ?? undefined;
+  })();
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -276,6 +286,7 @@ export default function FlightsPage() {
                 setExpanded={setExpanded}
                 isAdmin={!!room.is_admin}
                 memberCount={room.member_count ?? 0}
+                nights={tripNights}
                 choosingDest={choosingDest}
                 handleChooseDestination={handleChooseDestination}
               />
@@ -341,6 +352,7 @@ export default function FlightsPage() {
                               setExpanded={setExpanded}
                               isAdmin={!!room.is_admin}
                               memberCount={room.member_count ?? 0}
+                              nights={tripNights}
                               choosingDest={choosingDest}
                               handleChooseDestination={handleChooseDestination}
                             />
@@ -381,6 +393,7 @@ export default function FlightsPage() {
                       setExpanded={setExpanded}
                       isAdmin={!!room.is_admin}
                       memberCount={room.member_count ?? 0}
+                      nights={tripNights}
                       choosingDest={choosingDest}
                       handleChooseDestination={handleChooseDestination}
                     />
@@ -431,6 +444,7 @@ interface ResultsListProps {
   setExpanded: (key: string | null) => void;
   isAdmin: boolean;
   memberCount: number;
+  nights?: number;
   choosingDest: string | null;
   handleChooseDestination: (iata: string) => void;
 }
@@ -442,6 +456,7 @@ function ResultsList({
   setExpanded,
   isAdmin,
   memberCount,
+  nights,
   choosingDest,
   handleChooseDestination,
 }: ResultsListProps) {
@@ -484,7 +499,16 @@ function ResultsList({
                 <p className="text-xl font-bold text-gray-900">
                   £{Math.round(r.avg_individual_cost).toLocaleString()}
                 </p>
-                <p className="text-xs text-gray-500">avg per person</p>
+                <p className="text-xs text-gray-500">flights avg/person</p>
+                {nights && nights > 0 && (() => {
+                  const est = totalTripEstimate(r.destination, Math.round(r.avg_individual_cost), nights, memberCount);
+                  if (!est) return null;
+                  return (
+                    <p className="text-xs text-gray-400" title="Estimated total including typical accommodation cost">
+                      ~£{est.budget}–£{est.mid} incl. hotel
+                    </p>
+                  );
+                })()}
               </div>
               {isAdmin && (
                 <button
