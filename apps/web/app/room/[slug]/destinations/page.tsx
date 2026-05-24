@@ -442,6 +442,12 @@ export default function DestinationsPage() {
               value={proposeSearch}
               onChange={(e) => { setProposeSearch(e.target.value); setShowProposeDropdown(true); }}
               onFocus={() => setShowProposeDropdown(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && filteredDests.length > 0) {
+                  e.preventDefault();
+                  handlePropose(filteredDests[0][0]);
+                }
+              }}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
             />
             {showProposeDropdown && filteredDests.length > 0 && (
