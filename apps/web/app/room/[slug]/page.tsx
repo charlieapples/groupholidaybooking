@@ -216,11 +216,11 @@ export default function RoomPage() {
         <div className="rounded-xl border bg-white p-6 shadow-sm">
           <div className="flex items-center gap-2 overflow-x-auto pb-2">
             {STEPS.map((step, i) => {
-              // Past steps are clickable (revisit), current is highlighted, future is dimmed
+              // All steps are clickable — users can jump anywhere in the flow
               const isPast = i < stepIdx;
               const isCurrent = i === stepIdx;
+              const isFuture = i > stepIdx;
               const route = STEP_ROUTES[step.key];
-              const clickable = (isPast || isCurrent) && route;
 
               const pill = (
                 <div
@@ -228,21 +228,26 @@ export default function RoomPage() {
                     isCurrent
                       ? "bg-blue-600 text-white"
                       : isPast
-                      ? "bg-green-100 text-green-700 hover:bg-green-200"
-                      : "bg-gray-100 text-gray-400"
+                      ? "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer"
+                      : "bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600 cursor-pointer"
                   }`}
                 >
                   <span>{step.icon}</span>
                   <span>{step.label}</span>
+                  {isFuture && <span className="text-xs opacity-60">🔒</span>}
                 </div>
               );
 
               return (
                 <div key={step.key} className="flex items-center">
-                  {clickable ? (
+                  {route ? (
                     <button
                       onClick={() => router.push(`/room/${slug}/${route}`)}
-                      title={isPast ? `Revisit ${step.label}` : step.label}
+                      title={
+                        isPast ? `Revisit ${step.label}` :
+                        isCurrent ? step.label :
+                        `Jump to ${step.label} (admin may need to unlock first)`
+                      }
                     >
                       {pill}
                     </button>

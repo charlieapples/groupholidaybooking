@@ -162,9 +162,10 @@ export default function FlightsPage() {
         <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900 flex items-start gap-2">
           <span className="text-lg leading-none">🧳</span>
           <p>
-            Prices include a <strong>carry-on (£40 return)</strong> for every traveller —
-            Travelpayouts shows the rock-bottom &ldquo;personal item only&rdquo; fare, which most
-            people upgrade. Each person can add hold luggage during checkout on Aviasales/Ryanair.
+            Prices include a per-airline <strong>carry-on estimate</strong> —
+            Travelpayouts returns rock-bottom &ldquo;personal item only&rdquo; fares. Airlines
+            like BA &amp; easyJet include cabin bags; Ryanair/Wizz Air charge extra.
+            Hold luggage can be added at checkout.
           </p>
         </div>
 
@@ -312,7 +313,10 @@ export default function FlightsPage() {
                               {p.outbound_date && <p>Out: {p.outbound_date} · In: {p.inbound_date}</p>}
                               <div className="flex gap-3 flex-wrap">
                                 {p.outbound_cost_gbp > 0 && <span>Flights: £{Math.round(p.outbound_cost_gbp + p.inbound_cost_gbp)}</span>}
-                                {p.baggage_cost_gbp > 0 && <span>Baggage: £{Math.round(p.baggage_cost_gbp)}</span>}
+                                {p.baggage_cost_gbp > 0
+                                  ? <span>Carry-on: £{Math.round(p.baggage_cost_gbp)}</span>
+                                  : p.viable && <span className="text-green-600">Cabin bag incl.</span>
+                                }
                                 {p.ground_cost_gbp > 0 && <span>Ground: £{Math.round(p.ground_cost_gbp)}</span>}
                               </div>
                               {p.booking_link && (

@@ -13,9 +13,23 @@ from datetime import date
 from typing import Optional
 
 from .airports import UK_AIRPORTS
-from .config import Config, Person
+from .config import AIRLINE_BAGGAGE_GBP, DEFAULT_BAGGAGE_GBP, Config, Person
 from .flights import Fare, cheap_destination_codes, cheapest_return_pair
 from .ground import GroundLeg, nearest_airports
+
+
+def _baggage_for_fare(outbound: Optional["Fare"], fallback: float = DEFAULT_BAGGAGE_GBP) -> float:
+    """Return estimated round-trip carry-on cost for this airline.
+
+    Uses the per-airline lookup table in config.  Falls back to ``fallback``
+    (the room-level override set by the admin) when the airline code is unknown.
+    """
+    if outbound is None:
+        return 0.0
+    code = (outbound.airline or "").upper()
+    if code in AIRLINE_BAGGAGE_GBP:
+        return AIRLINE_BAGGAGE_GBP[code]
+    return fallback
 
 
 @dataclass
@@ -130,9 +144,9 @@ def _options_for_person(
             continue
 
         # Baggage uplift: Travelpayouts returns "personal item only" fares.
-        # Real-world travellers will add a carry-on (or hold bag). Adding a
-        # flat uplift here keeps the budget cap and ranking realistic.
-        baggage = config.baggage_uplift_gbp
+        # Use per-airline carry-on estimates where known; fall back to the
+        # room-level baggage_uplift_gbp override set by the admin.
+        baggage = _baggage_for_fare(outbound, fallback=config.baggage_uplift_gbp)
         money_cost = ground.estimated_cost_gbp + outbound.price_gbp + inbound.price_gbp + baggage
         time_cost = ground.duration_hours * 2 * config.time_value_per_hour
         total = money_cost + time_cost
@@ -149,7 +163,7 @@ def _build_result(
     person_name: str,
     option: Optional[tuple[str, GroundLeg, Fare, Fare, float, float]],
     note: str = "",
-    baggage_uplift_gbp: float = 0.0,
+    baggage_uplift_gbp: float = 0.0,  # kept for call-site compat; overridden below
 ) -> PersonResult:
     if option is None:
         return PersonResult(
@@ -164,6 +178,9 @@ def _build_result(
             note=note or "No viable flights found",
         )
     code, ground, out, inn, money, total = option
+    # Derive the displayed baggage cost from the actual airline rather than
+    # using the fallback passed in — the airline may have a £0 cabin-bag policy.
+    displayed_baggage = _baggage_for_fare(out, fallback=baggage_uplift_gbp)
     return PersonResult(
         person_name=person_name,
         chosen_airport=code,
@@ -172,7 +189,7 @@ def _build_result(
         inbound=inn,
         total_cost_gbp=round(total, 2),
         flight_plus_ground_gbp=round(money, 2),
-        baggage_cost_gbp=round(baggage_uplift_gbp, 2),
+        baggage_cost_gbp=round(displayed_baggage, 2),
         viable=True,
     )
 
