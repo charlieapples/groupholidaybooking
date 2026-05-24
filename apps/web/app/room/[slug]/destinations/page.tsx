@@ -15,6 +15,7 @@ import {
   type DestinationCandidate,
 } from "@/lib/api";
 import dynamic from "next/dynamic";
+import FeedbackButton from "@/components/FeedbackButton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
@@ -612,6 +613,7 @@ export default function DestinationsPage() {
       </div>
 
       {token && <ChatWidget token={token} roomSlug={slug} />}
+      {token && <FeedbackButton token={token} page="destinations" roomSlug={slug} />}
     </main>
   );
 }

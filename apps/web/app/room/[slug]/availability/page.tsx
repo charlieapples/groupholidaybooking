@@ -24,6 +24,7 @@ import {
   type FreeWindow,
 } from "@/lib/api";
 import { parseIcal, parseRoughWindow, getMonthsInRange } from "@/lib/ical";
+import FeedbackButton from "@/components/FeedbackButton";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
@@ -865,6 +866,7 @@ export default function AvailabilityPage() {
           </div>
         )}
       </div>
+      {token && <FeedbackButton token={token} page="availability" roomSlug={slug} />}
     </main>
   );
 }

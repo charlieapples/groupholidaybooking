@@ -10,6 +10,7 @@ import {
   type Room,
   type DurationBudgetAggregate,
 } from "@/lib/api";
+import FeedbackButton from "@/components/FeedbackButton";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
@@ -423,6 +424,7 @@ export default function PreferencesPage() {
           </div>
         )}
       </div>
+      {token && <FeedbackButton token={token} page="preferences" roomSlug={slug} />}
     </main>
   );
 }
