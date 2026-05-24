@@ -221,6 +221,41 @@ export default function RoomPage() {
     }
   }
 
+  /** Download an .ics file so users can add the agreed trip dates to their calendar. */
+  function downloadIcs() {
+    if (!room?.agreed_start) return;
+    const start = room.agreed_start.replace(/-/g, ""); // YYYYMMDD
+    // DTEND is exclusive in iCal — use the day after agreed_end (or day after start for single-day)
+    const endDate = room.agreed_end
+      ? new Date(room.agreed_end)
+      : new Date(room.agreed_start);
+    endDate.setUTCDate(endDate.getUTCDate() + 1);
+    const end = endDate.toISOString().slice(0, 10).replace(/-/g, "");
+    const destLabel = room.destination_iata ? ` (${destName(room.destination_iata)})` : "";
+    const summary = `${room.name}${destLabel}`;
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Group Holiday//EN",
+      "BEGIN:VEVENT",
+      `UID:${slug}@groupholiday.app`,
+      `DTSTART;VALUE=DATE:${start}`,
+      `DTEND;VALUE=DATE:${end}`,
+      `SUMMARY:${summary}`,
+      "DESCRIPTION:Booked via Group Holiday",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+
+    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${room.name.replace(/\s+/g, "-").toLowerCase()}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function shareLink() {
     const url = `${window.location.origin}/room/${slug}/join`;
     const shareText = `Join my holiday planning room "${room?.name ?? slug}" on Group Holiday`;
@@ -532,11 +567,28 @@ export default function RoomPage() {
                       View booking details
                     </button>
                     <button
-                      onClick={shareLink}
+                      onClick={() => {
+                        const url = `${window.location.origin}/room/${slug}/results`;
+                        if (typeof navigator.share === "function") {
+                          navigator.share({ title: room.name, text: `Check out our group trip: ${room.name}`, url }).catch(() => {
+                            navigator.clipboard.writeText(url).then(() => toast.success("Results link copied!"));
+                          });
+                        } else {
+                          navigator.clipboard.writeText(url).then(() => toast.success("Results link copied!"));
+                        }
+                      }}
                       className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                     >
-                      Share with the group
+                      📤 Share trip summary
                     </button>
+                    {room.agreed_start && (
+                      <button
+                        onClick={downloadIcs}
+                        className="rounded-lg border border-green-300 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-100"
+                      >
+                        📅 Add to calendar
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -565,6 +617,12 @@ export default function RoomPage() {
                     {" – "}
                     {new Date(room.agreed_end!).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
                   </p>
+                  <button
+                    onClick={downloadIcs}
+                    className="mt-2 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    📅 Add to my calendar
+                  </button>
                 </div>
               )}
               {(room.min_nights || room.budget_gbp) && (
@@ -689,6 +747,23 @@ export default function RoomPage() {
               >
                 📋 Copy invite link
               </button>
+              {(room.current_step === "booking" || room.current_step === "done") && (
+                <button
+                  onClick={() => {
+                    const url = `${window.location.origin}/room/${slug}/results`;
+                    if (typeof navigator.share === "function") {
+                      navigator.share({ title: room.name, text: `Our group trip: ${room.name}`, url }).catch(() => {
+                        navigator.clipboard.writeText(url).then(() => toast.success("Results link copied!"));
+                      });
+                    } else {
+                      navigator.clipboard.writeText(url).then(() => toast.success("Results link copied!"));
+                    }
+                  }}
+                  className="mt-2 w-full rounded-lg border border-blue-300 bg-white py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                >
+                  📤 Share trip summary
+                </button>
+              )}
             </div>
 
             {/* Quick links */}
