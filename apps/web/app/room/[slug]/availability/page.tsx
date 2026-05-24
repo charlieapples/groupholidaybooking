@@ -457,6 +457,12 @@ export default function AvailabilityPage() {
         setLoading(false);
       }
     });
+    // Availability page is often left open for ages — keep the captured
+    // JWT in sync with Supabase's silent background refresh.
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      if (session?.access_token) setToken(session.access_token);
+    });
+    return () => sub.subscription.unsubscribe();
   }, [slug, supabase, router]);
 
   // If we've just returned from Google OAuth (sync_google=1), auto-trigger sync

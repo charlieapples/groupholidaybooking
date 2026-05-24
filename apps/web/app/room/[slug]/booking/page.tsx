@@ -76,6 +76,10 @@ export default function BookingPage() {
       }
       setLoading(false);
     });
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      if (session?.access_token) setToken(session.access_token);
+    });
+    return () => sub.subscription.unsubscribe();
   }, [slug, router, supabase]);
 
   async function handleMarkDone() {

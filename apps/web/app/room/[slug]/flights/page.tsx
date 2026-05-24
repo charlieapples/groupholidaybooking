@@ -48,6 +48,12 @@ export default function FlightsPage() {
       }
       setLoading(false);
     });
+    // Keep token fresh when Supabase silently refreshes the JWT
+    // (fires every ~50 min; without this the captured token expires).
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      if (session?.access_token) setToken(session.access_token);
+    });
+    return () => sub.subscription.unsubscribe();
   }, [slug, router, supabase]);
 
   async function handleRun() {
@@ -55,7 +61,17 @@ export default function FlightsPage() {
     setRunning(true);
     setError(null);
     try {
-      const res = await runFlightOptimiser(token, slug);
+      // Always grab a fresh token before slow calls — Supabase JWTs expire
+      // after 1 hour and the captured `token` may have gone stale while the
+      // user sat on the page. getSession() returns the auto-refreshed value.
+      const { data } = await supabase.auth.getSession();
+      const freshToken = data.session?.access_token;
+      if (!freshToken) {
+        router.replace("/");
+        return;
+      }
+      setToken(freshToken);
+      const res = await runFlightOptimiser(freshToken, slug);
       setResults(res);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Flight search failed. Please check all prerequisites are complete.");

@@ -81,6 +81,11 @@ export default function Dashboard() {
       }
       setLoading(false);
     });
+    // Keep token fresh when Supabase silently refreshes the JWT
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      if (session?.access_token) setToken(session.access_token);
+    });
+    return () => sub.subscription.unsubscribe();
   }, [supabase, router]);
 
   // Focus the name input after the modal animates in

@@ -83,6 +83,11 @@ export default function RoomPage() {
         setLoading(false);
       }
     });
+    // Keep token fresh as Supabase silently refreshes the 1h JWT
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      if (session?.access_token) setToken(session.access_token);
+    });
+    return () => sub.subscription.unsubscribe();
   }, [slug, router, supabase]);
 
   async function handleSavePostcode() {
