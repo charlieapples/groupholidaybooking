@@ -123,6 +123,32 @@ export default function BookingPage() {
   const [markingDone, setMarkingDone] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
+  // Booking checklist — persisted to localStorage so it survives page refresh.
+  const CHECKLIST_ITEMS = [
+    "Everyone has booked their flights",
+    "Accommodation is booked",
+    "Travel insurance sorted",
+    "Airport transfers arranged",
+    "Everyone has a valid passport",
+  ] as const;
+  const checklistKey = `booking-checklist-${slug}`;
+  const [checked, setChecked] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const saved = localStorage.getItem(checklistKey);
+      return new Set(saved ? JSON.parse(saved) as string[] : []);
+    } catch { return new Set(); }
+  });
+
+  function toggleChecked(item: string) {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(item)) next.delete(item); else next.add(item);
+      try { localStorage.setItem(checklistKey, JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: s }) => {
       if (!s.session) { router.replace("/"); return; }
@@ -466,20 +492,24 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* Checklist */}
+        {/* Checklist — state persists in localStorage per room */}
         <div className="rounded-xl border bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">✅ Booking checklist</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-gray-900">✅ Booking checklist</h2>
+            <span className="text-xs text-gray-400">
+              {checked.size}/{CHECKLIST_ITEMS.length} done
+            </span>
+          </div>
           <div className="space-y-2 text-sm text-gray-700">
-            {[
-              "Everyone has booked their flights",
-              "Accommodation is booked",
-              "Travel insurance sorted",
-              "Airport transfers arranged",
-              "Everyone has a valid passport",
-            ].map((item) => (
-              <label key={item} className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-blue-600" />
-                {item}
+            {CHECKLIST_ITEMS.map((item) => (
+              <label key={item} className="flex items-center gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={checked.has(item)}
+                  onChange={() => toggleChecked(item)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                />
+                <span className={checked.has(item) ? "line-through text-gray-400" : ""}>{item}</span>
               </label>
             ))}
           </div>
