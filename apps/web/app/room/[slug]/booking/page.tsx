@@ -194,8 +194,11 @@ export default function BookingPage() {
 
   const destIata = room.destination_iata;
   const destResult = results.find(r => r.destination === destIata) ?? results[0] ?? null;
-  const checkIn = room.agreed_start ?? destResult?.shared_out_date ?? "";
-  const checkOut = room.agreed_end ?? destResult?.shared_return_date ?? "";
+  // Prefer the SPECIFIC flight dates picked by the optimiser — those are when
+  // the group will actually be there. Fall back to the room's wide agreed_start
+  // window only if no flight result has narrowed it down yet.
+  const checkIn = destResult?.shared_out_date ?? room.agreed_start ?? "";
+  const checkOut = destResult?.shared_return_date ?? room.agreed_end ?? "";
   const guestCount = Math.max(members.length, 1);
   const providers = destIata
     ? [

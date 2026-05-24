@@ -7,6 +7,7 @@ import {
   suggestDestinations,
   proposeDestination,
   voteDestination,
+  deleteDestinationCandidate,
   submitDestinationPreferences,
   getMyDestinationPreferences,
   advanceStep,
@@ -189,6 +190,7 @@ export default function DestinationsPage() {
   const { toast } = useToast();
 
   const [token, setToken] = useState<string | null>(null);
+  const [myUserId, setMyUserId] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [candidates, setCandidates] = useState<DestinationCandidate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -218,6 +220,7 @@ export default function DestinationsPage() {
       if (!s.session) { router.replace("/"); return; }
       const t = s.session.access_token;
       setToken(t);
+      setMyUserId(s.session.user.id);
       // Load room first — if THIS fails we know they shouldn't be here.
       // Then load candidates + preferences separately; failures on those
       // don't kick the user out, they just leave the questionnaire blank.
@@ -295,6 +298,20 @@ export default function DestinationsPage() {
       toast.error(errorMessage(e, "Failed to propose destination"));
     } finally {
       setProposing(false);
+    }
+  }
+
+  async function handleDeleteCandidate(candidateId: string, name: string) {
+    if (!token) return;
+    if (!window.confirm(`Remove ${name} from the candidates?`)) return;
+    // Optimistic remove
+    const prev = candidates;
+    setCandidates((cs) => cs.filter((c) => c.id !== candidateId));
+    try {
+      await deleteDestinationCandidate(token, slug, candidateId);
+    } catch (e: unknown) {
+      setCandidates(prev);
+      toast.error(errorMessage(e, "Failed to remove candidate"));
     }
   }
 
@@ -603,6 +620,16 @@ export default function DestinationsPage() {
                     >
                       👎
                     </button>
+                    {/* Show delete button to admin OR the person who proposed it */}
+                    {(room.is_admin || c.proposed_by === myUserId) && (
+                      <button
+                        onClick={() => handleDeleteCandidate(c.id, c.name)}
+                        className="rounded-full p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors"
+                        title="Remove candidate"
+                      >
+                        🗑️
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

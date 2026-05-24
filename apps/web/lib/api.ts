@@ -217,6 +217,16 @@ export function proposeDestination(token: string, slug: string, iata_code: strin
   );
 }
 
+export function deleteDestinationCandidate(
+  token: string,
+  slug: string,
+  candidate_id: string
+) {
+  return apiFetch<void>(`/rooms/${slug}/destinations/${candidate_id}`, token, {
+    method: "DELETE",
+  });
+}
+
 export function voteDestination(
   token: string,
   slug: string,

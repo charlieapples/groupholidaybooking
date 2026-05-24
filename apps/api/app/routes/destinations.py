@@ -402,6 +402,42 @@ def propose_destination(
     return _candidate_to_dto(c, user.id, [])
 
 
+@router.delete("/{candidate_id}", status_code=204)
+def delete_candidate(
+    slug: str,
+    candidate_id: str,
+    user: UserInfo = Depends(current_user),
+):
+    """Remove a destination candidate from the Holiday.
+
+    Admin can delete any. Non-admins can only delete candidates THEY proposed.
+    Algorithm-proposed candidates (proposed_by IS NULL) are admin-only.
+    Cascades to delete votes via FK.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    membership = _assert_member(db, room["id"], user.id)
+
+    cand_res = (
+        db.table("destination_candidates")
+        .select("id, room_id, proposed_by")
+        .eq("id", candidate_id)
+        .eq("room_id", room["id"])
+        .execute()
+    )
+    if not cand_res.data:
+        raise HTTPException(404, "Candidate not found in this Holiday.")
+    cand = cand_res.data[0]
+
+    is_admin = bool(membership.get("is_admin"))
+    is_owner = cand.get("proposed_by") == user.id
+    if not (is_admin or is_owner):
+        raise HTTPException(403, "Only the admin or the proposer can delete a candidate.")
+
+    db.table("destination_candidates").delete().eq("id", candidate_id).execute()
+    return None
+
+
 @router.post("/{candidate_id}/vote")
 def vote(
     slug: str,
@@ -505,7 +541,31 @@ def suggest_destinations(
     if not top:
         top = list(POPULAR_LABELS.values())[:top_n]
 
-    # Upsert algorithm-suggested candidates (proposed_by = null = algorithm)
+    # Wipe previous algorithm-proposed candidates so a fresh suggestion run
+    # actually REPLACES the old list (otherwise re-running just accumulates
+    # forever). Keep human-proposed ones (proposed_by IS NOT NULL) and any
+    # candidates with votes — those are real picks, not stale suggestions.
+    existing = (
+        db.table("destination_candidates")
+        .select("id, proposed_by, iata_code")
+        .eq("room_id", room["id"])
+        .execute()
+    )
+    voted_candidate_ids: set[str] = set()
+    if existing.data:
+        ids = [c["id"] for c in existing.data]
+        votes_res = (
+            db.table("destination_votes")
+            .select("candidate_id")
+            .in_("candidate_id", ids)
+            .execute()
+        )
+        voted_candidate_ids = {v["candidate_id"] for v in (votes_res.data or [])}
+    for c in (existing.data or []):
+        if c.get("proposed_by") is None and c["id"] not in voted_candidate_ids:
+            db.table("destination_candidates").delete().eq("id", c["id"]).execute()
+
+    # Insert new algorithm suggestions (proposed_by = null marks them as such)
     for iata in top:
         db.table("destination_candidates").upsert(
             {"room_id": room["id"], "iata_code": iata},
