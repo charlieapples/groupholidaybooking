@@ -389,8 +389,12 @@ export default function BookingPage() {
                         {p.outbound_cost_gbp + p.inbound_cost_gbp > 0 && (
                           <span>Flights: £{Math.round(p.outbound_cost_gbp + p.inbound_cost_gbp)}</span>
                         )}
-                        {p.baggage_cost_gbp > 0 && (
-                          <span>Baggage: £{Math.round(p.baggage_cost_gbp)}</span>
+                        {p.baggage_cost_gbp > 0
+                          ? <span title="Estimated carry-on/cabin bag add-on cost for this airline">Cabin bag est.: £{Math.round(p.baggage_cost_gbp)}</span>
+                          : <span className="text-green-600">Cabin bag incl.</span>
+                        }
+                        {p.ground_cost_gbp > 0 && (
+                          <span title="Estimated ground travel cost to/from the airport">Ground travel: £{Math.round(p.ground_cost_gbp)}</span>
                         )}
                       </div>
                       {p.booking_link ? (
@@ -423,6 +427,7 @@ export default function BookingPage() {
                           </div>
                           <p className="text-[10px] text-gray-400">
                             Prices cached up to ~24h — live price on Aviasales may differ slightly.
+                            Cabin bag estimate only — hold luggage is priced separately by the airline at checkout.
                           </p>
                         </div>
                       ) : (
