@@ -128,6 +128,24 @@ export default function RoomPage() {
     };
   }, [slug, router, supabase]);
 
+  // Poll submission status every 20s while on the availability step and not yet complete.
+  // Lets the admin see the count go up in real-time as members submit.
+  const allSubmitted = Boolean(submissionStatus?.all_submitted ||
+    (submissionStatus && submissionStatus.submitted === submissionStatus.total));
+  useEffect(() => {
+    if (!token || !room || room.current_step !== "availability" || allSubmitted) return;
+    const interval = setInterval(async () => {
+      try {
+        const status = await getSubmissionStatus(token, slug);
+        setSubmissionStatus(status);
+      } catch {
+        // Ignore transient failures — next tick will retry
+      }
+    }, 20_000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, room?.current_step, slug, allSubmitted]);
+
   async function handleSavePostcode() {
     if (!token || !myPostcode.trim()) return;
     const normalised = normalisePostcode(myPostcode);
