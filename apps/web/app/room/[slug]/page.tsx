@@ -8,6 +8,7 @@ import {
   updateMyPostcode,
   deleteRoom,
   leaveRoom,
+  kickMember,
   type Room,
   type Member,
   type SubmissionStatus,
@@ -164,6 +165,21 @@ export default function RoomPage() {
       router.replace("/dashboard");
     } catch (e: unknown) {
       toast.error(errorMessage(e, "Failed to leave Holiday"));
+    }
+  }
+
+  async function handleKick(member: Member) {
+    if (!token || !room) return;
+    const name = member.display_name || "this member";
+    if (!window.confirm(`Remove ${name} from "${room.name}"? They will need a new invite link to rejoin.`)) return;
+    try {
+      await kickMember(token, slug, member.user_id);
+      toast.success(`Removed ${name} from the Holiday`);
+      // Refresh member list
+      const m = await listMembers(token, slug);
+      setMembers(m);
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Failed to remove member"));
     }
   }
 
@@ -500,11 +516,11 @@ export default function RoomPage() {
               </h3>
               <ul className="space-y-3">
                 {members.map((m) => (
-                  <li key={m.user_id} className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
+                  <li key={m.user_id} className="flex items-center gap-3 group">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
                       {(m.display_name || "?")[0].toUpperCase()}
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900">
                         {m.display_name || "Unknown"}
                         {m.is_admin && (
@@ -516,6 +532,18 @@ export default function RoomPage() {
                         : <p className="text-xs text-amber-600">⚠️ No postcode</p>
                       }
                     </div>
+                    {/* Admin kick button — hidden unless hovering, only shown for non-admin members */}
+                    {room.is_admin && !m.is_admin && m.user_id !== userId && (
+                      <button
+                        onClick={() => handleKick(m)}
+                        title={`Remove ${m.display_name || "this member"}`}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 rounded p-1 text-gray-300 hover:text-red-500 hover:bg-red-50"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>

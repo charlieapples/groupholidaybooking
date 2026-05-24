@@ -137,6 +137,10 @@ export function leaveRoom(token: string, slug: string) {
   return apiFetch<void>(`/rooms/${slug}/leave`, token, { method: "DELETE" });
 }
 
+export function kickMember(token: string, slug: string, memberUserId: string) {
+  return apiFetch<void>(`/rooms/${slug}/members/${memberUserId}`, token, { method: "DELETE" });
+}
+
 export function updateMyPostcode(token: string, slug: string, home_postcode: string) {
   return apiFetch<{ ok: boolean }>(
     `/rooms/${slug}/join?home_postcode=${encodeURIComponent(home_postcode)}`,

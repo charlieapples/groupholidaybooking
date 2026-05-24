@@ -451,6 +451,37 @@ def leave_room(slug: str, user: UserInfo = Depends(current_user)):
     return None
 
 
+@router.delete("/{slug}/members/{member_user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def kick_member(
+    slug: str,
+    member_user_id: str,
+    user: UserInfo = Depends(current_user),
+):
+    """Admin: remove a specific member from the room.
+
+    Admins cannot kick themselves — use leave or delete instead.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    membership = _assert_member(db, room["id"], user.id)
+    if not membership.get("is_admin"):
+        raise HTTPException(403, "Only room admins can remove members.")
+    if member_user_id == user.id:
+        raise HTTPException(400, "Admins cannot remove themselves. Delete the Holiday instead.")
+    # Check the target is actually in the room
+    target = (
+        db.table("room_members")
+        .select("*")
+        .eq("room_id", room["id"])
+        .eq("user_id", member_user_id)
+        .execute()
+    )
+    if not target.data:
+        raise HTTPException(404, "That user is not a member of this room.")
+    db.table("room_members").delete().eq("room_id", room["id"]).eq("user_id", member_user_id).execute()
+    return None
+
+
 @router.post("/{slug}/advance", response_model=RoomResponse)
 def advance_step(slug: str, user: UserInfo = Depends(current_user)):
     """Advance the room to the next planning step. Admin only."""
