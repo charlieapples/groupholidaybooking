@@ -257,7 +257,7 @@ def run_optimiser(slug: str, user: UserInfo = Depends(current_user)):
     try:
         best = next((d for d in dtos if d.is_fully_viable), dtos[0] if dtos else None)
         if best:
-            app_url = os.getenv("APP_URL", "https://groupholidaybooking.vercel.app")
+            app_url = os.getenv("APP_URL", "https://groupholidaybooking.com")
             # Fetch all member emails (join profiles)
             member_emails_res = (
                 db.table("room_members")

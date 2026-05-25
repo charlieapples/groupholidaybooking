@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ToastProvider } from "@/components/Toast";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://groupholidaybooking.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://groupholidaybooking.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),

@@ -222,7 +222,7 @@ def submit_availability(
                     if admin_profile.data and admin_profile.data.get("email"):
                         admin_email = admin_profile.data["email"]
                         admin_name = admin_profile.data.get("display_name") or "there"
-                        app_url = os.getenv("APP_URL", "https://groupholidaybooking.vercel.app")
+                        app_url = os.getenv("APP_URL", "https://groupholidaybooking.com")
                         subject, html = availability_complete_email(
                             admin_name=admin_name,
                             room_name=room["name"],
@@ -290,7 +290,7 @@ def remind_pending_members(slug: str, user: UserInfo = Depends(current_user)):
         .execute()
     )
     admin_name = (admin_profile.data or {}).get("display_name") or "the organiser"
-    app_url = os.getenv("APP_URL", "https://groupholidaybooking.vercel.app")
+    app_url = os.getenv("APP_URL", "https://groupholidaybooking.com")
 
     sent = 0
     for m in (members_res.data or []):

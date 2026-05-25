@@ -381,7 +381,7 @@ def join_room(
                 admin_name = profile.get("display_name") or "there"
                 if not admin_email:
                     continue
-                app_url = os.getenv("APP_URL", "https://groupholidaybooking.vercel.app")
+                app_url = os.getenv("APP_URL", "https://groupholidaybooking.com")
                 joiner_name = user.display_name or (user.email or "").split("@")[0] or "Someone"
                 subject, html = member_joined_email(
                     admin_name=admin_name,
@@ -399,7 +399,7 @@ def join_room(
         try:
             joiner_email = user.email
             if joiner_email:
-                app_url = os.getenv("APP_URL", "https://groupholidaybooking.vercel.app")
+                app_url = os.getenv("APP_URL", "https://groupholidaybooking.com")
                 joiner_name = user.display_name or joiner_email.split("@")[0] or "there"
                 welcome_subject, welcome_html = member_welcome_email(
                     member_name=joiner_name,
@@ -581,7 +581,7 @@ def advance_step(slug: str, user: UserInfo = Depends(current_user)):
     # Fire-and-forget: notify all non-admin members of the step change.
     # step_advance_email() returns None for steps that don't warrant an email.
     try:
-        app_url = os.getenv("APP_URL", "https://groupholidaybooking.vercel.app")
+        app_url = os.getenv("APP_URL", "https://groupholidaybooking.com")
         members_res = (
             db.table("room_members")
             .select("user_id, is_admin, profiles(email, display_name)")
