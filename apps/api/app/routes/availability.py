@@ -173,7 +173,13 @@ def submit_availability(
     room = _get_room_by_slug(db, slug)
     _assert_member(db, room["id"], user.id)
 
-    # Upsert blocks (unique constraint: room_id, user_id, block_date)
+    # Replace all existing blocks for this user in this room.
+    # Using delete-then-insert rather than upsert so that dates the user
+    # previously marked busy but has now un-marked are actually removed.
+    # The React UI accumulates imports in local state; each Submit call
+    # represents the user's complete, current availability picture.
+    db.table("availability_blocks").delete().eq("room_id", room["id"]).eq("user_id", user.id).execute()
+
     rows = [
         {
             "room_id": room["id"],
@@ -186,9 +192,7 @@ def submit_availability(
         for b in body.blocks
     ]
     if rows:
-        db.table("availability_blocks").upsert(
-            rows, on_conflict="room_id,user_id,block_date"
-        ).execute()
+        db.table("availability_blocks").insert(rows).execute()
 
     if body.mark_submitted:
         db.table("availability_submissions").upsert(
