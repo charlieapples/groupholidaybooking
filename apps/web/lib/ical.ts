@@ -88,8 +88,6 @@ export function parseRoughWindow(rough: string | null): { start: Date; end: Date
 
   if (!rough) return { start: defaultStart, end: defaultEnd };
 
-  const sep = /\s*[–—-]\s*/;
-
   // "Month YYYY – Month YYYY"
   const m1 = rough.match(/^(\w+)\s+(\d{4})\s*[–—-]\s*(\w+)\s+(\d{4})$/);
   if (m1) {

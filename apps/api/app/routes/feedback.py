@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from ..deps.auth import UserInfo, current_user
-from ..db import get_client
+from ..db.supabase import get_client
 
 router = APIRouter()
 
