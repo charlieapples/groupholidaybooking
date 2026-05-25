@@ -113,7 +113,7 @@ function trainlineLink(city: string, outDate: string, inDate: string) {
   });
   const dest = `https://www.thetrainline.com/book/results?${params}`;
   if (AWIN_PID) {
-    return `https://www.awin1.com/cread.php?awinmid=${TRAINLINE_AWIN_MID}&awinpub=${AWIN_PID}&ued=${encodeURIComponent(dest)}`;
+    return `https://www.awin1.com/cread.php?awinmid=${TRAINLINE_AWIN_MID}&awinaffid=${AWIN_PID}&ued=${encodeURIComponent(dest)}`;
   }
   return dest;
 }
