@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { PageSpinner } from "@/components/Skeleton";
 import { Suspense, useEffect, useMemo, useState } from "react";
@@ -171,6 +172,13 @@ function LandingPageContent() {
           ))}
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="mt-24 border-t py-8 text-center text-sm text-gray-400 w-full">
+        <Link href="/privacy" className="hover:text-gray-600">Privacy Policy</Link>
+        {" · "}
+        <Link href="/terms" className="hover:text-gray-600">Terms of Service</Link>
+      </footer>
     </main>
   );
 }
