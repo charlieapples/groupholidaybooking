@@ -27,9 +27,17 @@ function cityFor(iata: string): string {
 
 // ── Affiliate IDs (baked in at build time via NEXT_PUBLIC_ env vars) ──────────
 // Set these in Vercel → Project Settings → Environment Variables when approved.
+//
+// Booking.com:
+//   - Direct Partner Hub: set NEXT_PUBLIC_BOOKING_COM_AID (e.g. "12345678")
+//   - CJ Affiliate route: set NEXT_PUBLIC_CJ_PID + NEXT_PUBLIC_CJ_BOOKING_AID
+//     (PID = your CJ publisher ID, AID = Booking.com UK advertiser ID 4297311)
+//   Most new affiliates go via CJ — direct Partner Hub is increasingly selective.
 const BOOKING_COM_AID = process.env.NEXT_PUBLIC_BOOKING_COM_AID ?? "";
-// Trainline affiliate via Partnerize. Set NEXT_PUBLIC_TRAINLINE_CAMREF in Vercel
-// once approved at join.partnerize.com/trainline/en (Trainline moved off Awin in 2024).
+const CJ_PID = process.env.NEXT_PUBLIC_CJ_PID ?? "";
+const CJ_BOOKING_AID = process.env.NEXT_PUBLIC_CJ_BOOKING_AID ?? "4297311"; // Booking.com UK on CJ
+// Trainline affiliate via Partnerize (moved off Awin in 2024).
+// Sign up at join.partnerize.com/trainline/en
 const TRAINLINE_CAMREF = process.env.NEXT_PUBLIC_TRAINLINE_CAMREF ?? "";
 
 function bookingComLink(iata: string, checkIn: string, checkOut: string, guests: number) {
@@ -42,7 +50,12 @@ function bookingComLink(iata: string, checkIn: string, checkOut: string, guests:
     order: "price",
     ...(BOOKING_COM_AID ? { aid: BOOKING_COM_AID } : {}),
   });
-  return `https://www.booking.com/searchresults.html?${params}`;
+  const directUrl = `https://www.booking.com/searchresults.html?${params}`;
+  // If publisher is on CJ (not direct Partner Hub), wrap in CJ click-through URL.
+  if (CJ_PID && !BOOKING_COM_AID) {
+    return `https://www.anrdoezrs.net/click-${CJ_PID}-${CJ_BOOKING_AID}?url=${encodeURIComponent(directUrl)}`;
+  }
+  return directUrl;
 }
 
 function airbnbLink(iata: string, checkIn: string, checkOut: string, guests: number) {
@@ -310,7 +323,7 @@ export default function BookingPage() {
               ))}
             </div>
             <p className="mt-3 text-xs text-gray-400">
-              {BOOKING_COM_AID || TRAINLINE_CAMREF
+              {BOOKING_COM_AID || CJ_PID || TRAINLINE_CAMREF
                 ? "Some links may earn us a small commission at no extra cost to you."
                 : "Comparison links — pick whichever you trust."}
             </p>

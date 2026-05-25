@@ -47,6 +47,19 @@ def _token() -> str:
     return token
 
 
+def _marker() -> str:
+    """Travelpayouts affiliate marker (Partner ID) for tracking clicks.
+
+    This is DIFFERENT from the API token. The marker is a short numeric ID
+    visible in the lower-left of the Travelpayouts dashboard. Without it,
+    Aviasales clicks don't earn commission.
+
+    Falls back to empty string (no tracking) rather than raising — flights
+    still work, just without affiliate revenue.
+    """
+    return os.getenv("TRAVELPAYOUTS_MARKER", "")
+
+
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _get(path: str, params: dict) -> dict:
     params = {**params, "token": _token(), "currency": params.get("currency", "GBP")}
@@ -187,12 +200,14 @@ def cheapest_return_pair(
                 best_total = price
                 airline = info.get("airline", "?")
                 half = round(price / 2, 2)
+                marker_val = _marker()
                 deep = (
                     f"https://www.aviasales.com/search/"
                     f"{origin}{dep_date.strftime('%d%m')}"
                     f"{destination}{ret_date.strftime('%d%m')}1"
-                    f"?marker={_token()}"
                 )
+                if marker_val:
+                    deep = f"{deep}?marker={marker_val}"
                 best_out = Fare(
                     origin=origin, destination=destination,
                     departure_date=dep_date, price_gbp=half,
