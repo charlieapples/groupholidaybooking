@@ -28,9 +28,9 @@ function cityFor(iata: string): string {
 // ── Affiliate IDs (baked in at build time via NEXT_PUBLIC_ env vars) ──────────
 // Set these in Vercel → Project Settings → Environment Variables when approved.
 const BOOKING_COM_AID = process.env.NEXT_PUBLIC_BOOKING_COM_AID ?? "";
-// Awin publisher ID — used for Trainline deep links when you're approved on Awin.
-const AWIN_PID = process.env.NEXT_PUBLIC_AWIN_PID ?? "";
-const TRAINLINE_AWIN_MID = "5585"; // Trainline's Awin merchant ID (UK programme)
+// Trainline affiliate via Partnerize. Set NEXT_PUBLIC_TRAINLINE_CAMREF in Vercel
+// once approved at join.partnerize.com/trainline/en (Trainline moved off Awin in 2024).
+const TRAINLINE_CAMREF = process.env.NEXT_PUBLIC_TRAINLINE_CAMREF ?? "";
 
 function bookingComLink(iata: string, checkIn: string, checkOut: string, guests: number) {
   const params = new URLSearchParams({
@@ -102,8 +102,9 @@ const TRAIN_DESTINATIONS: Record<string, { city: string; eurostar: boolean }> = 
 };
 
 function trainlineLink(city: string, outDate: string, inDate: string) {
-  // Trainline deep link — pre-fills origin as London, destination as city.
-  // Wrapped in Awin tracking URL when NEXT_PUBLIC_AWIN_PID is set.
+  // Trainline deep link — pre-fills destination city and dates.
+  // Wrapped in Partnerize tracking URL when NEXT_PUBLIC_TRAINLINE_CAMREF is set.
+  // Sign up at join.partnerize.com/trainline/en to get your camref.
   const params = new URLSearchParams({
     origin: "london",
     destination: city.toLowerCase(),
@@ -112,8 +113,8 @@ function trainlineLink(city: string, outDate: string, inDate: string) {
     adults: "1",
   });
   const dest = `https://www.thetrainline.com/book/results?${params}`;
-  if (AWIN_PID) {
-    return `https://www.awin1.com/cread.php?awinmid=${TRAINLINE_AWIN_MID}&awinaffid=${AWIN_PID}&ued=${encodeURIComponent(dest)}`;
+  if (TRAINLINE_CAMREF) {
+    return `https://prf.hn/click/camref:${TRAINLINE_CAMREF}/destination:${encodeURIComponent(dest)}`;
   }
   return dest;
 }
@@ -309,7 +310,7 @@ export default function BookingPage() {
               ))}
             </div>
             <p className="mt-3 text-xs text-gray-400">
-              {BOOKING_COM_AID || AWIN_PID
+              {BOOKING_COM_AID || TRAINLINE_CAMREF
                 ? "Some links may earn us a small commission at no extra cost to you."
                 : "Comparison links — pick whichever you trust."}
             </p>
