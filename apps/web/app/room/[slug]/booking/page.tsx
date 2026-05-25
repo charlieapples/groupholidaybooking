@@ -25,6 +25,13 @@ function cityFor(iata: string): string {
   return cityName(iata);
 }
 
+// ── Affiliate IDs (baked in at build time via NEXT_PUBLIC_ env vars) ──────────
+// Set these in Vercel → Project Settings → Environment Variables when approved.
+const BOOKING_COM_AID = process.env.NEXT_PUBLIC_BOOKING_COM_AID ?? "";
+// Awin publisher ID — used for Trainline deep links when you're approved on Awin.
+const AWIN_PID = process.env.NEXT_PUBLIC_AWIN_PID ?? "";
+const TRAINLINE_AWIN_MID = "5585"; // Trainline's Awin merchant ID (UK programme)
+
 function bookingComLink(iata: string, checkIn: string, checkOut: string, guests: number) {
   const params = new URLSearchParams({
     ss: cityFor(iata),
@@ -33,6 +40,7 @@ function bookingComLink(iata: string, checkIn: string, checkOut: string, guests:
     group_adults: String(guests),
     no_rooms: "1",
     order: "price",
+    ...(BOOKING_COM_AID ? { aid: BOOKING_COM_AID } : {}),
   });
   return `https://www.booking.com/searchresults.html?${params}`;
 }
@@ -94,7 +102,8 @@ const TRAIN_DESTINATIONS: Record<string, { city: string; eurostar: boolean }> = 
 };
 
 function trainlineLink(city: string, outDate: string, inDate: string) {
-  // Trainline deep link — pre-fills origin as London, destination as city
+  // Trainline deep link — pre-fills origin as London, destination as city.
+  // Wrapped in Awin tracking URL when NEXT_PUBLIC_AWIN_PID is set.
   const params = new URLSearchParams({
     origin: "london",
     destination: city.toLowerCase(),
@@ -102,7 +111,11 @@ function trainlineLink(city: string, outDate: string, inDate: string) {
     returnDate: inDate,
     adults: "1",
   });
-  return `https://www.thetrainline.com/book/results?${params}`;
+  const dest = `https://www.thetrainline.com/book/results?${params}`;
+  if (AWIN_PID) {
+    return `https://www.awin1.com/cread.php?awinmid=${TRAINLINE_AWIN_MID}&awinpub=${AWIN_PID}&ued=${encodeURIComponent(dest)}`;
+  }
+  return dest;
 }
 
 function eurostarLink(city: string, outDate: string, inDate: string) {
@@ -296,7 +309,9 @@ export default function BookingPage() {
               ))}
             </div>
             <p className="mt-3 text-xs text-gray-400">
-              We don&apos;t take commission from these searches yet — pick whichever you trust.
+              {BOOKING_COM_AID || AWIN_PID
+                ? "Some links may earn us a small commission at no extra cost to you."
+                : "Comparison links — pick whichever you trust."}
             </p>
 
             {/* Static accommodation cost estimate */}

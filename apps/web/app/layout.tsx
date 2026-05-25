@@ -2,7 +2,10 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ToastProvider } from "@/components/Toast";
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://groupholidaybooking.vercel.app";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(APP_URL),
   title: {
     default: "✈️ Group Holiday — sort your trip together",
     template: "%s | Group Holiday",
@@ -13,6 +16,13 @@ export const metadata: Metadata = {
     title: "Group Holiday — sort your trip together",
     description: "Find when everyone is free, pick a destination together, and book the cheapest flights.",
     type: "website",
+    url: APP_URL,
+    siteName: "Group Holiday",
+  },
+  twitter: {
+    card: "summary",
+    title: "Group Holiday — sort your trip together",
+    description: "Find when everyone is free, pick a destination together, and book the cheapest flights.",
   },
   icons: {
     icon: [
