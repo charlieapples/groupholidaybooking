@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="sunGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FCD34D;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F59E0B;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="60" cy="60" r="60" fill="url(#bgGrad)" />
+
+  <!-- Sun -->
+  <circle cx="60" cy="38" r="13" fill="url(#sunGrad)" />
+  <!-- Sun rays -->
+  <g stroke="#FCD34D" stroke-width="2.5" stroke-linecap="round">
+    <line x1="60" y1="17" x2="60" y2="12" />
+    <line x1="60" y1="59" x2="60" y2="64" />
+    <line x1="39" y1="38" x2="34" y2="38" />
+    <line x1="81" y1="38" x2="86" y2="38" />
+    <line x1="45.5" y1="23.5" x2="41.9" y2="19.9" />
+    <line x1="74.5" y1="52.5" x2="78.1" y2="56.1" />
+    <line x1="74.5" y1="23.5" x2="78.1" y2="19.9" />
+    <line x1="45.5" y1="52.5" x2="41.9" y2="56.1" />
+  </g>
+
+  <!-- Ground / horizon -->
+  <ellipse cx="60" cy="82" rx="38" ry="6" fill="#312E81" opacity="0.4" />
+
+  <!-- Three people (group silhouettes) -->
+  <!-- Left person -->
+  <circle cx="38" cy="68" r="6" fill="white" opacity="0.9" />
+  <path d="M30 85 Q38 78 46 85" fill="white" opacity="0.9" />
+
+  <!-- Centre person (slightly taller) -->
+  <circle cx="60" cy="65" r="7" fill="white" />
+  <path d="M51 84 Q60 76 69 84" fill="white" />
+
+  <!-- Right person -->
+  <circle cx="82" cy="68" r="6" fill="white" opacity="0.9" />
+  <path d="M74 85 Q82 78 90 85" fill="white" opacity="0.9" />
+
+  <!-- Small plane -->
+  <g transform="translate(78,22) rotate(-30)" fill="white" opacity="0.85">
+    <polygon points="0,-4 12,0 0,4" />
+    <polygon points="0,-1 -5,-5 -5,-3" />
+    <polygon points="0,1 -5,5 -5,3" />
+  </g>
+</svg>
