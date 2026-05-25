@@ -1,0 +1,26 @@
+{
+  "name": "Group Holiday Booking",
+  "short_name": "Group Holiday",
+  "description": "Plan group holidays together — find free windows, compare flights, vote on destinations.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#4F46E5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo.jpg",
+      "sizes": "120x120",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    }
+  ],
+  "categories": ["travel", "utilities"],
+  "lang": "en-GB"
+}

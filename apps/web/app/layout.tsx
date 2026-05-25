@@ -7,21 +7,23 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://groupholidaybooking.
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
   title: {
-    default: "✈️ Group Holiday — sort your trip together",
-    template: "%s | Group Holiday",
+    default: "Group Holiday Booking — plan your trip together",
+    template: "%s | Group Holiday Booking",
   },
   description:
     "Plan group holidays from multiple UK cities — find free windows, compare flights from everyone's nearest airport, vote on destinations, and book at the lowest group cost.",
+  manifest: "/manifest.json",
   openGraph: {
-    title: "Group Holiday — sort your trip together",
+    title: "Group Holiday Booking — plan your trip together",
     description: "Find when everyone is free, pick a destination together, and book the cheapest flights.",
     type: "website",
     url: APP_URL,
-    siteName: "Group Holiday",
+    siteName: "Group Holiday Booking",
+    images: [{ url: "/logo.jpg", width: 120, height: 120 }],
   },
   twitter: {
     card: "summary",
-    title: "Group Holiday — sort your trip together",
+    title: "Group Holiday Booking — plan your trip together",
     description: "Find when everyone is free, pick a destination together, and book the cheapest flights.",
   },
   icons: {
