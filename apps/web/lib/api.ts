@@ -267,6 +267,18 @@ export interface DestinationPreferences {
   free_text?: string | null;
 }
 
+export interface RandomPickResult {
+  iata_code: string;
+  name: string;
+  total_cost_gbp: number | null;
+}
+
+/** 'Surprise us' — pick a random destination from the current candidates
+ *  (weighted by vote count). Falls back to unweighted random if no votes. */
+export function pickRandomDestination(token: string, slug: string) {
+  return apiFetch<RandomPickResult>(`/rooms/${slug}/destinations/pick-random`, token);
+}
+
 export function submitDestinationPreferences(
   token: string,
   slug: string,

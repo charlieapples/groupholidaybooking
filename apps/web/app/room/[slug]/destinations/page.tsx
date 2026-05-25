@@ -10,6 +10,7 @@ import {
   deleteDestinationCandidate,
   submitDestinationPreferences,
   getMyDestinationPreferences,
+  pickRandomDestination,
   advanceStep,
   type Room,
   type DestinationCandidate,
@@ -59,6 +60,9 @@ export default function DestinationsPage() {
 
   // AI suggest
   const [suggesting, setSuggesting] = useState(false);
+
+  // Pick random
+  const [pickingRandom, setPickingRandom] = useState(false);
 
   // Manual propose
   const [proposeSearch, setProposeSearch] = useState("");
@@ -161,6 +165,19 @@ export default function DestinationsPage() {
       toast.error(errorMessage(e, "Failed to save questionnaire"));
     } finally {
       setQuestSaving(false);
+    }
+  }
+
+  async function handlePickRandom() {
+    if (!token || candidates.length === 0) return;
+    setPickingRandom(true);
+    try {
+      const pick = await pickRandomDestination(token, slug);
+      toast.success(`🎲 The random pick is: ${pick.name}!${pick.total_cost_gbp ? ` (~£${Math.round(pick.total_cost_gbp)}/person)` : ""}`);
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Couldn't pick a random destination"));
+    } finally {
+      setPickingRandom(false);
     }
   }
 
@@ -475,13 +492,25 @@ export default function DestinationsPage() {
               Destination candidates
               {candidates.length > 0 && <span className="ml-2 text-sm font-normal text-gray-500">({candidates.length})</span>}
             </h2>
-            <button
-              onClick={handleSuggest}
-              disabled={suggesting}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {suggesting ? "Asking Gemini…" : candidates.length > 0 ? "✨ Refresh AI suggestions" : "✨ Get AI suggestions"}
-            </button>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={handleSuggest}
+                disabled={suggesting}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {suggesting ? "Asking Gemini…" : candidates.length > 0 ? "✨ Refresh AI suggestions" : "✨ Get AI suggestions"}
+              </button>
+              {candidates.length > 0 && (
+                <button
+                  onClick={handlePickRandom}
+                  disabled={pickingRandom}
+                  title="Pick a random destination from the candidates, weighted by votes"
+                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {pickingRandom ? "Spinning…" : "🎲 Surprise us!"}
+                </button>
+              )}
+            </div>
           </div>
           <p className="text-xs text-gray-500 mb-4">
             Gemini picks destinations matched to the group&apos;s combined questionnaire answers, dates, and budget. Tap 👍 or 👎 to vote — votes update live for everyone.
