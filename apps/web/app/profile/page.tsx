@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
 import { normalisePostcode } from "@/lib/postcode";
+import FeedbackButton from "@/components/FeedbackButton";
 
 export default function ProfilePage() {
   const supabase = useMemo(() => createClient(), []);
@@ -151,6 +152,7 @@ export default function ProfilePage() {
           Your postcode is only used to calculate travel distances and is never shared publicly.
         </p>
       </div>
+      <FeedbackButton token={token} page="profile" />
     </main>
   );
 }

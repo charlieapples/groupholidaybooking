@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { PageSpinner } from "@/components/Skeleton";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -8,7 +9,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 // when the page is statically prerendered. Wrap the inner content.
 export default function LandingPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<PageSpinner />}>
       <LandingPageContent />
     </Suspense>
   );

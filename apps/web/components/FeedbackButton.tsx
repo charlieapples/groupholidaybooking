@@ -62,7 +62,7 @@ export default function FeedbackButton({ token, page, roomSlug }: Props) {
         className="fixed bottom-6 left-6 z-40 flex items-center gap-1.5 rounded-full bg-white border border-gray-200 shadow-md px-3.5 py-2 text-xs font-medium text-gray-600 hover:shadow-lg hover:border-blue-300 hover:text-blue-700 transition-all"
         aria-label="Give feedback"
       >
-        <span>💬</span>
+        <span>⭐</span>
         <span>Feedback</span>
       </button>
 
