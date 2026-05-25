@@ -194,6 +194,12 @@ export function getFreeWindows(token: string, slug: string, min_days = 4) {
   return apiFetch<FreeWindow[]>(`/rooms/${slug}/availability/windows?min_days=${min_days}`, token);
 }
 
+/** Return the calling user's currently-saved busy dates (ISO strings).
+ *  Used to pre-populate the availability calendar on revisit. */
+export function getMyAvailability(token: string, slug: string) {
+  return apiFetch<string[]>(`/rooms/${slug}/availability/my`, token);
+}
+
 export function remindPendingMembers(token: string, slug: string) {
   return apiFetch<{ ok: boolean; reminders_sent: number }>(
     `/rooms/${slug}/availability/remind`,

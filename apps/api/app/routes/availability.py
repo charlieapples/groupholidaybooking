@@ -356,6 +356,30 @@ def submission_status(slug: str, user: UserInfo = Depends(current_user)):
     )
 
 
+@router.get("/my")
+def get_my_availability(slug: str, user: UserInfo = Depends(current_user)):
+    """Return the calling user's currently saved busy dates for this room.
+
+    Used to pre-populate the calendar when revisiting after a prior submission
+    so the user doesn't have to re-mark everything from scratch.
+
+    Returns a list of ISO date strings (YYYY-MM-DD) that the user has marked busy.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+
+    blocks_res = (
+        db.table("availability_blocks")
+        .select("block_date")
+        .eq("room_id", room["id"])
+        .eq("user_id", user.id)
+        .eq("is_busy", True)
+        .execute()
+    )
+    return [b["block_date"] for b in (blocks_res.data or [])]
+
+
 @router.get("/windows", response_model=list[FreeWindow])
 def get_windows(
     slug: str,

@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   submitAvailability,
   getSubmissionStatus,
+  getMyAvailability,
   getFreeWindows,
   getRoom,
   updateRoom,
@@ -473,9 +474,18 @@ export default function AvailabilityPage() {
         setRoom(r);
         if (s) {
           setStatus(s);
-          // If this user has already submitted, skip the form and show the
-          // post-submit state — prevents confusing "empty calendar" on revisit.
-          if (s.user_submitted) setSubmitted(true);
+          if (s.user_submitted) {
+            setSubmitted(true);
+            // Pre-populate the calendar with the user's previously submitted dates
+            // so "Edit my availability" shows what they actually marked, not a blank slate.
+            getMyAvailability(t, slug).then((dates) => {
+              setBusyDates((prev) => {
+                // Don't overwrite if localStorage restore from OAuth redirect already ran
+                if (prev.size > 0) return prev;
+                return new Set(dates);
+              });
+            }).catch(() => { /* non-fatal — calendar just starts empty */ });
+          }
           if (s.all_submitted) {
             const w = await getFreeWindows(t, slug).catch(() => null);
             setWindows(w);
