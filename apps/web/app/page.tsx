@@ -80,6 +80,10 @@ function LandingPageContent() {
         )}
         <div className="text-6xl">✈️</div>
 
+        <p className="text-sm font-semibold uppercase tracking-widest text-blue-600">
+          Group Holiday Booking
+        </p>
+
         <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
           Group holidays,{" "}
           <span className="text-blue-600">sorted.</span>
