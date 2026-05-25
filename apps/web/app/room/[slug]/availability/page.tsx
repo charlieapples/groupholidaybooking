@@ -739,6 +739,14 @@ export default function AvailabilityPage() {
                   <span className="h-5 w-5 rounded bg-red-500 inline-block" />
                   <span className="text-gray-600">Busy</span>
                 </span>
+                {busyDates.size > 0 && (
+                  <button
+                    onClick={() => setBusyDates(new Set())}
+                    className="text-xs text-gray-400 hover:text-red-600 underline underline-offset-2"
+                  >
+                    Clear all
+                  </button>
+                )}
               </div>
             </div>
 
