@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Header
-from gotrue.errors import AuthApiError
+from supabase_auth.errors import AuthApiError
 
 from ..db.supabase import get_client
 
