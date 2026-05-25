@@ -2,13 +2,13 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | Group Holiday",
-  description: "How Group Holiday collects and uses your data.",
+  title: "Privacy Policy | Group Holiday Booking",
+  description: "How Group Holiday Booking collects and uses your data.",
 };
 
 export default function PrivacyPage() {
-  const CONTACT = "privacy@groupholiday.app";
-  const APP_NAME = "Group Holiday";
+  const CONTACT = "privacy@groupholidaybooking.com";
+  const APP_NAME = "Group Holiday Booking";
   const UPDATED = "25 May 2026";
 
   return (

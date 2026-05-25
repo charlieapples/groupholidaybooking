@@ -2,13 +2,13 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service | Group Holiday",
-  description: "Terms of Service for Group Holiday.",
+  title: "Terms of Service | Group Holiday Booking",
+  description: "Terms of Service for Group Holiday Booking.",
 };
 
 export default function TermsPage() {
-  const CONTACT = "legal@groupholiday.app";
-  const APP_NAME = "Group Holiday";
+  const CONTACT = "legal@groupholidaybooking.com";
+  const APP_NAME = "Group Holiday Booking";
   const UPDATED = "25 May 2026";
 
   return (
