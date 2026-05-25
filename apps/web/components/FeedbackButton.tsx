@@ -25,12 +25,14 @@ export default function FeedbackButton({ token, page, roomSlug }: Props) {
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!token) return null;
 
   async function handleSubmit() {
     if (!token || rating === 0) return;
     setSending(true);
+    setError(null);
     try {
       await submitFeedback(token, {
         rating,
@@ -44,9 +46,10 @@ export default function FeedbackButton({ token, page, roomSlug }: Props) {
         setDone(false);
         setRating(0);
         setComment("");
+        setError(null);
       }, 1800);
-    } catch {
-      // Silent fail — feedback is non-critical
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong — please try again.");
     } finally {
       setSending(false);
     }
@@ -115,6 +118,10 @@ export default function FeedbackButton({ token, page, roomSlug }: Props) {
                   rows={3}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none resize-none"
                 />
+
+                {error && (
+                  <p className="text-xs text-red-600 text-center">{error}</p>
+                )}
 
                 <button
                   onClick={handleSubmit}
