@@ -32,7 +32,12 @@ class ProfileUpdateRequest(BaseModel):
 
 
 def _ensure_profile(db, user: UserInfo) -> dict:
-    """Upsert the profile row and return the current state."""
+    """Insert profile row if it doesn't already exist, then return the current state.
+
+    Uses ignore_duplicates=True so that an existing user's custom display_name
+    (set via PATCH /profile) is never overwritten by the Google OAuth name that
+    lives in the JWT.  Email is kept in sync separately with a targeted UPDATE.
+    """
     db.table("profiles").upsert(
         {
             "id": user.id,
@@ -40,7 +45,12 @@ def _ensure_profile(db, user: UserInfo) -> dict:
             "display_name": user.display_name or (user.email or "").split("@")[0],
         },
         on_conflict="id",
+        ignore_duplicates=True,   # INSERT only — never overwrite existing rows
     ).execute()
+    # Keep email in sync for existing users (e.g. if they changed their Google
+    # address) without touching display_name or any other field.
+    if user.email:
+        db.table("profiles").update({"email": user.email}).eq("id", user.id).execute()
     res = db.table("profiles").select("*").eq("id", user.id).execute()
     return res.data[0] if res.data else {}
 

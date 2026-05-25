@@ -225,7 +225,9 @@ def create_room(
 
     # Ensure the user has a profile row (the trigger may have missed them
     # if they signed up before the migration ran).
-    profile_data = {
+    # ignore_duplicates=True → INSERT only; never overwrite an existing
+    # display_name that the user set via their profile page.
+    profile_data: dict = {
         "id": user.id,
         "email": user.email,
         "display_name": user.display_name or (user.email or "").split("@")[0],
@@ -234,7 +236,10 @@ def create_room(
     # can pre-fill the field on future Holidays they create or join.
     if body.home_postcode:
         profile_data["default_home_postcode"] = body.home_postcode
-    db.table("profiles").upsert(profile_data, on_conflict="id").execute()
+    db.table("profiles").upsert(profile_data, on_conflict="id", ignore_duplicates=True).execute()
+    # Keep email in sync for existing users without touching other fields.
+    if user.email:
+        db.table("profiles").update({"email": user.email}).eq("id", user.id).execute()
 
     # If no postcode was passed, fall back to the user's stored default.
     home_postcode = body.home_postcode
@@ -311,14 +316,19 @@ def join_room(
     # them if they signed up before the migration ran). Without this, they'd
     # appear as 'Unknown' to other members of the room. Also save the postcode
     # as their default if they passed one, so future Holidays pre-fill it.
-    profile_data = {
+    # ignore_duplicates=True → INSERT only; never overwrite an existing
+    # display_name the user set via their profile page.
+    profile_data: dict = {
         "id": user.id,
         "email": user.email,
         "display_name": user.display_name or (user.email or "").split("@")[0],
     }
     if home_postcode:
         profile_data["default_home_postcode"] = home_postcode
-    db.table("profiles").upsert(profile_data, on_conflict="id").execute()
+    db.table("profiles").upsert(profile_data, on_conflict="id", ignore_duplicates=True).execute()
+    # Keep email in sync for existing users without touching other fields.
+    if user.email:
+        db.table("profiles").update({"email": user.email}).eq("id", user.id).execute()
 
     # Fall back to stored default if none was passed
     if not home_postcode:
