@@ -260,13 +260,13 @@ export default function RoomPage() {
     const ics = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
-      "PRODID:-//Group Holiday//EN",
+      "PRODID:-//Group Holiday Booking//EN",
       "BEGIN:VEVENT",
-      `UID:${slug}@groupholiday.app`,
+      `UID:${slug}@groupholidaybooking.com`,
       `DTSTART;VALUE=DATE:${start}`,
       `DTEND;VALUE=DATE:${end}`,
       `SUMMARY:${summary}`,
-      "DESCRIPTION:Booked via Group Holiday",
+      "DESCRIPTION:Booked via Group Holiday Booking",
       "END:VEVENT",
       "END:VCALENDAR",
     ].join("\r\n");

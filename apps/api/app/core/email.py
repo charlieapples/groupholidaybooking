@@ -10,7 +10,7 @@ Required env vars:
   RESEND_API_KEY   — from resend.com/api-keys
   EMAIL_FROM       — verified sender address, e.g. "hello@yourdomain.com"
                      or "Group Holiday <noreply@yourdomain.com>"
-                     Defaults to: "Group Holiday <onboarding@resend.dev>"
+                     Defaults to: "Group Holiday Booking <onboarding@resend.dev>"
                      (works for testing, recipients must be your own verified email)
 """
 from __future__ import annotations
@@ -39,7 +39,7 @@ def send_email(
         return False
 
     sender = from_addr or os.getenv(
-        "EMAIL_FROM", "Group Holiday <onboarding@resend.dev>"
+        "EMAIL_FROM", "Group Holiday Booking <onboarding@resend.dev>"
     )
 
     try:
@@ -71,7 +71,7 @@ def availability_complete_email(
     subject = f"🎉 All {member_count} members have submitted availability — {room_name}"
     html = f"""
     <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
-      <h2 style="color: #1d4ed8;">✈️ Group Holiday</h2>
+      <h2 style="color: #1d4ed8;">✈️ Group Holiday Booking</h2>
       <h3 style="color: #111827;">Everyone's availability is in!</h3>
       <p style="color: #374151;">
         Hi {admin_name},<br><br>
@@ -86,7 +86,7 @@ def availability_complete_email(
         View availability →
       </a>
       <p style="color:#9ca3af; font-size:12px; margin-top:32px;">
-        Group Holiday · <a href="{app_url}" style="color:#9ca3af;">groupholiday.app</a>
+        Group Holiday Booking · <a href="{app_url}" style="color:#9ca3af;">groupholidaybooking.com</a>
       </p>
     </div>
     """
@@ -106,7 +106,7 @@ def member_joined_email(
     subject = f"🙋 {member_name} just joined {room_name}!"
     html = f"""
     <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
-      <h2 style="color: #1d4ed8;">✈️ Group Holiday</h2>
+      <h2 style="color: #1d4ed8;">✈️ Group Holiday Booking</h2>
       <h3 style="color: #111827;">New member joined!</h3>
       <p style="color: #374151;">
         Hi {admin_name},<br><br>
@@ -120,7 +120,7 @@ def member_joined_email(
         View your Holiday →
       </a>
       <p style="color:#9ca3af; font-size:12px; margin-top:32px;">
-        Group Holiday · <a href="{app_url}" style="color:#9ca3af;">groupholiday.app</a>
+        Group Holiday Booking · <a href="{app_url}" style="color:#9ca3af;">groupholidaybooking.com</a>
       </p>
     </div>
     """
@@ -139,7 +139,7 @@ def availability_reminder_email(
     subject = f"⏳ Reminder: please submit your availability for {room_name}"
     html = f"""
     <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
-      <h2 style="color: #1d4ed8;">✈️ Group Holiday</h2>
+      <h2 style="color: #1d4ed8;">✈️ Group Holiday Booking</h2>
       <h3 style="color: #111827;">Don't forget to submit your availability!</h3>
       <p style="color: #374151;">
         Hi {member_name},<br><br>
@@ -155,7 +155,7 @@ def availability_reminder_email(
         Submit availability →
       </a>
       <p style="color:#9ca3af; font-size:12px; margin-top:32px;">
-        Group Holiday · <a href="{app_url}" style="color:#9ca3af;">groupholiday.app</a>
+        Group Holiday Booking · <a href="{app_url}" style="color:#9ca3af;">groupholidaybooking.com</a>
       </p>
     </div>
     """
@@ -213,7 +213,7 @@ def step_advance_email(
 
     html = f"""
     <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
-      <h2 style="color: #1d4ed8;">✈️ Group Holiday</h2>
+      <h2 style="color: #1d4ed8;">✈️ Group Holiday Booking</h2>
       <p style="color: #374151;">{body}</p>
       <a href="{cta_url}"
          style="display:inline-block; margin-top:16px; padding:12px 24px;
@@ -222,7 +222,7 @@ def step_advance_email(
         {cta_label}
       </a>
       <p style="color:#9ca3af; font-size:12px; margin-top:32px;">
-        Group Holiday · <a href="{app_url}" style="color:#9ca3af;">groupholiday.app</a>
+        Group Holiday Booking · <a href="{app_url}" style="color:#9ca3af;">groupholidaybooking.com</a>
       </p>
     </div>
     """
@@ -245,7 +245,7 @@ def flights_ready_email(
     subject = f"✈️ Flight results are in for {room_name}!"
     html = f"""
     <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
-      <h2 style="color: #1d4ed8;">✈️ Group Holiday</h2>
+      <h2 style="color: #1d4ed8;">✈️ Group Holiday Booking</h2>
       <h3 style="color: #111827;">Your flight results are ready!</h3>
       <p style="color: #374151;">
         Hi {member_name},<br><br>
@@ -260,7 +260,7 @@ def flights_ready_email(
         View flight options →
       </a>
       <p style="color:#9ca3af; font-size:12px; margin-top:32px;">
-        Group Holiday · <a href="{app_url}" style="color:#9ca3af;">groupholiday.app</a>
+        Group Holiday Booking · <a href="{app_url}" style="color:#9ca3af;">groupholidaybooking.com</a>
       </p>
     </div>
     """
@@ -293,11 +293,11 @@ def member_welcome_email(
     subject = f"✈️ You've joined {room_name}!"
     html = f"""
     <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
-      <h2 style="color: #1d4ed8;">✈️ Group Holiday</h2>
+      <h2 style="color: #1d4ed8;">✈️ Group Holiday Booking</h2>
       <h3 style="color: #111827;">Welcome to {room_name}!</h3>
       <p style="color: #374151;">
         Hi {member_name},<br><br>
-        You've successfully joined <strong>{room_name}</strong> on Group Holiday.
+        You've successfully joined <strong>{room_name}</strong> on Group Holiday Booking.
         The group is currently at the <strong>{current_step}</strong> step &mdash;
         click below to get started.
       </p>
@@ -312,7 +312,7 @@ def member_welcome_email(
         <a href="{room_url}" style="color:#2563eb;">{room_url}</a>
       </p>
       <p style="color:#9ca3af; font-size:12px; margin-top:32px;">
-        Group Holiday &middot; <a href="{app_url}" style="color:#9ca3af;">groupholiday.app</a>
+        Group Holiday Booking &middot; <a href="{app_url}" style="color:#9ca3af;">groupholidaybooking.com</a>
       </p>
     </div>
     """
