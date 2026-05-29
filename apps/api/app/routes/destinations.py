@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..core.destinations import DEST_NAMES, POPULAR_LABELS, label as label_dest, score_destination
+from ..core.ai import GEMINI_MODEL
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user
 from .rooms import _assert_member, _get_room_by_slug
@@ -128,7 +129,7 @@ def _gemini_suggestions(
 
     try:
         resp = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=GEMINI_MODEL,
             contents=[
                 genai_types.Content(role="user", parts=[genai_types.Part(text=prompt)]),
             ],

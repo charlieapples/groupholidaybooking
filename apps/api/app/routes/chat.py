@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..db.supabase import get_client
+from ..core.ai import GEMINI_MODEL
 from ..deps.auth import UserInfo, current_user
 
 router = APIRouter()
@@ -241,7 +242,7 @@ def chat(
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model=GEMINI_MODEL,
             contents=contents,
         )
         return ChatResponse(reply=response.text)
