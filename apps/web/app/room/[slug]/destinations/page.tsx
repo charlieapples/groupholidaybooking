@@ -117,7 +117,7 @@ export default function DestinationsPage() {
   // Update browser tab title when the room name is known
   useEffect(() => {
     if (room?.name) document.title = `Destinations – ${room.name} | Group Holiday`;
-    return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
+    return () => { document.title = "Group Holiday Booking — plan your trip together"; };
   }, [room?.name]);
 
   // ── Realtime: live vote count updates ─────────────────────────────────────────

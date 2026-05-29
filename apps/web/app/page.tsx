@@ -150,32 +150,68 @@ function LandingPageContent() {
         </button>
 
         <p className="text-sm text-gray-400">
-          Free to use · No booking fees · Works with Ryanair, easyJet, BA &amp; more
+          Free · No booking fees · Works with Ryanair, easyJet, BA &amp; more
         </p>
       </div>
 
       {/* How it works */}
       <div className="mt-24 max-w-4xl w-full">
-        <h2 className="mb-12 text-2xl font-semibold text-gray-900">
+        <h2 className="mb-12 text-2xl font-semibold text-gray-900 text-center">
           How it works
         </h2>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { step: "1", title: "Create a room", desc: "Share the link. Everyone joins." },
-            { step: "2", title: "Mark availability", desc: "Pick your free dates. Results hidden until everyone's in." },
-            { step: "3", title: "Vote on destinations", desc: "AI suggests places. You vote. The group decides." },
-            { step: "4", title: "Book together", desc: "Cheapest flights from every city. Book in one click each." },
-          ].map(({ step, title, desc }) => (
-            <div key={step} className="rounded-xl border border-gray-200 p-6 text-left">
-              <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-600">
-                {step}
-              </div>
+            { step: "1", emoji: "📅", title: "Find free dates", desc: "Everyone marks their availability. Results stay hidden until the whole group is in." },
+            { step: "2", emoji: "✈️", title: "Compare flights", desc: "We search from every member's nearest airport and find the cheapest combination." },
+            { step: "3", emoji: "🗳️", title: "Vote on where to go", desc: "Add destination ideas, vote together, or let the AI pick based on your group's preferences." },
+            { step: "4", emoji: "🎫", title: "Book in one tap", desc: "Everyone gets their own booking link. One click, cheapest price, done." },
+          ].map(({ step, emoji, title, desc }) => (
+            <div key={step} className="rounded-xl border border-gray-200 bg-white p-6 text-left hover:border-blue-300 transition-colors">
+              <div className="mb-3 text-2xl">{emoji}</div>
+              <div className="mb-2 text-xs font-bold uppercase tracking-wider text-blue-500">Step {step}</div>
               <h3 className="mb-1 font-semibold text-gray-900">{title}</h3>
               <p className="text-sm text-gray-500">{desc}</p>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Why it beats WhatsApp polls */}
+      <div className="mt-20 max-w-3xl w-full">
+        <h2 className="mb-8 text-2xl font-semibold text-gray-900 text-center">
+          Why not just use WhatsApp?
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            { icon: "🙈", title: "Blind availability", desc: "No one knows who's free until everyone has submitted — no anchoring or social pressure." },
+            { icon: "🛫", title: "Multi-airport search", desc: "Everyone flies from their nearest airport. We find the dates when it's cheapest overall." },
+            { icon: "🤖", title: "AI destination ideas", desc: "Gemini suggests destinations based on your group's climate, budget, and duration preferences." },
+          ].map(({ icon, title, desc }) => (
+            <div key={title} className="rounded-xl bg-indigo-50 border border-indigo-100 p-5 text-left">
+              <div className="text-2xl mb-2">{icon}</div>
+              <h3 className="font-semibold text-gray-900 mb-1">{title}</h3>
+              <p className="text-sm text-gray-600">{desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* JSON-LD structured data for SEO */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "WebApplication",
+            "name": "Group Holiday Booking",
+            "url": "https://groupholidaybooking.com",
+            "description": "Plan group holidays from multiple UK cities — find free windows, compare flights from everyone's nearest airport, vote on destinations, and book at the lowest group cost.",
+            "applicationCategory": "TravelApplication",
+            "operatingSystem": "Web",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "GBP" },
+          }),
+        }}
+      />
 
       {/* Footer */}
       <footer className="mt-24 border-t py-8 text-center text-sm text-gray-400 w-full">

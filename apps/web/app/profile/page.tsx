@@ -45,8 +45,8 @@ export default function ProfilePage() {
 
   // Update browser tab title
   useEffect(() => {
-    document.title = "Your Profile | Group Holiday";
-    return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
+    document.title = "Your Profile | Group Holiday Booking";
+    return () => { document.title = "Group Holiday Booking — plan your trip together"; };
   }, []);
 
   async function handleSave() {

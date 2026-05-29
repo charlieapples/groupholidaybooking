@@ -508,7 +508,7 @@ export default function AvailabilityPage() {
   // Update browser tab title when the room name is known
   useEffect(() => {
     if (room?.name) document.title = `Availability – ${room.name} | Group Holiday`;
-    return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
+    return () => { document.title = "Group Holiday Booking — plan your trip together"; };
   }, [room?.name]);
 
   // If we've just returned from Google OAuth (sync_google=1), auto-trigger sync

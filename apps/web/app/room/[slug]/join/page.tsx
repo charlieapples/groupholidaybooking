@@ -52,8 +52,8 @@ export default function JoinRoomPage() {
   // Update browser tab title
   useEffect(() => {
     const name = room?.name ?? roomName;
-    document.title = name ? `Join ${name} | Group Holiday` : "Join a Holiday | Group Holiday";
-    return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
+    document.title = name ? `Join ${name} | Group Holiday` : "Join a Holiday | Group Holiday Booking";
+    return () => { document.title = "Group Holiday Booking — plan your trip together"; };
   }, [room?.name, roomName]);
 
   async function handleJoin() {

@@ -42,7 +42,7 @@ export default function PublicResultsPage() {
   // Update browser tab title when the trip name is known
   useEffect(() => {
     if (summary?.name) document.title = `${summary.name} | Group Holiday`;
-    return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
+    return () => { document.title = "Group Holiday Booking — plan your trip together"; };
   }, [summary?.name]);
 
   function copyLink() {

@@ -92,8 +92,8 @@ export default function Dashboard() {
 
   // Update browser tab title
   useEffect(() => {
-    document.title = "Your Holidays | Group Holiday";
-    return () => { document.title = "✈️ Group Holiday — sort your trip together"; };
+    document.title = "Your Holidays | Group Holiday Booking";
+    return () => { document.title = "Group Holiday Booking — plan your trip together"; };
   }, []);
 
   // Focus the name input after the modal animates in
