@@ -20,7 +20,7 @@ import FeedbackButton from "@/components/FeedbackButton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
-import { DEST_NAMES, flagFor } from "@/lib/destinations";
+import { DEST_NAMES, flagFor, countryFor } from "@/lib/destinations";
 
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
@@ -282,7 +282,9 @@ export default function DestinationsPage() {
   const curatedMatches: [string, string][] = proposeSearch.length >= 2
     ? Object.entries(DEST_NAMES).filter(([iata, name]) =>
         name.toLowerCase().includes(searchLower) ||
-        iata.toLowerCase().includes(searchLower)
+        iata.toLowerCase().includes(searchLower) ||
+        // Country search: "Italy" → Rome/Milan/Venice, "Uruguay" → Montevideo
+        countryFor(iata).toLowerCase().includes(searchLower)
       ).slice(0, 8)
     : [];
   // If no curated matches but the user typed exactly 3 letters, show a "use as custom code" option

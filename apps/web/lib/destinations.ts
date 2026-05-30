@@ -180,6 +180,44 @@ export function flagFor(iata: string): string {
   return FLAG_BY_IATA[iata] ?? "🌍";
 }
 
+/** Flag emoji → searchable country name(s), including common aliases so that
+ * typing "UK", "Britain", "Holland" or "USA" still matches. Used to let the
+ * destination search resolve a COUNTRY ("Italy") to its airports. */
+const COUNTRY_BY_FLAG: Record<string, string> = {
+  "🇬🇧": "United Kingdom UK Britain Great Britain England Scotland",
+  "🇮🇪": "Ireland", "🇫🇷": "France", "🇪🇸": "Spain", "🇵🇹": "Portugal",
+  "🇮🇹": "Italy", "🇳🇱": "Netherlands Holland", "🇧🇪": "Belgium",
+  "🇩🇪": "Germany", "🇨🇭": "Switzerland", "🇦🇹": "Austria",
+  "🇩🇰": "Denmark", "🇸🇪": "Sweden", "🇳🇴": "Norway", "🇫🇮": "Finland",
+  "🇮🇸": "Iceland", "🇨🇿": "Czech Republic Czechia", "🇭🇺": "Hungary",
+  "🇵🇱": "Poland", "🇪🇪": "Estonia", "🇱🇻": "Latvia", "🇱🇹": "Lithuania",
+  "🇷🇸": "Serbia", "🇧🇬": "Bulgaria", "🇷🇴": "Romania", "🇭🇷": "Croatia",
+  "🇸🇮": "Slovenia", "🇸🇰": "Slovakia", "🇦🇱": "Albania",
+  "🇲🇰": "North Macedonia", "🇧🇦": "Bosnia", "🇬🇷": "Greece",
+  "🇨🇾": "Cyprus", "🇲🇹": "Malta", "🇲🇦": "Morocco", "🇹🇳": "Tunisia",
+  "🇪🇬": "Egypt", "🇹🇷": "Turkey Turkiye", "🇦🇪": "United Arab Emirates UAE Dubai",
+  "🇶🇦": "Qatar", "🇯🇴": "Jordan", "🇮🇱": "Israel", "🇱🇧": "Lebanon",
+  "🇸🇦": "Saudi Arabia", "🇿🇦": "South Africa", "🇰🇪": "Kenya",
+  "🇹🇿": "Tanzania", "🇪🇹": "Ethiopia", "🇳🇬": "Nigeria",
+  "🇲🇺": "Mauritius", "🇸🇨": "Seychelles", "🇹🇭": "Thailand",
+  "🇸🇬": "Singapore", "🇲🇾": "Malaysia", "🇮🇩": "Indonesia Bali",
+  "🇵🇭": "Philippines", "🇻🇳": "Vietnam", "🇭🇰": "Hong Kong",
+  "🇹🇼": "Taiwan", "🇰🇷": "South Korea", "🇯🇵": "Japan", "🇨🇳": "China",
+  "🇮🇳": "India", "🇱🇰": "Sri Lanka", "🇲🇻": "Maldives", "🇳🇵": "Nepal",
+  "🇺🇸": "United States USA America US", "🇨🇦": "Canada",
+  "🇲🇽": "Mexico", "🇵🇦": "Panama", "🇨🇷": "Costa Rica", "🇨🇺": "Cuba",
+  "🇧🇸": "Bahamas", "🇯🇲": "Jamaica", "🇩🇴": "Dominican Republic",
+  "🇧🇧": "Barbados", "🇸🇽": "Sint Maarten", "🇧🇷": "Brazil",
+  "🇦🇷": "Argentina", "🇨🇱": "Chile", "🇵🇪": "Peru", "🇨🇴": "Colombia",
+  "🇺🇾": "Uruguay", "🇪🇨": "Ecuador", "🇦🇺": "Australia",
+  "🇳🇿": "New Zealand", "🇫🇯": "Fiji", "🇵🇫": "French Polynesia Tahiti",
+};
+
+/** Searchable country name(s) for an IATA code (empty string if unknown). */
+export function countryFor(iata: string): string {
+  return COUNTRY_BY_FLAG[FLAG_BY_IATA[iata] ?? ""] ?? "";
+}
+
 /** Airport code → display name (e.g. for "Flying from:" in flight results). */
 export const AIRPORT_DISPLAY: Record<string, string> = {
   LHR: "Heathrow", LGW: "Gatwick", STN: "Stansted", LTN: "Luton",
