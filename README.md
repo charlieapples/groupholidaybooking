@@ -3,8 +3,9 @@
 Multi-user platform for planning a group holiday end-to-end: when everyone's
 free, where to go, how to get there, where to stay — optimised for total group cost.
 
-**Live MVP:** [groupholidaybooking.streamlit.app](https://groupholidaybooking.streamlit.app) (single-user, flights only)
-**v2 (in build):** multi-user collaborative platform — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md)
+**Live:** [groupholidaybooking.com](https://groupholidaybooking.com) — the full multi-user platform (Next.js + FastAPI + Supabase)
+**Architecture:** see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md)
+**Legacy:** the original single-user Streamlit MVP lives in `apps/streamlit-legacy/` (retired)
 
 ## What it does
 
@@ -23,9 +24,9 @@ This platform walks the group through the whole flow:
 
 ```
 apps/
-├── streamlit-legacy/   The current MVP (Streamlit, single-user) — stays deployed
-├── api/                v2 backend (FastAPI + Supabase + diskcache)
-└── web/                v2 frontend (Next.js 15 + Tailwind + Supabase client) — coming soon
+├── streamlit-legacy/   Original single-user MVP (Streamlit) — retired
+├── api/                Backend (FastAPI + Supabase + diskcache) — live on Railway
+└── web/                Frontend (Next.js 15 + Tailwind + Supabase client) — live on Vercel
 infra/
 └── supabase/           Database schema migrations
 docs/
@@ -55,21 +56,32 @@ uvicorn app.main:app --reload
 
 API docs auto-generated at http://localhost:8000/docs.
 
-### Next.js frontend (v2)
+### Next.js frontend
 
-Not scaffolded yet — see [ROADMAP.md](docs/ROADMAP.md) Phase 1.
+```bash
+cd apps/web
+npm install
+npm run dev      # http://localhost:3000
+```
+
+## Testing
+
+```bash
+cd apps/api && pytest          # backend: core logic + ground-transport fallback
+cd apps/web && npm test        # frontend: postcode + iCal parsing (Vitest)
+```
 
 ## Stack
 
-| | MVP | v2 |
+| | Legacy MVP | Production |
 |---|---|---|
 | Frontend | Streamlit | Next.js 15 (Vercel) |
 | Backend | (Streamlit serves) | FastAPI (Railway) |
 | DB / Auth | (none) | Supabase (Postgres + Google OAuth + Realtime) |
 | AI | (none) | Gemini 2.5 Flash |
 | Flights | Travelpayouts/Aviasales | same |
-| Ground | Google Maps Directions | same + Trainline (via Awin) |
-| Hotels | — | Booking.com Affiliate API |
+| Ground | Google Maps Directions | same (free haversine fallback) + Trainline (via Partnerize) |
+| Hotels | — | Booking.com (via CJ Affiliate) |
 
 ## Revenue model
 
