@@ -238,11 +238,18 @@ function ImportPanel({
             if (ev.status === "cancelled") continue;
             // transparency: "transparent" = "available", skip it
             if (ev.transparency === "transparent") continue;
-            const start: string = ev.start?.date ?? ev.start?.dateTime?.slice(0, 10);
-            const end: string   = ev.end?.date   ?? ev.end?.dateTime?.slice(0, 10);
+            // All-day events use `date` (exclusive end). Timed events use
+            // `dateTime` and end on an INCLUSIVE day — a 9am–5pm meeting on
+            // Jul 15 has end Jul 15, so without the +1 below it would collapse
+            // to zero busy days and be silently dropped (most calendar events
+            // are timed same-day events).
+            const isTimed = !ev.start?.date;
+            const start: string = (ev.start?.date ?? ev.start?.dateTime)?.slice(0, 10);
+            const end: string   = (ev.end?.date   ?? ev.end?.dateTime)?.slice(0, 10);
             if (!start || !end) continue;
             const cur = new Date(start);
             const stop = new Date(end);
+            if (isTimed) stop.setDate(stop.getDate() + 1);
             while (cur < stop) {
               allBusy.add(cur.toISOString().slice(0, 10));
               cur.setDate(cur.getDate() + 1);
