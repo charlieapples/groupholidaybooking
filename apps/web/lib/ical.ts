@@ -37,15 +37,30 @@ export function parseIcal(
     // Skip cancelled events
     if (/STATUS:CANCELLED/i.test(block)) continue;
 
-    // DTSTART and DTEND – handles VALUE=DATE and datetime variants
-    const startMatch = block.match(/DTSTART(?:;[^:\n]*)?:(\d{8})/i);
-    const endMatch   = block.match(/DTEND(?:;[^:\n]*)?:(\d{8})/i);
+    // DTSTART and DTEND – handles VALUE=DATE (all-day) and datetime variants.
+    // The trailing capture group detects a time component ("T090000Z").
+    const startMatch = block.match(/DTSTART(?:;[^:\n]*)?:(\d{8})(T\d{4,6}Z?)?/i);
+    const endMatch   = block.match(/DTEND(?:;[^:\n]*)?:(\d{8})(T\d{4,6}Z?)?/i);
 
     if (!startMatch) continue;
 
+    // All-day events use DATE values (no time component) and an EXCLUSIVE DTEND
+    // (a one-day event on Jul 15 has DTEND Jul 16). Timed events have a time
+    // component and an INCLUSIVE end day (a 9am–5pm meeting on Jul 15 has DTEND
+    // Jul 15) — without this distinction same-day timed events collapse to zero
+    // busy days and get silently dropped on calendar import.
+    const isTimed = Boolean(startMatch[2]);
+
     const evStart = icalDateToDate(startMatch[1]);
-    // For all-day events DTEND is exclusive (e.g. July 16 event → DTEND July 17)
-    const evEnd = endMatch ? icalDateToDate(endMatch[1]) : new Date(evStart.getTime() + 86_400_000);
+    let evEnd: Date;
+    if (endMatch) {
+      evEnd = icalDateToDate(endMatch[1]);
+      // Timed event: push the boundary one day forward so the [from, to) loop
+      // includes the final day the event actually touches.
+      if (isTimed) evEnd = new Date(evEnd.getTime() + 86_400_000);
+    } else {
+      evEnd = new Date(evStart.getTime() + 86_400_000);
+    }
 
     // Clamp to window
     const from = new Date(Math.max(evStart.getTime(), windowStart.getTime()));
