@@ -6,6 +6,7 @@ import {
   getFlightResults,
   listMembers,
   advanceStep,
+  getLivePrice,
   type Room,
   type FlightResult,
   type Member,
@@ -498,8 +499,17 @@ export default function BookingPage() {
                               {copied === p.person_name ? "Copied!" : "Copy link"}
                             </button>
                           </div>
+                          {token && p.chosen_airport && destIata && p.outbound_date && p.inbound_date && (
+                            <LivePriceCheck
+                              token={token}
+                              origin={p.chosen_airport}
+                              destination={destIata}
+                              depart={p.outbound_date}
+                              returnDate={p.inbound_date}
+                            />
+                          )}
                           <p className="text-[10px] text-gray-400">
-                            Indicative fare for comparison — tap through to Aviasales for the live price before booking.
+                            Indicative fare for comparison — tap &ldquo;Check latest price&rdquo; or open Aviasales for the live price before booking.
                             Cabin bag estimate only — hold luggage is priced separately by the airline at checkout.
                           </p>
                         </div>
@@ -659,5 +669,67 @@ function CopyGroupPlanButton({
     >
       📋 Copy group plan to clipboard
     </button>
+  );
+}
+
+// ── Live price check ───────────────────────────────────────────────────────────
+// On-demand fresh price for one person's exact route + dates. Far fresher than
+// the bulk optimiser cache; final fare still confirmed on Aviasales at click.
+
+function LivePriceCheck({
+  token,
+  origin,
+  destination,
+  depart,
+  returnDate,
+}: {
+  token: string;
+  origin: string;
+  destination: string;
+  depart: string;
+  returnDate: string;
+}) {
+  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [price, setPrice] = useState<number | null>(null);
+  const [link, setLink] = useState<string | null>(null);
+
+  async function check() {
+    setState("loading");
+    try {
+      const lp = await getLivePrice(token, { origin, destination, depart, return_date: returnDate });
+      setPrice(lp.price_gbp);
+      setLink(lp.deep_link);
+      setState("done");
+    } catch {
+      setState("error");
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap text-xs">
+      <button
+        onClick={check}
+        disabled={state === "loading"}
+        className="rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 font-medium text-green-800 hover:bg-green-100 disabled:opacity-60"
+      >
+        {state === "loading" ? "Checking…" : "🔄 Check latest price"}
+      </button>
+      {state === "done" && price !== null && (
+        <span className="text-gray-700">
+          Latest fare:{" "}
+          {link ? (
+            <a href={link} target="_blank" rel="noopener noreferrer" className="font-semibold text-green-700 hover:underline">
+              £{Math.round(price).toLocaleString()} →
+            </a>
+          ) : (
+            <span className="font-semibold text-green-700">£{Math.round(price).toLocaleString()}</span>
+          )}
+          <span className="text-gray-400"> · checked just now</span>
+        </span>
+      )}
+      {state === "error" && (
+        <span className="text-gray-400">No live fare right now — use the Aviasales link.</span>
+      )}
+    </div>
   );
 }

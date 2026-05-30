@@ -328,3 +328,92 @@ def cheapest_one_way(
 
     _CACHE.set(cache_key, best, expire=3600)
     return best
+
+
+@dataclass
+class LivePrice:
+    """A freshly-fetched price for one specific route + exact dates."""
+    origin: str
+    destination: str
+    depart_date: date
+    return_date: date
+    price_gbp: float
+    airline: str
+    found_at: str            # ISO timestamp the fare was last seen by Travelpayouts
+    deep_link: str           # Aviasales link with affiliate marker
+
+
+def live_price_for_dates(
+    origin: str,
+    destination: str,
+    depart: date,
+    return_date: date,
+    currency: str = "GBP",
+) -> Optional[LivePrice]:
+    """Fetch the freshest available price for ONE specific route + exact dates.
+
+    Uses the date-specific /aviasales/v3/prices_for_dates endpoint, which is far
+    fresher than the monthly /v1/prices/cheap cache used during bulk optimisation.
+    Intended for an on-demand "check latest price" action on the booking page —
+    NOT for scanning hundreds of combos. Cached only briefly (2 min) so repeated
+    taps don't hammer the API while keeping the number current.
+    """
+    cache_key = f"live:{origin}:{destination}:{depart}:{return_date}:{currency}"
+    if cache_key in _CACHE:
+        return _CACHE[cache_key]
+
+    try:
+        data = _get("/aviasales/v3/prices_for_dates", {
+            "origin": origin,
+            "destination": destination,
+            "departure_at": depart.isoformat(),
+            "return_at": return_date.isoformat(),
+            "currency": currency,
+            "sorting": "price",
+            "direct": "false",
+            "limit": 1,
+            "one_way": "false",
+        })
+    except (httpx.HTTPStatusError, RetryError, httpx.RequestError) as exc:
+        log.warning("Live price query failed %s→%s: %s", origin, destination, exc)
+        return None
+
+    rows = data.get("data") or []
+    if not rows:
+        _CACHE.set(cache_key, None, expire=120)
+        return None
+
+    row = rows[0]
+    price = float(row.get("price", 0))
+    if price <= 0:
+        _CACHE.set(cache_key, None, expire=120)
+        return None
+
+    # Build affiliate deep link (prefer the API-supplied link; fall back to search)
+    marker = _marker()
+    api_link = row.get("link", "")
+    if api_link:
+        deep = f"https://www.aviasales.com{api_link}"
+        if marker:
+            sep = "&" if "?" in deep else "?"
+            deep = f"{deep}{sep}marker={marker}"
+    else:
+        deep = (
+            f"https://www.aviasales.com/search/"
+            f"{origin}{depart.strftime('%d%m')}{destination}{return_date.strftime('%d%m')}1"
+        )
+        if marker:
+            deep = f"{deep}?marker={marker}"
+
+    result = LivePrice(
+        origin=origin,
+        destination=destination,
+        depart_date=depart,
+        return_date=return_date,
+        price_gbp=round(price, 2),
+        airline=row.get("airline", "?"),
+        found_at=row.get("found_at", ""),
+        deep_link=deep,
+    )
+    _CACHE.set(cache_key, result, expire=120)
+    return result

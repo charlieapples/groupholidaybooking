@@ -21,12 +21,55 @@ import os
 from ..core.config import Config, DateWindow, Person
 from ..core.destinations import label as label_dest
 from ..core.email import flights_ready_email, send_email
+from ..core.flights import live_price_for_dates
 from ..core.optimiser import optimise
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user
 from .rooms import _assert_member, _get_room_by_slug
 
 router = APIRouter()
+
+
+class LivePriceResponse(BaseModel):
+    price_gbp: float
+    airline: Optional[str] = None
+    found_at: Optional[str] = None
+    deep_link: str
+
+
+@router.get("/live-price", response_model=LivePriceResponse)
+def get_live_price(
+    origin: str,
+    destination: str,
+    depart: str,           # ISO date YYYY-MM-DD
+    return_date: str,      # ISO date YYYY-MM-DD
+    user: UserInfo = Depends(current_user),
+):
+    """On-demand fresh price for ONE specific route + exact dates.
+
+    Used by the booking page's "Check latest price" button. Far fresher than
+    the bulk optimiser cache; the final fare is still confirmed on Aviasales at
+    click-through (no meta-search can guarantee the airline's price at booking).
+    """
+    try:
+        d_out = date.fromisoformat(depart)
+        d_back = date.fromisoformat(return_date)
+    except ValueError:
+        raise HTTPException(422, "depart and return_date must be YYYY-MM-DD dates.")
+
+    lp = live_price_for_dates(origin.upper(), destination.upper(), d_out, d_back)
+    if lp is None:
+        raise HTTPException(
+            404,
+            "No live fare found for that exact route and dates right now. "
+            "Try the Aviasales link to search directly.",
+        )
+    return LivePriceResponse(
+        price_gbp=lp.price_gbp,
+        airline=lp.airline,
+        found_at=lp.found_at,
+        deep_link=lp.deep_link,
+    )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
