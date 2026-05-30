@@ -535,7 +535,7 @@ export default function RoomPage() {
               {room.current_step === "flights" && (
                 <div className="space-y-4">
                   <p className="text-gray-600">
-                    Find the cheapest combination of flights from everyone&apos;s nearest airport to the shortlisted destinations.
+                    Find the cheapest combination of flights to the shortlisted destinations, checking every airport each member can reach.
                   </p>
                   <button
                     onClick={() => router.push(`/room/${slug}/flights`)}

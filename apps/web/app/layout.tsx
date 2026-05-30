@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     template: "%s | Group Holiday Booking",
   },
   description:
-    "Plan group holidays from multiple UK cities — find free windows, compare flights from everyone's nearest airport, vote on destinations, and book at the lowest group cost.",
+    "Plan group holidays from multiple UK cities — find free windows, compare flights from every airport each member can reach, vote on destinations, and book at the lowest group cost.",
   manifest: "/manifest.json",
   openGraph: {
     title: "Group Holiday Booking — plan your trip together",

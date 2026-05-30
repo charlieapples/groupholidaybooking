@@ -74,6 +74,7 @@ export interface Room {
   max_nights?: number | null;
   budget_gbp?: number | null;
   destination_iata?: string | null;
+  time_value_per_hour?: number | null;
 }
 
 export function createRoom(
@@ -117,6 +118,7 @@ export function updateRoom(
     max_nights?: number;
     budget_gbp?: number;
     destination_iata?: string;
+    time_value_per_hour?: number;
   }
 ) {
   return apiFetch<Room>(`/rooms/${slug}`, token, {

@@ -37,6 +37,9 @@ export default function PreferencesPage() {
   const [agreedMin, setAgreedMin] = useState("");
   const [agreedMax, setAgreedMax] = useState("");
   const [agreedBudget, setAgreedBudget] = useState("");
+  // Group's £/hr valuation of airport travel time (flight optimiser).
+  // 0 = cheapest regardless of distance; 50 = strongly prefer nearby airports.
+  const [timeValue, setTimeValue] = useState(0);
   const [advancing, setAdvancing] = useState(false);
 
   useEffect(() => {
@@ -54,6 +57,7 @@ export default function PreferencesPage() {
         if (r.min_nights) setAgreedMin(String(r.min_nights));
         if (r.max_nights) setAgreedMax(String(r.max_nights));
         if (r.budget_gbp) setAgreedBudget(String(r.budget_gbp));
+        if (r.time_value_per_hour != null) setTimeValue(r.time_value_per_hour);
         // Pre-fill my personal preferences from saved answers
         const mine = d.responses.find((row) => row.user_id === uid);
         if (mine) {
@@ -110,6 +114,7 @@ export default function PreferencesPage() {
         min_nights: Number(agreedMin),
         max_nights: Number(agreedMax),
         ...(agreedBudget ? { budget_gbp: Number(agreedBudget) } : {}),
+        time_value_per_hour: timeValue,
       });
       // Advance through BOTH duration + budget steps into destination
       // (the preferences page handles both steps together)
@@ -418,6 +423,37 @@ export default function PreferencesPage() {
                 onKeyDown={(e) => e.key === "Enter" && handleAdvance()}
                 className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
               />
+            </div>
+
+            {/* Travel-time vs money trade-off for the flight optimiser */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-blue-800">
+                Is it worth paying to travel less?
+              </label>
+              <p className="mb-2 text-xs text-blue-700">
+                The optimiser checks every airport each member can reach. This sets how much
+                the group values <strong>time saved</strong> getting to the airport.
+              </p>
+              <input
+                type="range"
+                min={0}
+                max={50}
+                step={5}
+                value={timeValue}
+                onChange={(e) => setTimeValue(Number(e.target.value))}
+                className="w-full accent-blue-600"
+              />
+              <div className="mt-1 flex justify-between text-xs text-blue-700">
+                <span>£0/hr</span>
+                <span className="font-semibold text-blue-900">
+                  {timeValue === 0
+                    ? "Cheapest — distance doesn't matter"
+                    : timeValue >= 45
+                    ? "Shortest journeys — take the closest airport"
+                    : `£${timeValue}/hr of travel time`}
+                </span>
+                <span>£50/hr</span>
+              </div>
             </div>
 
             <button

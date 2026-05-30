@@ -50,6 +50,9 @@ class RoomResponse(BaseModel):
     max_nights: Optional[int] = None
     budget_gbp: Optional[float] = None
     destination_iata: Optional[str] = None
+    # Flight optimiser: £/hr the group puts on ground-travel time.
+    # 0 = cheapest regardless of distance; higher = prefer shorter journeys.
+    time_value_per_hour: float = 0.0
 
 
 STEP_ORDER = ["availability", "duration", "budget", "destination", "flights", "booking", "done"]
@@ -66,6 +69,7 @@ class UpdateRoomRequest(BaseModel):
     max_nights: Optional[int] = None
     budget_gbp: Optional[float] = None
     destination_iata: Optional[str] = None
+    time_value_per_hour: Optional[float] = None
 
 
 class MemberResponse(BaseModel):
@@ -141,6 +145,7 @@ def _room_with_member_count(db, room: dict, user_id: str) -> RoomResponse:
         max_nights=room.get("max_nights"),
         budget_gbp=room.get("budget_gbp"),
         destination_iata=room.get("destination_iata"),
+        time_value_per_hour=room.get("time_value_per_hour") or 0.0,
     )
 
 
@@ -202,6 +207,7 @@ def list_rooms(user: UserInfo = Depends(current_user)):
             max_nights=room.get("max_nights"),
             budget_gbp=room.get("budget_gbp"),
             destination_iata=room.get("destination_iata"),
+            time_value_per_hour=room.get("time_value_per_hour") or 0.0,
         ))
     return result
 
@@ -290,6 +296,7 @@ def create_room(
         agreed_start=None, agreed_end=None,
         min_nights=None, max_nights=None,
         budget_gbp=None, destination_iata=None,
+        time_value_per_hour=0.0,
     )
 
 

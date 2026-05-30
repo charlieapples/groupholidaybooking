@@ -212,6 +212,9 @@ def run_optimiser(slug: str, user: UserInfo = Depends(current_user)):
         ),
         budget_cap_per_person=room.get("budget_gbp"),
         shared_dates=True,
+        # Group's £/hr valuation of ground-travel time. 0 = pure cheapest;
+        # higher weights toward airports closer to each member's home.
+        time_value_per_hour=float(room.get("time_value_per_hour") or 0.0),
     )
 
     # Surface optimiser failures with a useful message instead of generic 500.

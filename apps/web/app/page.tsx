@@ -97,7 +97,7 @@ function LandingPageContent() {
         <ul className="mx-auto max-w-md space-y-2 text-left text-gray-600">
           {[
             "Find when everyone is free",
-            "Compare flights from every member's nearest airport",
+            "Compare flights from every airport each member can reach",
             "Vote on destinations together",
             "Book at the lowest total group cost",
           ].map((item) => (
@@ -162,7 +162,7 @@ function LandingPageContent() {
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { step: "1", emoji: "📅", title: "Find free dates", desc: "Everyone marks their availability. Results stay hidden until the whole group is in." },
-            { step: "2", emoji: "✈️", title: "Compare flights", desc: "We search from every member's nearest airport and find the cheapest combination." },
+            { step: "2", emoji: "✈️", title: "Compare flights", desc: "We price every UK airport each member can reach — not just the closest — and find the cheapest overall combination." },
             { step: "3", emoji: "🗳️", title: "Vote on where to go", desc: "Add destination ideas, vote together, or let the AI pick based on your group's preferences." },
             { step: "4", emoji: "🎫", title: "Book in one tap", desc: "Everyone gets their own booking link. One click, cheapest price, done." },
           ].map(({ step, emoji, title, desc }) => (
@@ -184,7 +184,7 @@ function LandingPageContent() {
         <div className="grid gap-4 sm:grid-cols-3">
           {[
             { icon: "🙈", title: "Blind availability", desc: "No one knows who's free until everyone has submitted — no anchoring or social pressure." },
-            { icon: "🛫", title: "Multi-airport search", desc: "Everyone flies from their nearest airport. We find the dates when it's cheapest overall." },
+            { icon: "🛫", title: "Multi-airport search", desc: "We price up every UK airport each person can reach — not just the closest — and find the combination that's cheapest for the whole group." },
             { icon: "🤖", title: "AI destination ideas", desc: "Gemini suggests destinations based on your group's climate, budget, and duration preferences." },
           ].map(({ icon, title, desc }) => (
             <div key={title} className="rounded-xl bg-indigo-50 border border-indigo-100 p-5 text-left">
@@ -205,7 +205,7 @@ function LandingPageContent() {
             "@type": "WebApplication",
             "name": "Group Holiday Booking",
             "url": "https://groupholidaybooking.com",
-            "description": "Plan group holidays from multiple UK cities — find free windows, compare flights from everyone's nearest airport, vote on destinations, and book at the lowest group cost.",
+            "description": "Plan group holidays from multiple UK cities — find free windows, compare flights from every airport each member can reach, vote on destinations, and book at the lowest group cost.",
             "applicationCategory": "TravelApplication",
             "operatingSystem": "Web",
             "offers": { "@type": "Offer", "price": "0", "priceCurrency": "GBP" },

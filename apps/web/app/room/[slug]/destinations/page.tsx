@@ -635,7 +635,7 @@ export default function DestinationsPage() {
           <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-6">
             <h2 className="text-lg font-bold text-blue-900 mb-2">Ready to find flights?</h2>
             <p className="text-sm text-blue-700 mb-4">
-              The top-voted destinations will be checked for flights from everyone&apos;s nearest airport.
+              The top-voted destinations will be checked for flights from every airport each member can reach.
               Candidates with the most votes will be prioritised.
             </p>
             <button

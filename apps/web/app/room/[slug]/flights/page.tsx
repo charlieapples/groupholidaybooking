@@ -39,7 +39,7 @@ export default function FlightsPage() {
   // Cosmetic only — doesn't reflect actual progress, just keeps the user engaged.
   const [hintIdx, setHintIdx] = useState(0);
   const HINTS = useMemo(() => [
-    "Looking up the nearest airport for each member…",
+    "Checking every airport option for each member…",
     "Asking Travelpayouts for cheapest fares in the date window…",
     "Comparing every member's airport options…",
     "Picking the date pair that minimises group total cost…",
@@ -211,7 +211,7 @@ export default function FlightsPage() {
           <div className="rounded-xl border bg-white p-6 shadow-sm">
             <h2 className="text-lg font-bold text-gray-900 mb-2">Flight optimiser</h2>
             <p className="text-sm text-gray-600 mb-4">
-              Searches for the best flights from each member&apos;s nearest airport to all destination candidates.
+              Checks every UK airport each member can reach (not just the closest) against all destination candidates, and picks the cheapest overall combination.
               This can take 15–30 seconds.
             </p>
 
