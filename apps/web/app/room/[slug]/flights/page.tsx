@@ -541,7 +541,7 @@ function ResultsList({
             <div className="flex items-center gap-3 shrink-0">
               <div className="text-right">
                 <p className="text-xl font-bold text-gray-900">
-                  £{Math.round(r.avg_individual_cost).toLocaleString()}
+                  ~£{Math.round(r.avg_individual_cost).toLocaleString()}
                 </p>
                 <p className="text-xs text-gray-500">flights avg/person</p>
                 {nights && nights > 0 && (() => {

@@ -499,7 +499,7 @@ export default function BookingPage() {
                             </button>
                           </div>
                           <p className="text-[10px] text-gray-400">
-                            Prices cached up to ~24h — live price on Aviasales may differ slightly.
+                            Indicative fare for comparison — tap through to Aviasales for the live price before booking.
                             Cabin bag estimate only — hold luggage is priced separately by the airline at checkout.
                           </p>
                         </div>
