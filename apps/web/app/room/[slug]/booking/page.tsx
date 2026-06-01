@@ -509,8 +509,10 @@ export default function BookingPage() {
                             />
                           )}
                           <p className="text-[10px] text-gray-400">
-                            Indicative fare for comparison — tap &ldquo;Check latest price&rdquo; or open Aviasales for the live price before booking.
-                            Cabin bag estimate only — hold luggage is priced separately by the airline at checkout.
+                            Flight prices change by the minute, so the figure here is indicative and may
+                            vary slightly — tap &ldquo;Check latest price&rdquo; or open Aviasales for the
+                            live fare before booking. Cabin bag estimate only — hold luggage is priced
+                            separately by the airline at checkout.
                           </p>
                         </div>
                       ) : (

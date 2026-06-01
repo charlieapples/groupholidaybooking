@@ -299,6 +299,10 @@ export default function FlightsPage() {
         {/* Results */}
         {viableResults.length > 0 && (
           <div className="space-y-4">
+            <p className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-xs text-blue-800">
+              💡 Prices are indicative and update through the day. Flight fares change by the minute,
+              so the live price you book at may vary slightly — confirm on the booking step before you book.
+            </p>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-xl font-bold text-gray-900">Results</h2>
               <div className="text-right">
