@@ -144,7 +144,7 @@ function ImportPanel({
   providerToken,
   authProvider,
   slug,
-  autoSync,
+  autoSyncProvider,
   onAutoSyncDone,
   busyDates,
 }: {
@@ -154,7 +154,7 @@ function ImportPanel({
   providerToken: string | null;
   authProvider: string | null;
   slug: string;
-  autoSync: boolean;
+  autoSyncProvider: "google" | "outlook" | null;
   onAutoSyncDone: () => void;
   busyDates: Set<string>;
 }) {
@@ -170,16 +170,53 @@ function ImportPanel({
   // provider_token is a Microsoft Graph token only when the user signed in with Microsoft
   const hasOutlookToken = authProvider === "azure" && !!providerToken;
 
-  // Auto-trigger Google sync when returning from OAuth
+  // Auto-trigger the matching sync when returning from a calendar connect.
   useEffect(() => {
-    if (autoSync && providerToken && gcalStatus === "idle") {
-      setOpen(true);
+    if (!autoSyncProvider || !providerToken) return;
+    setOpen(true);
+    if (autoSyncProvider === "google" && gcalStatus === "idle") {
       setActiveTab("google");
       syncGoogle();
       onAutoSyncDone();
+    } else if (autoSyncProvider === "outlook" && outlookStatus === "idle") {
+      setActiveTab("outlook");
+      syncOutlook();
+      onAutoSyncDone();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSync, providerToken]);
+  }, [autoSyncProvider, providerToken]);
+
+  // Connect a calendar account (the one you logged in with OR an extra one).
+  // linkIdentity attaches another Google/Microsoft account to your existing
+  // account without logging you out, so several calendars can be summed. Falls
+  // back to a normal re-auth if linking isn't available (e.g. first connection).
+  async function connectCalendar(provider: "google" | "azure") {
+    localStorage.setItem(`busy_${slug}`, JSON.stringify([...busyDates]));
+    const flag = provider === "google" ? "google" : "outlook";
+    const returnPath = `/room/${slug}/availability?connect=${flag}`;
+    const scopes =
+      provider === "google"
+        ? "openid profile email https://www.googleapis.com/auth/calendar.readonly"
+        : "openid profile email offline_access Calendars.Read";
+    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnPath)}`;
+    const queryParams: Record<string, string> =
+      provider === "google"
+        ? { prompt: "select_account consent", access_type: "offline" }
+        : { prompt: "select_account" };
+
+    const { error } = await supabase.auth.linkIdentity({
+      provider,
+      options: { scopes, redirectTo, queryParams },
+    });
+    // If linking isn't enabled or the identity is the same one you're logged in
+    // with, fall back to a standard re-auth (still returns with a calendar token).
+    if (error) {
+      await supabase.auth.signInWithOAuth({
+        provider,
+        options: { scopes, redirectTo, queryParams },
+      });
+    }
+  }
 
   async function grantCalendarAccess() {
     // Persist any manually-marked dates so they survive the OAuth redirect
@@ -410,7 +447,7 @@ function ImportPanel({
                     <em>Allow</em>. You stay logged in, no sign-out required.
                   </p>
                   <button
-                    onClick={grantCalendarAccess}
+                    onClick={() => connectCalendar("google")}
                     className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     🗓 Grant calendar access →
@@ -434,6 +471,13 @@ function ImportPanel({
                     : "Sync Google Calendar"}
                 </button>
               )}
+              {/* Connect an additional Google account — its busy days are summed in. */}
+              <button
+                onClick={() => connectCalendar("google")}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                ➕ Connect another Google account
+              </button>
               {gcalError && (
                 <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{gcalError}</div>
               )}
@@ -455,7 +499,7 @@ function ImportPanel({
                     Microsoft permissions screen — just click <em>Accept</em>. You stay logged in.
                   </p>
                   <button
-                    onClick={grantOutlookAccess}
+                    onClick={() => connectCalendar("azure")}
                     className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
                   >
                     📘 Connect Outlook Calendar →
@@ -479,6 +523,13 @@ function ImportPanel({
                     : "Sync Outlook Calendar"}
                 </button>
               )}
+              {/* Connect an additional Microsoft account — its busy days are summed in. */}
+              <button
+                onClick={() => connectCalendar("azure")}
+                className="block text-xs text-blue-600 hover:underline"
+              >
+                ➕ Connect another Microsoft account
+              </button>
               {outlookError && (
                 <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{outlookError}</div>
               )}
@@ -627,22 +678,27 @@ export default function AvailabilityPage() {
     return () => { document.title = "Group Holiday Booking — plan your trip together"; };
   }, [room?.name]);
 
-  // If we've just returned from Google OAuth (sync_google=1), auto-trigger sync
+  // After returning from a calendar OAuth/link, auto-trigger the matching sync.
+  // ?connect=google|outlook is set by connectCalendar(); sync_google=1 kept for
+  // backward compatibility with the older Google grant flow.
   const autoSyncDone = useRef(false);
   useEffect(() => {
     if (autoSyncDone.current) return;
-    if (searchParams.get("sync_google") !== "1") return;
     if (!providerToken || loading) return;
+    const connect = searchParams.get("connect");
+    const legacyGoogle = searchParams.get("sync_google") === "1";
+    const provider: "google" | "outlook" | null =
+      connect === "google" || legacyGoogle ? "google" : connect === "outlook" ? "outlook" : null;
+    if (!provider) return;
     autoSyncDone.current = true;
-    // Clean the URL param without reloading
     const url = new URL(window.location.href);
+    url.searchParams.delete("connect");
     url.searchParams.delete("sync_google");
     window.history.replaceState({}, "", url.toString());
-    // The ImportPanel's syncGoogle is internal — trigger it via a flag
-    setAutoSync(true);
+    setAutoSyncProvider(provider);
   }, [searchParams, providerToken, loading]);
 
-  const [autoSync, setAutoSync] = useState(false);
+  const [autoSyncProvider, setAutoSyncProvider] = useState<"google" | "outlook" | null>(null);
   const [lockingWindow, setLockingWindow] = useState<number | null>(null);
   const [reminding, setReminding] = useState(false);
 
@@ -836,8 +892,8 @@ export default function AvailabilityPage() {
               providerToken={providerToken}
               authProvider={authProvider}
               slug={slug}
-              autoSync={autoSync}
-              onAutoSyncDone={() => setAutoSync(false)}
+              autoSyncProvider={autoSyncProvider}
+              onAutoSyncDone={() => setAutoSyncProvider(null)}
               busyDates={busyDates}
             />
 
