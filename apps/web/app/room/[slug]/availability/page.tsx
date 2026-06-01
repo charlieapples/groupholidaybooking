@@ -142,6 +142,7 @@ function ImportPanel({
   windowStart,
   windowEnd,
   providerToken,
+  authProvider,
   slug,
   autoSync,
   onAutoSyncDone,
@@ -151,6 +152,7 @@ function ImportPanel({
   windowStart: Date;
   windowEnd: Date;
   providerToken: string | null;
+  authProvider: string | null;
   slug: string;
   autoSync: boolean;
   onAutoSyncDone: () => void;
@@ -161,8 +163,12 @@ function ImportPanel({
   const [activeTab, setActiveTab] = useState<"google" | "outlook" | "apple">("google");
   const [gcalStatus, setGcalStatus] = useState<"idle" | "syncing" | "done" | "needs_grant" | "error">("idle");
   const [gcalError, setGcalError] = useState("");
+  const [outlookStatus, setOutlookStatus] = useState<"idle" | "syncing" | "done" | "needs_grant" | "error">("idle");
+  const [outlookError, setOutlookError] = useState("");
   const [icsError, setIcsError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  // provider_token is a Microsoft Graph token only when the user signed in with Microsoft
+  const hasOutlookToken = authProvider === "azure" && !!providerToken;
 
   // Auto-trigger Google sync when returning from OAuth
   useEffect(() => {
@@ -271,6 +277,69 @@ function ImportPanel({
     }
   }
 
+  async function grantOutlookAccess() {
+    localStorage.setItem(`busy_${slug}`, JSON.stringify([...busyDates]));
+    const returnPath = `/room/${slug}/availability`;
+    await supabase.auth.signInWithOAuth({
+      provider: "azure",
+      options: {
+        scopes: "openid profile email offline_access Calendars.Read",
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnPath)}`,
+      },
+    });
+  }
+
+  async function syncOutlook() {
+    if (!hasOutlookToken) {
+      setOutlookStatus("needs_grant");
+      return;
+    }
+    setOutlookStatus("syncing");
+    setOutlookError("");
+    try {
+      // Microsoft Graph calendarView expands recurring events across the window.
+      const url = new URL("https://graph.microsoft.com/v1.0/me/calendarView");
+      url.searchParams.set("startDateTime", windowStart.toISOString());
+      url.searchParams.set("endDateTime", windowEnd.toISOString());
+      url.searchParams.set("$select", "start,end,showAs,isCancelled,isAllDay");
+      url.searchParams.set("$top", "1000");
+
+      const r = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${providerToken}`,
+          Prefer: 'outlook.timezone="UTC"',
+        },
+      });
+      if (!r.ok) throw new Error(`Graph ${r.status}`);
+      const data = await r.json();
+
+      const allBusy = new Set<string>();
+      for (const ev of data.value ?? []) {
+        if (ev.isCancelled) continue;
+        // showAs: free | tentative | busy | oof | workingElsewhere — skip "free"
+        if (ev.showAs === "free") continue;
+        const startStr: string = ev.start?.dateTime?.slice(0, 10);
+        const endStr: string = ev.end?.dateTime?.slice(0, 10);
+        if (!startStr || !endStr) continue;
+        // All-day events have an exclusive end; timed events end on an inclusive day.
+        const isTimed = !ev.isAllDay;
+        const cur = new Date(startStr);
+        const stop = new Date(endStr);
+        if (isTimed) stop.setDate(stop.getDate() + 1);
+        while (cur < stop) {
+          allBusy.add(cur.toISOString().slice(0, 10));
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+
+      onImport(Array.from(allBusy));
+      setOutlookStatus("done");
+    } catch {
+      setOutlookStatus("error");
+      setOutlookError("Failed to reach Outlook Calendar. Check your connection and try again.");
+    }
+  }
+
   async function handleFile(file: File) {
     setIcsError("");
     try {
@@ -374,23 +443,59 @@ function ImportPanel({
           {/* Outlook tab */}
           {activeTab === "outlook" && (
             <div className="mt-4 space-y-3">
-              <ol className="ml-4 list-decimal space-y-2 text-sm text-gray-600">
-                <li>Go to <strong>outlook.com</strong> and sign in</li>
-                <li>Click the calendar icon in the left bar</li>
-                <li>Click <strong>⚙️ Settings → View all Outlook settings</strong></li>
-                <li>Go to <strong>Calendar → Shared calendars</strong></li>
-                <li>Under <em>Publish a calendar</em>, select your calendar and click <strong>Publish</strong></li>
-                <li>Copy the <strong>ICS link</strong>, open it in a browser, save as a file, then upload below</li>
-              </ol>
-              <p className="text-xs text-gray-400">
-                Or in the Outlook desktop app: File → Open &amp; Export → Import/Export → Export to a file → iCalendar
+              <p className="text-sm text-gray-600">
+                One-click sync of your Outlook/Microsoft 365 calendar — marks anything scheduled
+                in the holiday window as busy.
               </p>
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="rounded-lg border border-dashed border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:border-blue-400 hover:text-blue-600 w-full"
-              >
-                📂 Upload .ics file
-              </button>
+
+              {outlookStatus === "needs_grant" || !hasOutlookToken ? (
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 space-y-3">
+                  <p className="text-sm text-blue-800">
+                    <strong>Connect your Microsoft account</strong> to sync live. You&apos;ll see a
+                    Microsoft permissions screen — just click <em>Accept</em>. You stay logged in.
+                  </p>
+                  <button
+                    onClick={grantOutlookAccess}
+                    className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                  >
+                    📘 Connect Outlook Calendar →
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={syncOutlook}
+                  disabled={outlookStatus === "syncing" || outlookStatus === "done"}
+                  className={[
+                    "rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors",
+                    outlookStatus === "done"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60",
+                  ].join(" ")}
+                >
+                  {outlookStatus === "syncing"
+                    ? "Syncing…"
+                    : outlookStatus === "done"
+                    ? "✓ Synced!"
+                    : "Sync Outlook Calendar"}
+                </button>
+              )}
+              {outlookError && (
+                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{outlookError}</div>
+              )}
+
+              {/* Manual fallback */}
+              <details className="text-sm text-gray-500">
+                <summary className="cursor-pointer hover:text-gray-700">Or upload a .ics file instead</summary>
+                <p className="mt-2 text-xs text-gray-400">
+                  Outlook desktop: File → Open &amp; Export → Import/Export → Export to a file → iCalendar.
+                </p>
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="mt-2 rounded-lg border border-dashed border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:border-blue-400 hover:text-blue-600 w-full"
+                >
+                  📂 Upload .ics file
+                </button>
+              </details>
             </div>
           )}
 
@@ -447,6 +552,7 @@ export default function AvailabilityPage() {
 
   const [token, setToken] = useState<string | null>(null);
   const [providerToken, setProviderToken] = useState<string | null>(null);
+  const [authProvider, setAuthProvider] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [busyDates, setBusyDates] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
@@ -462,6 +568,9 @@ export default function AvailabilityPage() {
       const pt = data.session.provider_token ?? null;
       setToken(t);
       setProviderToken(pt);
+      // Which OAuth provider the user signed in with — decides whether the
+      // provider_token is a Google or a Microsoft Graph token.
+      setAuthProvider((data.session.user.app_metadata?.provider as string) ?? null);
 
       // Restore any busy dates saved before the OAuth redirect
       const saved = localStorage.getItem(`busy_${slug}`);
@@ -725,6 +834,7 @@ export default function AvailabilityPage() {
               windowStart={windowStart}
               windowEnd={windowEnd}
               providerToken={providerToken}
+              authProvider={authProvider}
               slug={slug}
               autoSync={autoSync}
               onAutoSyncDone={() => setAutoSync(false)}
