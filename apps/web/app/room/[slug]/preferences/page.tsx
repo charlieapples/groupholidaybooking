@@ -78,7 +78,7 @@ export default function PreferencesPage() {
 
   // Update browser tab title when the room name is known
   useEffect(() => {
-    if (room?.name) document.title = `Duration & Budget – ${room.name} | Group Holiday`;
+    if (room?.name) document.title = `Duration & Budget – ${room.name} | Group Holiday Booking`;
     return () => { document.title = "Group Holiday Booking — plan your trip together"; };
   }, [room?.name]);
 

@@ -154,7 +154,7 @@ export default function RoomPage() {
 
   // Update browser tab title when the room name is known
   useEffect(() => {
-    if (room?.name) document.title = `${room.name} | Group Holiday`;
+    if (room?.name) document.title = `${room.name} | Group Holiday Booking`;
     return () => { document.title = "Group Holiday Booking — plan your trip together"; };
   }, [room?.name]);
 
@@ -316,7 +316,7 @@ export default function RoomPage() {
 
   async function shareLink() {
     const url = `${window.location.origin}/room/${slug}/join`;
-    const shareText = `Join my holiday planning room "${room?.name ?? slug}" on Group Holiday`;
+    const shareText = `Join my holiday planning room "${room?.name ?? slug}" on Group Holiday Booking`;
 
     // Use Web Share API on supported devices (mobile gets a native share sheet)
     if (typeof navigator.share === "function") {
