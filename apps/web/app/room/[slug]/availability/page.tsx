@@ -218,21 +218,6 @@ function ImportPanel({
     }
   }
 
-  async function grantCalendarAccess() {
-    // Persist any manually-marked dates so they survive the OAuth redirect
-    localStorage.setItem(`busy_${slug}`, JSON.stringify([...busyDates])); // busyDates is a prop
-    // Return to the availability page and auto-trigger sync on arrival
-    const returnPath = `/room/${slug}/availability?sync_google=1`;
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        scopes: "openid profile email https://www.googleapis.com/auth/calendar.readonly",
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnPath)}`,
-        queryParams: { prompt: "consent", access_type: "offline" },
-      },
-    });
-    // Page navigates away — user comes back with calendar-scoped provider_token
-  }
 
   async function syncGoogle() {
     if (!providerToken) {
@@ -312,18 +297,6 @@ function ImportPanel({
       setGcalStatus("error");
       setGcalError("Failed to reach Google Calendar. Check your connection and try again.");
     }
-  }
-
-  async function grantOutlookAccess() {
-    localStorage.setItem(`busy_${slug}`, JSON.stringify([...busyDates]));
-    const returnPath = `/room/${slug}/availability`;
-    await supabase.auth.signInWithOAuth({
-      provider: "azure",
-      options: {
-        scopes: "openid profile email offline_access Calendars.Read",
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnPath)}`,
-      },
-    });
   }
 
   async function syncOutlook() {
