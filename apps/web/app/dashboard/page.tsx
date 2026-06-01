@@ -351,8 +351,9 @@ export default function Dashboard() {
                     {room.is_admin ? " · admin" : ""}
                   </p>
                 </button>
-                {/* Quick actions — only visible on hover/focus */}
-                <div className="absolute top-2 right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                {/* Quick actions — always visible (hover-only hid them on touch
+                    devices and clashed with the status pill at the top-right). */}
+                <div className="absolute bottom-2 right-2 flex gap-0.5">
                   <button
                     onClick={() => copyRoomLink(room.slug)}
                     title="Copy invite link"
