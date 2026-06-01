@@ -67,6 +67,7 @@ export default function Dashboard() {
       if (!data.session) { router.replace("/"); return; }
       const t = data.session.access_token;
       setToken(t);
+      // Show the Google name immediately so the header isn't blank…
       setUser({
         email: data.session.user.email,
         name: data.session.user.user_metadata?.full_name,
@@ -77,9 +78,17 @@ export default function Dashboard() {
         getMyProfile(t).catch(() => null),
       ]);
       setRooms(rooms);
-      if (profile?.default_home_postcode) {
-        setNewPostcode(profile.default_home_postcode);
-        setJoinPostcode(profile.default_home_postcode);
+      if (profile) {
+        // …then prefer the user's saved display name (set on the Profile page)
+        // over the raw Google name so the header reflects their choice.
+        setUser({
+          email: profile.email ?? data.session.user.email,
+          name: profile.display_name || data.session.user.user_metadata?.full_name,
+        });
+        if (profile.default_home_postcode) {
+          setNewPostcode(profile.default_home_postcode);
+          setJoinPostcode(profile.default_home_postcode);
+        }
       }
       setLoading(false);
     });
