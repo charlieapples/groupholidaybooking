@@ -186,11 +186,14 @@ function ImportPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSyncProvider, providerToken]);
 
-  // Connect a calendar account (the one you logged in with OR an extra one).
-  // linkIdentity attaches another Google/Microsoft account to your existing
-  // account without logging you out, so several calendars can be summed. Falls
-  // back to a normal re-auth if linking isn't available (e.g. first connection).
-  async function connectCalendar(provider: "google" | "azure") {
+  // Connect a calendar.
+  //   • PRIMARY (the account you're logged in with): re-auth that SAME account
+  //     with calendar scope — no account picker, so you can't accidentally
+  //     switch logins (which previously bounced people to the home page).
+  //   • ADDITIONAL (forceAdditional, or a different provider than your login):
+  //     linkIdentity attaches an extra Google/Microsoft account WITHOUT logging
+  //     you out, so several calendars sum together. Shows the account picker.
+  async function connectCalendar(provider: "google" | "azure", forceAdditional = false) {
     localStorage.setItem(`busy_${slug}`, JSON.stringify([...busyDates]));
     const flag = provider === "google" ? "google" : "outlook";
     const returnPath = `/room/${slug}/availability?connect=${flag}`;
@@ -199,22 +202,29 @@ function ImportPanel({
         ? "openid profile email https://www.googleapis.com/auth/calendar.readonly"
         : "openid profile email offline_access Calendars.Read";
     const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnPath)}`;
+
+    const isPrimary = !forceAdditional && authProvider === provider;
+
+    if (isPrimary) {
+      // Re-auth the current account (prompt=consent, NO select_account picker).
+      const queryParams: Record<string, string> =
+        provider === "google" ? { prompt: "consent", access_type: "offline" } : {};
+      await supabase.auth.signInWithOAuth({ provider, options: { scopes, redirectTo, queryParams } });
+      return;
+    }
+
+    // Additional account → link it (picker on). Fall back to re-auth if linking
+    // is unavailable.
     const queryParams: Record<string, string> =
       provider === "google"
         ? { prompt: "select_account consent", access_type: "offline" }
         : { prompt: "select_account" };
-
     const { error } = await supabase.auth.linkIdentity({
       provider,
       options: { scopes, redirectTo, queryParams },
     });
-    // If linking isn't enabled or the identity is the same one you're logged in
-    // with, fall back to a standard re-auth (still returns with a calendar token).
     if (error) {
-      await supabase.auth.signInWithOAuth({
-        provider,
-        options: { scopes, redirectTo, queryParams },
-      });
+      await supabase.auth.signInWithOAuth({ provider, options: { scopes, redirectTo, queryParams } });
     }
   }
 
@@ -446,7 +456,7 @@ function ImportPanel({
               )}
               {/* Connect an additional Google account — its busy days are summed in. */}
               <button
-                onClick={() => connectCalendar("google")}
+                onClick={() => connectCalendar("google", true)}
                 className="text-xs text-blue-600 hover:underline"
               >
                 ➕ Connect another Google account
@@ -498,7 +508,7 @@ function ImportPanel({
               )}
               {/* Connect an additional Microsoft account — its busy days are summed in. */}
               <button
-                onClick={() => connectCalendar("azure")}
+                onClick={() => connectCalendar("azure", true)}
                 className="block text-xs text-blue-600 hover:underline"
               >
                 ➕ Connect another Microsoft account
