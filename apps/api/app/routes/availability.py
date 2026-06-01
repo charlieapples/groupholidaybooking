@@ -347,15 +347,21 @@ def submission_status(slug: str, user: UserInfo = Depends(current_user)):
     )
     submitted_ids = {s["user_id"] for s in submitted_res.data}
 
+    # Only count submissions from CURRENT members — stale rows from people who
+    # have left the room must not inflate the count or trip "all submitted"
+    # (see the matching note in GET /windows).
+    member_ids = set(all_members.keys())
+    submitted_current = submitted_ids & member_ids
+
     pending_names = [
         name for uid, name in all_members.items() if uid not in submitted_ids
     ]
 
     return SubmissionStatusResponse(
-        submitted=len(submitted_ids),
+        submitted=len(submitted_current),
         total=len(all_members),
         members_pending=pending_names,
-        all_submitted=len(submitted_ids) == len(all_members),
+        all_submitted=member_ids.issubset(submitted_ids),
         user_submitted=user.id in submitted_ids,
     )
 
@@ -418,8 +424,13 @@ def get_windows(
     )
     submitted_ids = {s["user_id"] for s in submitted_res.data}
 
-    if submitted_ids < member_ids:
-        pending_count = len(member_ids) - len(submitted_ids)
+    # Require every CURRENT member to have submitted. Use a subset test rather
+    # than a count/strict-subset check, because availability_submissions rows
+    # can linger for members who have since left the room (the table cascades on
+    # room/profile deletion, not on leaving), which would otherwise let the blind
+    # reveal fire before a newer member has submitted.
+    if not member_ids.issubset(submitted_ids):
+        pending_count = len(member_ids - submitted_ids)
         raise HTTPException(
             412,
             f"Waiting for {pending_count} more member(s) to submit their availability. "

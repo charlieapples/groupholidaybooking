@@ -513,6 +513,40 @@ def delete_room(slug: str, user: UserInfo = Depends(current_user)):
     return None
 
 
+def _purge_member_room_data(db, room_id: str, user_id: str) -> None:
+    """Delete a member's per-room data when they leave or are removed.
+
+    The availability/preference/vote tables cascade on room or profile deletion
+    but NOT on a member simply leaving the room, so without this their stale
+    availability submissions (and busy dates, votes, prefs) would linger — which
+    can wrongly trip the blind-reveal "everyone submitted" check. Best-effort:
+    a cleanup failure must not block the member removal itself.
+    """
+    # These tables are keyed by (room_id, user_id) — straightforward delete.
+    for table in ("availability_blocks", "availability_submissions", "trip_preferences"):
+        try:
+            db.table(table).delete().eq("room_id", room_id).eq("user_id", user_id).execute()
+        except Exception:
+            log.warning("Failed to purge %s for user %s in room %s", table, user_id, room_id)
+
+    # destination_votes is keyed by candidate_id (no room_id), so delete the
+    # user's votes only for candidates belonging to this room.
+    try:
+        cands = (
+            db.table("destination_candidates")
+            .select("id")
+            .eq("room_id", room_id)
+            .execute()
+        )
+        candidate_ids = [c["id"] for c in (cands.data or [])]
+        if candidate_ids:
+            db.table("destination_votes").delete().in_(
+                "candidate_id", candidate_ids
+            ).eq("user_id", user_id).execute()
+    except Exception:
+        log.warning("Failed to purge destination_votes for user %s in room %s", user_id, room_id)
+
+
 @router.delete("/{slug}/leave", status_code=status.HTTP_204_NO_CONTENT)
 def leave_room(slug: str, user: UserInfo = Depends(current_user)):
     """Remove the calling user from a room.
@@ -529,6 +563,7 @@ def leave_room(slug: str, user: UserInfo = Depends(current_user)):
             "Delete the Holiday instead, or ask another member to become admin.",
         )
     db.table("room_members").delete().eq("room_id", room["id"]).eq("user_id", user.id).execute()
+    _purge_member_room_data(db, room["id"], user.id)
     return None
 
 
@@ -560,6 +595,7 @@ def kick_member(
     if not target.data:
         raise HTTPException(404, "That user is not a member of this room.")
     db.table("room_members").delete().eq("room_id", room["id"]).eq("user_id", member_user_id).execute()
+    _purge_member_room_data(db, room["id"], member_user_id)
     return None
 
 
