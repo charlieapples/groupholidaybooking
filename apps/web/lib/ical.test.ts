@@ -116,6 +116,16 @@ describe("parseRoughWindow", () => {
     expect(end.getMonth()).toBe(2);
   });
 
+  it("parses 'Sept' (en-GB short September) in an exact date range", () => {
+    // Regression: "17 Sept 2026" previously failed to parse and fell back to
+    // a default 6-month window.
+    const { start, end } = parseRoughWindow("1 Aug 2026 – 17 Sept 2026");
+    expect(start.getMonth()).toBe(7);   // August
+    expect(start.getDate()).toBe(1);
+    expect(end.getMonth()).toBe(8);     // September
+    expect(end.getDate()).toBe(17);
+  });
+
   it("falls back to a 6-month window for unparseable input", () => {
     const { start, end } = parseRoughWindow("sometime next year maybe");
     expect(end.getTime()).toBeGreaterThan(start.getTime());

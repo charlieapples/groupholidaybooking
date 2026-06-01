@@ -89,11 +89,14 @@ const MONTH_MAP: Record<string, number> = {
   january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
   july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
   jan: 0, feb: 1, mar: 2, apr: 3, jun: 5, jul: 6, aug: 7,
-  sep: 8, oct: 9, nov: 10, dec: 11,
+  // "sept" is the en-GB short form for September (toLocaleDateString gives
+  // "17 Sept 2026") — without it, exact-date windows in September fail to parse.
+  sep: 8, sept: 8, oct: 9, nov: 10, dec: 11,
 };
 
 function monthFromName(name: string): number | undefined {
-  return MONTH_MAP[name.toLowerCase()];
+  const k = name.toLowerCase();
+  return MONTH_MAP[k] ?? MONTH_MAP[k.slice(0, 3)];
 }
 
 export function parseRoughWindow(rough: string | null): { start: Date; end: Date } {

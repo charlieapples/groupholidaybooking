@@ -33,30 +33,43 @@ _MONTH_MAP = {
     "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
     "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7, "aug": 8,
-    "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+    "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12,
 }
+
+
+def _month(name: str) -> int | None:
+    """Look up a month number, tolerant of en-GB abbreviations like 'Sept'."""
+    k = name.lower()
+    return _MONTH_MAP.get(k) or _MONTH_MAP.get(k[:3])
+
 
 def _parse_rough_window(rough: str | None) -> tuple[date, date] | None:
     """Parse rough_window text into (start, end) dates.  Returns None if unparseable."""
     if not rough:
         return None
     sep = r"\s*[–—-]\s*"
+    # "D Mon YYYY – D Mon YYYY"  (exact-date window — must be tried first)
+    m = re.match(r"(\d{1,2})\s+(\w+)\s+(\d{4})" + sep + r"(\d{1,2})\s+(\w+)\s+(\d{4})", rough, re.I)
+    if m:
+        sm, em = _month(m[2]), _month(m[5])
+        if sm and em:
+            return date(int(m[3]), sm, int(m[1])), date(int(m[6]), em, int(m[4]))
     # "Month YYYY – Month YYYY"
     m = re.match(r"(\w+)\s+(\d{4})" + sep + r"(\w+)\s+(\d{4})", rough, re.I)
     if m:
-        sm, sy, em, ey = _MONTH_MAP.get(m[1].lower()), int(m[2]), _MONTH_MAP.get(m[3].lower()), int(m[4])
+        sm, sy, em, ey = _month(m[1]), int(m[2]), _month(m[3]), int(m[4])
         if sm and em:
             return date(sy, sm, 1), date(ey, em, _days_in_month(ey, em))
     # "Month–Month YYYY"
     m = re.match(r"(\w+)" + sep + r"(\w+)\s+(\d{4})", rough, re.I)
     if m:
-        sm, em, y = _MONTH_MAP.get(m[1].lower()), _MONTH_MAP.get(m[2].lower()), int(m[3])
+        sm, em, y = _month(m[1]), _month(m[2]), int(m[3])
         if sm and em:
             return date(y, sm, 1), date(y, em, _days_in_month(y, em))
     # "Month YYYY"
     m = re.match(r"(\w+)\s+(\d{4})", rough, re.I)
     if m:
-        sm, y = _MONTH_MAP.get(m[1].lower()), int(m[2])
+        sm, y = _month(m[1]), int(m[2])
         if sm:
             return date(y, sm, 1), date(y, sm, _days_in_month(y, sm))
     return None
