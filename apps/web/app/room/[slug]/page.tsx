@@ -64,6 +64,12 @@ export default function RoomPage() {
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState("");
   const [savingName, setSavingName] = useState(false);
+  // Editable target window
+  const [editingWindow, setEditingWindow] = useState(false);
+  const [winMode, setWinMode] = useState<"month" | "date">("month");
+  const [winFrom, setWinFrom] = useState("");
+  const [winTo, setWinTo] = useState("");
+  const [savingWindow, setSavingWindow] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -242,6 +248,34 @@ export default function RoomPage() {
       toast.error(errorMessage(e, "Failed to rename Holiday"));
     } finally {
       setSavingName(false);
+    }
+  }
+
+  // Build the rough_window display string in the same format the create modal
+  // uses (so the parser reads it back correctly).
+  function buildWindowString(): string | null {
+    if (!winFrom || !winTo) return null;
+    const fmt = (v: string) =>
+      winMode === "month"
+        ? new Date(Number(v.split("-")[0]), Number(v.split("-")[1]) - 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" })
+        : new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+    return `${fmt(winFrom)} – ${fmt(winTo)}`;
+  }
+
+  async function handleSaveWindow() {
+    if (!token || !room?.is_admin) return;
+    const str = buildWindowString();
+    if (!str) { toast.error("Pick both a start and end."); return; }
+    setSavingWindow(true);
+    try {
+      const updated = await updateRoom(token, slug, { rough_window: str });
+      setRoom(updated);
+      setEditingWindow(false);
+      toast.success("Target window updated!");
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Failed to update window"));
+    } finally {
+      setSavingWindow(false);
     }
   }
 
@@ -629,8 +663,59 @@ export default function RoomPage() {
             <div className="grid grid-cols-2 gap-4">
               {room.rough_window && !room.agreed_start && (
                 <div className="rounded-xl border bg-white p-4 shadow-sm">
-                  <h3 className="text-xs font-medium text-gray-500 mb-1">Target window</h3>
-                  <p className="font-semibold text-gray-900 text-sm">{room.rough_window}</p>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <h3 className="text-xs font-medium text-gray-500">Target window</h3>
+                    {room.is_admin && !editingWindow && (
+                      <button
+                        onClick={() => { setEditingWindow(true); setWinMode("month"); setWinFrom(""); setWinTo(""); }}
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        Edit
+                      </button>
+                    )}
+                  </div>
+                  {editingWindow ? (
+                    <div className="space-y-2">
+                      <div className="flex gap-2 text-xs">
+                        <button
+                          onClick={() => setWinMode("month")}
+                          className={`rounded px-2 py-1 ${winMode === "month" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600"}`}
+                        >Months</button>
+                        <button
+                          onClick={() => setWinMode("date")}
+                          className={`rounded px-2 py-1 ${winMode === "date" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600"}`}
+                        >Exact dates</button>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type={winMode === "month" ? "month" : "date"}
+                          value={winFrom}
+                          onChange={(e) => setWinFrom(e.target.value)}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900"
+                        />
+                        <span className="text-gray-400 text-xs">to</span>
+                        <input
+                          type={winMode === "month" ? "month" : "date"}
+                          value={winTo}
+                          onChange={(e) => setWinTo(e.target.value)}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSaveWindow}
+                          disabled={savingWindow}
+                          className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                        >{savingWindow ? "Saving…" : "Save"}</button>
+                        <button
+                          onClick={() => setEditingWindow(false)}
+                          className="rounded px-3 py-1 text-xs text-gray-500 hover:text-gray-700"
+                        >Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="font-semibold text-gray-900 text-sm">{room.rough_window}</p>
+                  )}
                 </div>
               )}
               {room.agreed_start && (
