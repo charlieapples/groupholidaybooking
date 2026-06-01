@@ -12,8 +12,12 @@ import {
   getMyDestinationPreferences,
   pickRandomDestination,
   advanceStep,
+  getVoteStatus,
+  lockVotes,
+  unlockVotes,
   type Room,
   type DestinationCandidate,
+  type VoteStatus,
 } from "@/lib/api";
 import dynamic from "next/dynamic";
 import FeedbackButton from "@/components/FeedbackButton";
@@ -46,6 +50,8 @@ export default function DestinationsPage() {
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [candidates, setCandidates] = useState<DestinationCandidate[]>([]);
+  const [voteStatus, setVoteStatus] = useState<VoteStatus | null>(null);
+  const [lockingVotes, setLockingVotes] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Questionnaire state
@@ -93,11 +99,13 @@ export default function DestinationsPage() {
         router.replace("/dashboard");
         return;
       }
-      const [c, prefs] = await Promise.all([
+      const [c, prefs, vs] = await Promise.all([
         listDestinations(t, slug).catch(() => [] as DestinationCandidate[]),
         getMyDestinationPreferences(t, slug).catch(() => null),
+        getVoteStatus(t, slug).catch(() => null),
       ]);
       setCandidates(c);
+      if (vs) setVoteStatus(vs);
       if (prefs) {
         if (prefs.climate) setClimate(prefs.climate);
         if (prefs.setting) setSetting(prefs.setting);
@@ -126,26 +134,41 @@ export default function DestinationsPage() {
   useEffect(() => {
     if (!room?.id) return;
 
+    const refresh = async () => {
+      const t = tokenRef.current;
+      if (!t) return;
+      // Refetch candidates (counts/order) AND reveal status so the banner and
+      // the blind reveal update live as people vote and lock in.
+      listDestinations(t, slug).then(setCandidates).catch(() => {});
+      getVoteStatus(t, slug).then(setVoteStatus).catch(() => {});
+    };
+
     const channel = supabase
       .channel(`dest-votes-${room.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "destination_votes",
-        },
-        async () => {
-          const t = tokenRef.current;
-          if (!t) return;
-          // Refetch full candidate list so vote counts are accurate
-          listDestinations(t, slug).then(setCandidates).catch(() => {});
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "destination_votes" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "destination_vote_submissions" }, refresh)
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [room?.id, supabase, slug]);
+
+  async function handleLockVotes() {
+    if (!token) return;
+    setLockingVotes(true);
+    try {
+      const vs = voteStatus?.i_submitted
+        ? await unlockVotes(token, slug)
+        : await lockVotes(token, slug);
+      setVoteStatus(vs);
+      // Re-fetch candidates: if that lock-in triggered the full reveal, counts
+      // and ordering change for everyone.
+      listDestinations(token, slug).then(setCandidates).catch(() => {});
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Couldn't update your vote lock-in"));
+    } finally {
+      setLockingVotes(false);
+    }
+  }
 
   async function handleSaveQuestionnaire() {
     if (!token) return;
@@ -515,8 +538,46 @@ export default function DestinationsPage() {
             </div>
           </div>
           <p className="text-xs text-gray-500 mb-4">
-            Gemini picks destinations matched to the group&apos;s combined questionnaire answers, dates, and budget. Tap 👍 or 👎 to vote — votes update live for everyone.
+            Gemini picks destinations matched to the group&apos;s combined questionnaire answers, dates, and budget. Tap 👍 or 👎 to vote.
           </p>
+
+          {/* Blind-reveal banner */}
+          {candidates.length > 0 && voteStatus && (
+            <div className={`mb-4 rounded-xl border px-4 py-3 ${
+              voteStatus.votes_revealed
+                ? "bg-green-50 border-green-200"
+                : "bg-indigo-50 border-indigo-200"
+            }`}>
+              {voteStatus.votes_revealed ? (
+                <p className="text-sm text-green-800">
+                  ✅ <strong>Results revealed</strong> — everyone has voted. Candidates are now ranked by votes.
+                </p>
+              ) : (
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <p className="text-sm text-indigo-800">
+                    🗳️ <strong>Blind vote in progress.</strong> Tallies stay hidden so nobody&apos;s
+                    swayed — revealed once everyone locks in.{" "}
+                    <span className="font-semibold">{voteStatus.voters_done}/{voteStatus.voters_total} locked in.</span>
+                  </p>
+                  <button
+                    onClick={handleLockVotes}
+                    disabled={lockingVotes}
+                    className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50 ${
+                      voteStatus.i_submitted
+                        ? "border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        : "bg-indigo-600 text-white hover:bg-indigo-700"
+                    }`}
+                  >
+                    {lockingVotes
+                      ? "Saving…"
+                      : voteStatus.i_submitted
+                      ? "✓ Locked in — change my votes"
+                      : "Lock in my votes"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {candidates.length === 0 ? (
             <div className="py-10 text-center text-gray-500">
@@ -541,8 +602,13 @@ export default function DestinationsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="min-w-8 text-center text-sm font-bold text-gray-900">
-                      {c.vote_count > 0 ? `+${c.vote_count}` : c.vote_count}
+                    <span
+                      className="min-w-8 text-center text-sm font-bold text-gray-900"
+                      title={voteStatus && !voteStatus.votes_revealed ? "Hidden until everyone has voted" : undefined}
+                    >
+                      {voteStatus && !voteStatus.votes_revealed
+                        ? "🔒"
+                        : c.vote_count > 0 ? `+${c.vote_count}` : c.vote_count}
                     </span>
                     <button
                       onClick={() => handleVote(c.id, c.my_vote === 1 ? 0 : 1)}
@@ -594,10 +660,10 @@ export default function DestinationsPage() {
           )}
         </div>
 
-          {/* Voting summary — show when there are any votes */}
-        {candidates.length > 0 && candidates.some(c => c.vote_count !== 0) && (
+          {/* Voting summary — only after the blind reveal (counts are hidden until then) */}
+        {voteStatus?.votes_revealed && candidates.length > 0 && candidates.some(c => c.vote_count !== 0) && (
           <div className="rounded-xl border bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-gray-900 mb-3">🗳️ Voting so far</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-3">🗳️ Final votes</h2>
             <div className="space-y-2">
               {[...candidates]
                 .sort((a, b) => b.vote_count - a.vote_count)

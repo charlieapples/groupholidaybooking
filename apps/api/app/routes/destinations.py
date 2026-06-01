@@ -202,8 +202,14 @@ class DestinationCandidate(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _candidate_to_dto(c: dict, my_user_id: str, votes: list[dict]) -> DestinationCandidate:
-    vote_count = sum(v["vote_value"] for v in votes if v["candidate_id"] == c["id"])
+def _candidate_to_dto(
+    c: dict, my_user_id: str, votes: list[dict], reveal: bool = True
+) -> DestinationCandidate:
+    # Hide the aggregate count until the blind reveal so nobody is influenced
+    # by how others are voting. The caller always sees their OWN vote (my_vote).
+    vote_count = (
+        sum(v["vote_value"] for v in votes if v["candidate_id"] == c["id"]) if reveal else 0
+    )
     my_vote = next(
         (v["vote_value"] for v in votes if v["candidate_id"] == c["id"] and v["user_id"] == my_user_id),
         0,
@@ -218,6 +224,29 @@ def _candidate_to_dto(c: dict, my_user_id: str, votes: list[dict]) -> Destinatio
         vote_count=vote_count,
         my_vote=my_vote,
     )
+
+
+def _vote_reveal_state(db, room_id: str, my_user_id: Optional[str] = None):
+    """Return (revealed, voters_done, voters_total, i_submitted).
+
+    Mirrors the availability blind-reveal: votes are revealed only once every
+    CURRENT member has locked in (subset test — robust to stale submissions
+    from members who have since left).
+    """
+    members = db.table("room_members").select("user_id").eq("room_id", room_id).execute()
+    member_ids = {m["user_id"] for m in (members.data or [])}
+    subs = (
+        db.table("destination_vote_submissions")
+        .select("user_id")
+        .eq("room_id", room_id)
+        .execute()
+    )
+    submitted_ids = {s["user_id"] for s in (subs.data or [])}
+    revealed = bool(member_ids) and member_ids.issubset(submitted_ids)
+    done = len(submitted_ids & member_ids)
+    total = len(member_ids)
+    i_submitted = bool(my_user_id) and my_user_id in submitted_ids
+    return revealed, done, total, i_submitted
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -413,12 +442,21 @@ def list_candidates(slug: str, user: UserInfo = Depends(current_user)):
         )
         votes_data = votes_res.data
 
-    results = [
-        _candidate_to_dto(c, user.id, votes_data)
-        for c in candidates_res.data
-    ]
-    results.sort(key=lambda x: -x.vote_count)
-    return results
+    revealed, _done, _total, _mine = _vote_reveal_state(db, room["id"], user.id)
+
+    rows = candidates_res.data
+    if revealed:
+        # After reveal, rank by vote tally (highest first).
+        count_map: dict[str, int] = {}
+        for v in votes_data:
+            count_map[v["candidate_id"]] = count_map.get(v["candidate_id"], 0) + v["vote_value"]
+        rows = sorted(rows, key=lambda c: -count_map.get(c["id"], 0))
+    else:
+        # While voting, keep a STABLE order (insertion order) so the buttons
+        # don't jump around as people vote at the same time.
+        rows = sorted(rows, key=lambda c: c.get("created_at") or "")
+
+    return [_candidate_to_dto(c, user.id, votes_data, reveal=revealed) for c in rows]
 
 
 @router.post("/propose", response_model=DestinationCandidate)
@@ -531,6 +569,62 @@ def vote(
     return {"ok": True, "vote": vote_value}
 
 
+# ── Blind reveal for voting ───────────────────────────────────────────────────
+
+
+class VoteStatus(BaseModel):
+    votes_revealed: bool      # True once every current member has locked in
+    voters_done: int          # how many current members have locked in
+    voters_total: int         # current member count
+    i_submitted: bool         # has the caller locked in their votes
+
+
+@router.get("/vote-status", response_model=VoteStatus)
+def get_vote_status(slug: str, user: UserInfo = Depends(current_user)):
+    """Progress of the blind voting reveal for this room."""
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+    revealed, done, total, i_sub = _vote_reveal_state(db, room["id"], user.id)
+    return VoteStatus(
+        votes_revealed=revealed, voters_done=done, voters_total=total, i_submitted=i_sub
+    )
+
+
+@router.post("/lock-votes", response_model=VoteStatus)
+def lock_votes(slug: str, user: UserInfo = Depends(current_user)):
+    """Lock in the caller's votes. Counts reveal once everyone has locked in."""
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+    db.table("destination_vote_submissions").upsert(
+        {"room_id": room["id"], "user_id": user.id},
+        on_conflict="room_id,user_id",
+    ).execute()
+    revealed, done, total, i_sub = _vote_reveal_state(db, room["id"], user.id)
+    return VoteStatus(
+        votes_revealed=revealed, voters_done=done, voters_total=total, i_submitted=i_sub
+    )
+
+
+@router.post("/unlock-votes", response_model=VoteStatus)
+def unlock_votes(slug: str, user: UserInfo = Depends(current_user)):
+    """Undo a lock-in (change your mind) — only possible before full reveal."""
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+    revealed, _d, _t, _s = _vote_reveal_state(db, room["id"], user.id)
+    if revealed:
+        raise HTTPException(409, "Votes are already revealed — they can't be re-hidden.")
+    db.table("destination_vote_submissions").delete().eq(
+        "room_id", room["id"]
+    ).eq("user_id", user.id).execute()
+    revealed, done, total, i_sub = _vote_reveal_state(db, room["id"], user.id)
+    return VoteStatus(
+        votes_revealed=revealed, voters_done=done, voters_total=total, i_submitted=i_sub
+    )
+
+
 @router.get("/suggest", response_model=list[DestinationCandidate])
 def suggest_destinations(
     slug: str,
@@ -639,12 +733,21 @@ def suggest_destinations(
         )
         votes_data = votes_res.data
 
-    results = [
-        _candidate_to_dto(c, user.id, votes_data)
-        for c in candidates_res.data
-    ]
-    results.sort(key=lambda x: -x.vote_count)
-    return results
+    revealed, _done, _total, _mine = _vote_reveal_state(db, room["id"], user.id)
+
+    rows = candidates_res.data
+    if revealed:
+        # After reveal, rank by vote tally (highest first).
+        count_map: dict[str, int] = {}
+        for v in votes_data:
+            count_map[v["candidate_id"]] = count_map.get(v["candidate_id"], 0) + v["vote_value"]
+        rows = sorted(rows, key=lambda c: -count_map.get(c["id"], 0))
+    else:
+        # While voting, keep a STABLE order (insertion order) so the buttons
+        # don't jump around as people vote at the same time.
+        rows = sorted(rows, key=lambda c: c.get("created_at") or "")
+
+    return [_candidate_to_dto(c, user.id, votes_data, reveal=revealed) for c in rows]
 
 
 @router.get("/pick-random")

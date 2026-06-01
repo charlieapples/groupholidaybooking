@@ -265,6 +265,29 @@ export function voteDestination(
   );
 }
 
+export interface VoteStatus {
+  votes_revealed: boolean;
+  voters_done: number;
+  voters_total: number;
+  i_submitted: boolean;
+}
+
+export function getVoteStatus(token: string, slug: string) {
+  return apiFetch<VoteStatus>(`/rooms/${slug}/destinations/vote-status`, token);
+}
+
+export function lockVotes(token: string, slug: string) {
+  return apiFetch<VoteStatus>(`/rooms/${slug}/destinations/lock-votes`, token, {
+    method: "POST",
+  });
+}
+
+export function unlockVotes(token: string, slug: string) {
+  return apiFetch<VoteStatus>(`/rooms/${slug}/destinations/unlock-votes`, token, {
+    method: "POST",
+  });
+}
+
 export interface DestinationPreferences {
   climate?: string | null;
   setting?: string | null;

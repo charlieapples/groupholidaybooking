@@ -523,7 +523,12 @@ def _purge_member_room_data(db, room_id: str, user_id: str) -> None:
     a cleanup failure must not block the member removal itself.
     """
     # These tables are keyed by (room_id, user_id) — straightforward delete.
-    for table in ("availability_blocks", "availability_submissions", "trip_preferences"):
+    for table in (
+        "availability_blocks",
+        "availability_submissions",
+        "trip_preferences",
+        "destination_vote_submissions",
+    ):
         try:
             db.table(table).delete().eq("room_id", room_id).eq("user_id", user_id).execute()
         except Exception:
