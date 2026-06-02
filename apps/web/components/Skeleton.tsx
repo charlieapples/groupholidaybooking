@@ -32,7 +32,7 @@ export function DashboardSkeleton() {
     <main className="min-h-screen bg-gray-50">
       <nav className="border-b bg-white px-6 py-4">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <span className="text-xl font-bold text-blue-600">✈️ Group Holiday</span>
+          <span className="text-xl font-bold text-blue-600">✈️ Group Holiday Booking</span>
           <Skeleton className="h-5 w-24" />
         </div>
       </nav>

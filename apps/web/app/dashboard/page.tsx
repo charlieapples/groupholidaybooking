@@ -160,7 +160,7 @@ export default function Dashboard() {
     const url = `${window.location.origin}/room/${slug}/join`;
     try {
       if (typeof navigator.share === "function") {
-        await navigator.share({ title: "Group Holiday invite", url });
+        await navigator.share({ title: "Group Holiday Booking invite", url });
         return;
       }
       await navigator.clipboard.writeText(url);
@@ -212,7 +212,7 @@ export default function Dashboard() {
       {/* Nav */}
       <nav className="border-b bg-white px-6 py-4">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <span className="text-xl font-bold text-blue-600">✈️ Group Holiday</span>
+          <span className="text-xl font-bold text-blue-600">✈️ Group Holiday Booking</span>
           <div className="flex items-center gap-4">
             <button onClick={() => router.push("/profile")} className="text-sm text-gray-600 hover:text-gray-900 underline-offset-2 hover:underline">
               {user?.name || user?.email}

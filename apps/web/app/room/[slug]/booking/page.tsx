@@ -627,7 +627,7 @@ function CopyGroupPlanButton({
   function buildPlanText(): string {
     const lines: string[] = [];
     const destDisplay = destResult.destination_name ?? destIata ?? "TBC";
-    lines.push(`✈️ ${room.name} — Group Holiday Plan`);
+    lines.push(`✈️ ${room.name} — Group Holiday Booking Plan`);
     lines.push(`📍 Destination: ${destDisplay}`);
     if (destResult.shared_out_date) {
       lines.push(`📅 Dates: ${destResult.shared_out_date} → ${destResult.shared_return_date}`);

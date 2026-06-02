@@ -52,7 +52,7 @@ export default function JoinRoomPage() {
   // Update browser tab title
   useEffect(() => {
     const name = room?.name ?? roomName;
-    document.title = name ? `Join ${name} | Group Holiday` : "Join a Holiday | Group Holiday Booking";
+    document.title = name ? `Join ${name} | Group Holiday Booking` : "Join a Holiday | Group Holiday Booking";
     return () => { document.title = "Group Holiday Booking — plan your trip together"; };
   }, [room?.name, roomName]);
 

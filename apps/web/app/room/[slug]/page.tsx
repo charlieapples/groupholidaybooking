@@ -321,7 +321,7 @@ export default function RoomPage() {
     // Use Web Share API on supported devices (mobile gets a native share sheet)
     if (typeof navigator.share === "function") {
       try {
-        await navigator.share({ title: "Group Holiday invite", text: shareText, url });
+        await navigator.share({ title: "Group Holiday Booking invite", text: shareText, url });
         return;
       } catch (err) {
         // User cancelled — only fall through to clipboard if it wasn't a cancellation

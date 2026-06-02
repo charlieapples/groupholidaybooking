@@ -91,7 +91,7 @@ export default function PublicResultsPage() {
         {/* Header */}
         <div className="text-center space-y-2">
           <a href="/" className="text-sm text-gray-400 hover:text-blue-600 transition-colors">
-            ✈️ Group Holiday
+            ✈️ Group Holiday Booking
           </a>
           <h1 className="text-3xl font-bold text-gray-900">{summary.name}</h1>
           <p className="text-gray-500 text-sm">Group trip summary · {summary.member_count} travellers</p>
@@ -157,7 +157,7 @@ export default function PublicResultsPage() {
         </div>
 
         <p className="text-center text-xs text-gray-300">
-          Powered by Group Holiday · Prices are estimates and may vary
+          Powered by Group Holiday Booking · Prices are estimates and may vary
         </p>
       </div>
     </main>
