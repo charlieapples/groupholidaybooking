@@ -145,12 +145,12 @@ function LandingPageContent() {
       <div className="max-w-2xl space-y-6">
         {isInvite && (
           <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
-            🎉 You&apos;ve been invited to a Holiday! Sign in with Google to join the group.
+            🎉 You&apos;ve been invited to a Holiday! Sign in below to join the group.
           </div>
         )}
         {nextPath && !isInvite && (
           <div className="rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
-            Sign in with Google to continue.
+            Sign in to continue.
           </div>
         )}
         <div className="text-6xl">✈️</div>
