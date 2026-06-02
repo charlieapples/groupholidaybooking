@@ -464,6 +464,21 @@ function ImportPanel({
               {gcalError && (
                 <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{gcalError}</div>
               )}
+
+              {/* Reliable fallback: .ics upload (no permissions / no app-verification needed) */}
+              <div className="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-3">
+                <p className="text-xs text-gray-600 mb-2">
+                  <strong>Prefer no permissions?</strong> Export your calendar and upload it —
+                  works instantly, and you can upload several. In Google Calendar: Settings →
+                  Import &amp; Export → Export.
+                </p>
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="rounded-lg border border-dashed border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:border-blue-400 hover:text-blue-600 w-full"
+                >
+                  📂 Upload .ics file
+                </button>
+              </div>
             </div>
           )}
 
@@ -517,19 +532,20 @@ function ImportPanel({
                 <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{outlookError}</div>
               )}
 
-              {/* Manual fallback */}
-              <details className="text-sm text-gray-500">
-                <summary className="cursor-pointer hover:text-gray-700">Or upload a .ics file instead</summary>
-                <p className="mt-2 text-xs text-gray-400">
-                  Outlook desktop: File → Open &amp; Export → Import/Export → Export to a file → iCalendar.
+              {/* Reliable fallback: .ics upload */}
+              <div className="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-3">
+                <p className="text-xs text-gray-600 mb-2">
+                  <strong>Prefer no permissions?</strong> Export your calendar and upload it.
+                  Outlook desktop: File → Open &amp; Export → Import/Export → Export to a file →
+                  iCalendar.
                 </p>
                 <button
                   onClick={() => fileRef.current?.click()}
-                  className="mt-2 rounded-lg border border-dashed border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 hover:border-blue-400 hover:text-blue-600 w-full"
+                  className="rounded-lg border border-dashed border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:border-blue-400 hover:text-blue-600 w-full"
                 >
                   📂 Upload .ics file
                 </button>
-              </details>
+              </div>
             </div>
           )}
 
