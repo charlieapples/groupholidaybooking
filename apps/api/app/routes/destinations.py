@@ -232,16 +232,24 @@ def _vote_reveal_state(db, room_id: str, my_user_id: Optional[str] = None):
     Mirrors the availability blind-reveal: votes are revealed only once every
     CURRENT member has locked in (subset test — robust to stale submissions
     from members who have since left).
+
+    Defensive: if the destination_vote_submissions table doesn't exist yet
+    (migration 009 not run), degrade to "not revealed" rather than 500ing the
+    whole destinations page.
     """
     members = db.table("room_members").select("user_id").eq("room_id", room_id).execute()
     member_ids = {m["user_id"] for m in (members.data or [])}
-    subs = (
-        db.table("destination_vote_submissions")
-        .select("user_id")
-        .eq("room_id", room_id)
-        .execute()
-    )
-    submitted_ids = {s["user_id"] for s in (subs.data or [])}
+    try:
+        subs = (
+            db.table("destination_vote_submissions")
+            .select("user_id")
+            .eq("room_id", room_id)
+            .execute()
+        )
+        submitted_ids = {s["user_id"] for s in (subs.data or [])}
+    except Exception:
+        log.warning("destination_vote_submissions query failed (migration 009 not run?) — treating votes as not revealed")
+        return False, 0, len(member_ids), False
     revealed = bool(member_ids) and member_ids.issubset(submitted_ids)
     done = len(submitted_ids & member_ids)
     total = len(member_ids)
