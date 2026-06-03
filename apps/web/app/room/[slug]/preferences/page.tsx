@@ -428,32 +428,31 @@ export default function PreferencesPage() {
             {/* Travel-time vs money trade-off for the flight optimiser */}
             <div>
               <label className="mb-1 block text-sm font-medium text-blue-800">
-                Is it worth paying to travel less?
+                What is an hour of travel time worth? (£/hour)
               </label>
               <p className="mb-2 text-xs text-blue-700">
-                The optimiser checks every airport each member can reach. This sets how much
-                the group values <strong>time saved</strong> getting to the airport.
+                The optimiser checks every airport each member can reach. Enter how much the group
+                values <strong>time saved</strong> getting to the airport — any number works.
               </p>
-              <input
-                type="range"
-                min={0}
-                max={50}
-                step={5}
-                value={timeValue}
-                onChange={(e) => setTimeValue(Number(e.target.value))}
-                className="w-full accent-blue-600"
-              />
-              <div className="mt-1 flex justify-between text-xs text-blue-700">
-                <span>£0/hr</span>
-                <span className="font-semibold text-blue-900">
-                  {timeValue === 0
-                    ? "Cheapest — distance doesn't matter"
-                    : timeValue >= 45
-                    ? "Shortest journeys — take the closest airport"
-                    : `£${timeValue}/hr of travel time`}
-                </span>
-                <span>£50/hr</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-blue-800">£</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={timeValue}
+                  onChange={(e) => setTimeValue(Math.max(0, Number(e.target.value) || 0))}
+                  className="w-32 rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+                />
+                <span className="text-sm text-blue-700">/ hour</span>
               </div>
+              <p className="mt-1.5 text-xs text-blue-700">
+                {timeValue === 0
+                  ? "£0 → cheapest option, no matter how far anyone travels to the airport."
+                  : timeValue >= 40
+                  ? `£${timeValue}/hr → strongly prefers shorter journeys (people take their closest airport).`
+                  : `£${timeValue}/hr → balances ticket price against travel time.`}
+              </p>
             </div>
 
             <button
