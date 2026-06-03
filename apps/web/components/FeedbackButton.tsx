@@ -30,12 +30,13 @@ export default function FeedbackButton({ token, page, roomSlug }: Props) {
   if (!token) return null;
 
   async function handleSubmit() {
-    if (!token || rating === 0) return;
+    // A comment OR a rating is enough — text-only feedback is fine.
+    if (!token || (rating === 0 && !comment.trim())) return;
     setSending(true);
     setError(null);
     try {
       await submitFeedback(token, {
-        rating,
+        rating: rating > 0 ? rating : undefined,
         comment: comment.trim() || undefined,
         page,
         room_slug: roomSlug,
@@ -94,30 +95,34 @@ export default function FeedbackButton({ token, page, roomSlug }: Props) {
                   </button>
                 </div>
 
-                {/* Star rating */}
-                <div className="flex gap-1 justify-center py-1">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      onMouseEnter={() => setHovered(star)}
-                      onMouseLeave={() => setHovered(0)}
-                      onClick={() => setRating(star)}
-                      className="text-3xl transition-transform hover:scale-110"
-                      aria-label={`${star} star${star !== 1 ? "s" : ""}`}
-                    >
-                      {star <= displayRating ? "⭐" : "☆"}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Optional comment */}
+                {/* Comment — the main input */}
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  placeholder="Anything you'd like to add? (optional)"
+                  placeholder="What's working, what's not, any ideas…"
                   rows={3}
+                  autoFocus
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none resize-none"
                 />
+
+                {/* Optional star rating */}
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-xs text-gray-400">Rating (optional):</span>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        onMouseEnter={() => setHovered(star)}
+                        onMouseLeave={() => setHovered(0)}
+                        onClick={() => setRating(star === rating ? 0 : star)}
+                        className="text-2xl transition-transform hover:scale-110"
+                        aria-label={`${star} star${star !== 1 ? "s" : ""}`}
+                      >
+                        {star <= displayRating ? "⭐" : "☆"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {error && (
                   <p className="text-xs text-red-600 text-center">{error}</p>
@@ -125,7 +130,7 @@ export default function FeedbackButton({ token, page, roomSlug }: Props) {
 
                 <button
                   onClick={handleSubmit}
-                  disabled={rating === 0 || sending}
+                  disabled={sending || (rating === 0 && !comment.trim())}
                   className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                   {sending ? "Sending…" : "Send feedback"}

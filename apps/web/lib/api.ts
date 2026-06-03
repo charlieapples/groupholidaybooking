@@ -462,7 +462,7 @@ export function getLivePrice(
 
 export function submitFeedback(
   token: string,
-  body: { rating: number; comment?: string; page?: string; room_slug?: string }
+  body: { rating?: number; comment?: string; page?: string; room_slug?: string }
 ) {
   return apiFetch<void>("/feedback", token, {
     method: "POST",
