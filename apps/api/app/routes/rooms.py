@@ -53,6 +53,9 @@ class RoomResponse(BaseModel):
     # Flight optimiser: £/hr the group puts on ground-travel time.
     # 0 = cheapest regardless of distance; higher = prefer shorter journeys.
     time_value_per_hour: float = 0.0
+    # Destination voting style: 'ranked' (one proposal each + rank all) or 'open'
+    # (free AI suggestions + thumbs voting).
+    voting_style: str = "ranked"
 
 
 STEP_ORDER = ["availability", "duration", "budget", "destination", "flights", "booking", "done"]
@@ -70,6 +73,7 @@ class UpdateRoomRequest(BaseModel):
     budget_gbp: Optional[float] = None
     destination_iata: Optional[str] = None
     time_value_per_hour: Optional[float] = None
+    voting_style: Optional[str] = None
 
 
 class MemberResponse(BaseModel):
@@ -146,6 +150,7 @@ def _room_with_member_count(db, room: dict, user_id: str) -> RoomResponse:
         budget_gbp=room.get("budget_gbp"),
         destination_iata=room.get("destination_iata"),
         time_value_per_hour=room.get("time_value_per_hour") or 0.0,
+        voting_style=room.get("voting_style") or "ranked",
     )
 
 
@@ -208,6 +213,7 @@ def list_rooms(user: UserInfo = Depends(current_user)):
             budget_gbp=room.get("budget_gbp"),
             destination_iata=room.get("destination_iata"),
             time_value_per_hour=room.get("time_value_per_hour") or 0.0,
+            voting_style=room.get("voting_style") or "ranked",
         ))
     return result
 
@@ -297,6 +303,7 @@ def create_room(
         min_nights=None, max_nights=None,
         budget_gbp=None, destination_iata=None,
         time_value_per_hour=0.0,
+        voting_style="ranked",
     )
 
 

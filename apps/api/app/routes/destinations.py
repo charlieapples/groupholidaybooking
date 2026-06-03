@@ -196,7 +196,10 @@ class DestinationCandidate(BaseModel):
     total_cost_gbp: Optional[float] = None
     cost_breakdown: dict = {}
     vote_count: int = 0
-    my_vote: int = 0                        # caller's current vote value
+    my_vote: int = 0                        # open mode: caller's +1/0/-1 vote
+    # Ranked mode:
+    borda_points: Optional[int] = None     # sum of ranks (lower = better); None until revealed
+    my_rank: Optional[int] = None          # caller's rank for this candidate (1 = first choice)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -223,6 +226,33 @@ def _candidate_to_dto(
         cost_breakdown=c.get("cost_breakdown") or {},
         vote_count=vote_count,
         my_vote=my_vote,
+    )
+
+
+def _ranked_candidate_to_dto(
+    c: dict, my_user_id: str, votes: list[dict], reveal: bool
+) -> DestinationCandidate:
+    """Build a DTO for RANKED mode. votes.vote_value holds each person's rank
+    (1 = first choice). borda_points (sum of ranks, lower = better) is hidden
+    until the blind reveal; my_rank is always visible to the caller."""
+    my_rank = next(
+        (v["vote_value"] for v in votes if v["candidate_id"] == c["id"] and v["user_id"] == my_user_id),
+        None,
+    )
+    borda = (
+        sum(v["vote_value"] for v in votes if v["candidate_id"] == c["id"]) if reveal else None
+    )
+    return DestinationCandidate(
+        id=c["id"],
+        iata_code=c["iata_code"],
+        name=label_dest(c["iata_code"], "name"),
+        proposed_by=c.get("proposed_by"),
+        total_cost_gbp=c.get("total_cost_gbp"),
+        cost_breakdown=c.get("cost_breakdown") or {},
+        vote_count=0,
+        my_vote=0,
+        borda_points=borda,
+        my_rank=my_rank,
     )
 
 
@@ -255,6 +285,65 @@ def _vote_reveal_state(db, room_id: str, my_user_id: Optional[str] = None):
     total = len(member_ids)
     i_submitted = bool(my_user_id) and my_user_id in submitted_ids
     return revealed, done, total, i_submitted
+
+
+def _render_candidates(db, room: dict, user_id: str, candidates_data: list[dict], votes_data: list[dict]):
+    """Build the candidate-list response, branching on the room's voting style.
+
+    ranked: vote_value = each person's rank (1 = first choice). Sorted by Borda
+            total (lowest sum wins) once revealed; otherwise insertion order.
+    open:   vote_value = +1/0/-1. Sorted by tally (highest first) once revealed.
+    """
+    style = room.get("voting_style") or "ranked"
+    revealed, _done, _total, _mine = _vote_reveal_state(db, room["id"], user_id)
+    rows = list(candidates_data)
+
+    if style == "ranked":
+        if revealed:
+            borda: dict[str, int] = {}
+            for v in votes_data:
+                borda[v["candidate_id"]] = borda.get(v["candidate_id"], 0) + (v["vote_value"] or 0)
+            # Lowest total rank points wins; un-ranked candidates sink to the bottom.
+            rows = sorted(rows, key=lambda c: borda.get(c["id"], 10**9))
+        else:
+            rows = sorted(rows, key=lambda c: c.get("created_at") or "")
+        return [_ranked_candidate_to_dto(c, user_id, votes_data, revealed) for c in rows]
+
+    # open mode
+    if revealed:
+        count_map: dict[str, int] = {}
+        for v in votes_data:
+            count_map[v["candidate_id"]] = count_map.get(v["candidate_id"], 0) + v["vote_value"]
+        rows = sorted(rows, key=lambda c: -count_map.get(c["id"], 0))
+    else:
+        rows = sorted(rows, key=lambda c: c.get("created_at") or "")
+    return [_candidate_to_dto(c, user_id, votes_data, reveal=revealed) for c in rows]
+
+
+# Light content safeguard for free-text that gets sent to the AI / shown to the
+# group. Not a full moderation system — just blocks the obvious stuff so a joke
+# entry like "strippers" doesn't end up driving destination suggestions.
+_BLOCKED_TERMS = {
+    "strippers", "stripper", "strip club", "strip-club", "hookers", "hooker",
+    "prostitute", "prostitution", "brothel", "escort", "escorts", "cocaine",
+    "heroin", "meth", "drugs", "porn", "pornography", "orgy", "sex worker",
+    "rape", "nazi", "terrorist", "terrorism",
+}
+
+
+def assert_clean_text(text: Optional[str]) -> None:
+    """Raise 422 if free-text contains obviously inappropriate content."""
+    if not text:
+        return
+    lowered = text.lower()
+    for term in _BLOCKED_TERMS:
+        # word-ish boundary check so "scunthorpe" etc. don't false-positive
+        if re.search(rf"(?<![a-z]){re.escape(term)}(?![a-z])", lowered):
+            raise HTTPException(
+                422,
+                "That contains content we can't use for holiday planning. "
+                "Please keep preferences travel-related.",
+            )
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -400,6 +489,11 @@ def submit_preferences(
     room = _get_room_by_slug(db, slug)
     _assert_member(db, room["id"], user.id)
 
+    # Safeguard: keep the free-text travel-related before it reaches the AI.
+    assert_clean_text(body.free_text)
+    assert_clean_text(body.must_have)
+    assert_clean_text(body.avoid)
+
     import json as _json
 
     db.table("trip_preferences").upsert(
@@ -450,21 +544,7 @@ def list_candidates(slug: str, user: UserInfo = Depends(current_user)):
         )
         votes_data = votes_res.data
 
-    revealed, _done, _total, _mine = _vote_reveal_state(db, room["id"], user.id)
-
-    rows = candidates_res.data
-    if revealed:
-        # After reveal, rank by vote tally (highest first).
-        count_map: dict[str, int] = {}
-        for v in votes_data:
-            count_map[v["candidate_id"]] = count_map.get(v["candidate_id"], 0) + v["vote_value"]
-        rows = sorted(rows, key=lambda c: -count_map.get(c["id"], 0))
-    else:
-        # While voting, keep a STABLE order (insertion order) so the buttons
-        # don't jump around as people vote at the same time.
-        rows = sorted(rows, key=lambda c: c.get("created_at") or "")
-
-    return [_candidate_to_dto(c, user.id, votes_data, reveal=revealed) for c in rows]
+    return _render_candidates(db, room, user.id, candidates_res.data, votes_data)
 
 
 @router.post("/propose", response_model=DestinationCandidate)
@@ -473,14 +553,26 @@ def propose_destination(
     iata_code: str,
     user: UserInfo = Depends(current_user),
 ):
-    """User manually proposes a destination."""
+    """User manually proposes a destination.
+
+    In RANKED mode each member may put forward exactly ONE destination, so a new
+    proposal replaces this member's previous pick. In OPEN mode it's a plain add.
+    """
     db = get_client()
     room = _get_room_by_slug(db, slug)
     _assert_member(db, room["id"], user.id)
 
     iata_upper = iata_code.upper()
+    style = room.get("voting_style") or "ranked"
 
-    # Upsert (in case it was already algorithm-proposed)
+    if style == "ranked":
+        # One pick per person: clear this member's previous proposal first.
+        # (Cascades to any ranks on it — fine, ranking happens after proposing.)
+        db.table("destination_candidates").delete().eq("room_id", room["id"]).eq(
+            "proposed_by", user.id
+        ).execute()
+
+    # Upsert (in case it was already algorithm-proposed or proposed by someone else)
     res = (
         db.table("destination_candidates")
         .upsert(
@@ -633,6 +725,72 @@ def unlock_votes(slug: str, user: UserInfo = Depends(current_user)):
     )
 
 
+# ── Ranked voting (Borda) ─────────────────────────────────────────────────────
+
+
+class RankItem(BaseModel):
+    candidate_id: str
+    rank: int
+
+
+class RankSubmission(BaseModel):
+    rankings: list[RankItem]
+
+
+@router.post("/rank", response_model=VoteStatus)
+def submit_ranking(
+    slug: str,
+    body: RankSubmission,
+    user: UserInfo = Depends(current_user),
+):
+    """RANKED mode: submit a full 1..N ranking of all candidates and lock in.
+
+    Stores each rank in destination_votes.vote_value (1 = first choice) and
+    records the lock-in. Once every member has locked in, results reveal and the
+    winner is the destination with the lowest total rank points (Borda count).
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+
+    if (room.get("voting_style") or "ranked") != "ranked":
+        raise HTTPException(409, "This room is using open voting, not ranked voting.")
+
+    cand_res = (
+        db.table("destination_candidates")
+        .select("id")
+        .eq("room_id", room["id"])
+        .execute()
+    )
+    valid_ids = {c["id"] for c in cand_res.data}
+    n = len(valid_ids)
+    if n == 0:
+        raise HTTPException(409, "No destinations have been proposed yet.")
+
+    submitted_ids = [r.candidate_id for r in body.rankings]
+    submitted_ranks = sorted(r.rank for r in body.rankings)
+    if set(submitted_ids) != valid_ids or len(submitted_ids) != n:
+        raise HTTPException(422, "Rank every proposed destination exactly once.")
+    if submitted_ranks != list(range(1, n + 1)):
+        raise HTTPException(422, f"Use each rank from 1 to {n} exactly once.")
+
+    for r in body.rankings:
+        db.table("destination_votes").upsert(
+            {"candidate_id": r.candidate_id, "user_id": user.id, "vote_value": r.rank},
+            on_conflict="candidate_id,user_id",
+        ).execute()
+
+    db.table("destination_vote_submissions").upsert(
+        {"room_id": room["id"], "user_id": user.id},
+        on_conflict="room_id,user_id",
+    ).execute()
+
+    revealed, done, total, i_sub = _vote_reveal_state(db, room["id"], user.id)
+    return VoteStatus(
+        votes_revealed=revealed, voters_done=done, voters_total=total, i_submitted=i_sub
+    )
+
+
 @router.get("/suggest", response_model=list[DestinationCandidate])
 def suggest_destinations(
     slug: str,
@@ -741,21 +899,61 @@ def suggest_destinations(
         )
         votes_data = votes_res.data
 
-    revealed, _done, _total, _mine = _vote_reveal_state(db, room["id"], user.id)
+    return _render_candidates(db, room, user.id, candidates_res.data, votes_data)
 
-    rows = candidates_res.data
-    if revealed:
-        # After reveal, rank by vote tally (highest first).
-        count_map: dict[str, int] = {}
-        for v in votes_data:
-            count_map[v["candidate_id"]] = count_map.get(v["candidate_id"], 0) + v["vote_value"]
-        rows = sorted(rows, key=lambda c: -count_map.get(c["id"], 0))
-    else:
-        # While voting, keep a STABLE order (insertion order) so the buttons
-        # don't jump around as people vote at the same time.
-        rows = sorted(rows, key=lambda c: c.get("created_at") or "")
 
-    return [_candidate_to_dto(c, user.id, votes_data, reveal=revealed) for c in rows]
+class DestinationIdea(BaseModel):
+    iata_code: str
+    name: str
+
+
+@router.get("/ideas", response_model=list[DestinationIdea])
+def suggest_ideas(
+    slug: str,
+    top_n: int = 6,
+    user: UserInfo = Depends(current_user),
+):
+    """RANKED mode helper: return AI destination IDEAS for one member to choose
+    from, WITHOUT adding them as candidates. The member then proposes exactly one
+    (their own pick or one of these) via /propose. Falls back to the rule-based
+    scorer, then popular defaults, just like /suggest.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+
+    prefs_res = (
+        db.table("trip_preferences")
+        .select("pref_destination_answers")
+        .eq("room_id", room["id"])
+        .execute()
+    )
+    prefs_list: list[dict] = []
+    for row in prefs_res.data:
+        raw = row.get("pref_destination_answers")
+        if not raw:
+            continue
+        if isinstance(raw, str):
+            try:
+                prefs_list.append(_json.loads(raw))
+            except Exception:
+                pass
+        elif isinstance(raw, dict):
+            prefs_list.append(raw)
+
+    top: list[str] = []
+    if prefs_list:
+        gemini_picks = _gemini_suggestions(prefs_list, room, top_n)
+        if gemini_picks:
+            top = gemini_picks
+    if not top and prefs_list:
+        scored = [(iata, score_destination(iata, prefs_list)) for iata in DEST_NAMES]
+        scored.sort(key=lambda x: -x[1])
+        top = [iata for iata, s in scored if s > 0][:top_n]
+    if not top:
+        top = list(POPULAR_LABELS.values())[:top_n]
+
+    return [DestinationIdea(iata_code=iata, name=label_dest(iata, "name")) for iata in top]
 
 
 @router.get("/pick-random")
