@@ -992,6 +992,65 @@ def suggest_ideas(
     return out
 
 
+class FlightEstimate(BaseModel):
+    flight_return_gbp: int
+    is_live: bool = True
+
+
+@router.get("/flight-estimates", response_model=dict[str, FlightEstimate])
+def flight_estimates(slug: str, user: UserInfo = Depends(current_user)):
+    """LIVE rough return-flight prices per candidate, from London (a UK proxy)
+    for the room's agreed travel window. Returns {iata: {flight_return_gbp}}.
+
+    This is a ballpark for the voting cards — the real per-person, per-airport
+    search happens at the Flights step. Returns an empty object (so the UI keeps
+    its offline region estimates) when dates aren't set yet or the fare API is
+    unavailable.
+    """
+    from datetime import date as _date
+    from ..core.flights import cheapest_prices_by_destination
+
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+
+    start = room.get("agreed_start") or room.get("search_start")
+    end = room.get("agreed_end") or room.get("search_end")
+    if not (start and end):
+        return {}
+    try:
+        sd = _date.fromisoformat(str(start)[:10])
+        ed = _date.fromisoformat(str(end)[:10])
+    except (ValueError, TypeError):
+        return {}
+
+    min_n = int(room.get("min_nights") or 2)
+    max_n = int(room.get("max_nights") or 14)
+
+    cands = (
+        db.table("destination_candidates")
+        .select("iata_code")
+        .eq("room_id", room["id"])
+        .execute()
+    )
+    wanted = {c["iata_code"] for c in (cands.data or [])}
+    if not wanted:
+        return {}
+
+    try:
+        prices = cheapest_prices_by_destination("LON", sd, ed, min_n, max_n)
+    except Exception:
+        log.warning("Live flight-estimate lookup failed — falling back to offline estimates")
+        return {}
+
+    out: dict[str, FlightEstimate] = {}
+    for iata in wanted:
+        p = prices.get(iata)
+        if p and p > 0:
+            out[iata] = FlightEstimate(flight_return_gbp=round(p), is_live=True)
+    return out
+
+
 @router.get("/pick-random")
 def pick_random(slug: str, user: UserInfo = Depends(current_user)):
     """'Surprise us' — pick a random destination from the room's candidates.

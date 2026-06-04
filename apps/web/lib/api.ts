@@ -261,6 +261,20 @@ export function getDestinationIdeas(token: string, slug: string, top_n = 6) {
   );
 }
 
+export interface FlightEstimate {
+  flight_return_gbp: number;
+  is_live: boolean;
+}
+
+/** Live rough return-flight prices per candidate IATA (from London, for the
+ *  agreed window). Empty object when dates aren't set or the API is unavailable. */
+export function getFlightEstimates(token: string, slug: string) {
+  return apiFetch<Record<string, FlightEstimate>>(
+    `/rooms/${slug}/destinations/flight-estimates`,
+    token
+  );
+}
+
 /** Ranked mode: submit a full 1..N ranking of all candidates and lock in. */
 export function submitRanking(
   token: string,

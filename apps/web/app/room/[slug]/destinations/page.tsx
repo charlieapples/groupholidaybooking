@@ -18,9 +18,11 @@ import {
   updateRoom,
   getDestinationIdeas,
   submitRanking,
+  getFlightEstimates,
   type Room,
   type DestinationCandidate,
   type DestinationIdea,
+  type FlightEstimate,
   type VoteStatus,
 } from "@/lib/api";
 import dynamic from "next/dynamic";
@@ -77,6 +79,8 @@ export default function DestinationsPage() {
   const [rankOrder, setRankOrder] = useState<string[]>([]);
   const [submittingRank, setSubmittingRank] = useState(false);
   const [changingMode, setChangingMode] = useState(false);
+  // Live flight prices per IATA (from Travelpayouts), merged over offline estimates.
+  const [liveFlights, setLiveFlights] = useState<Record<string, FlightEstimate>>({});
 
   // Pick random
   const [pickingRandom, setPickingRandom] = useState(false);
@@ -242,17 +246,29 @@ export default function DestinationsPage() {
 
   // Small cost-guidance line shown under each destination.
   function CostLine({ c }: { c: DestinationCandidate }) {
-    const hasFlight = c.total_cost_gbp != null || c.est_flight_return_gbp != null;
+    // Prefer the live fare (Travelpayouts) over the offline region estimate.
+    const live = liveFlights[c.iata_code];
+    const flightForTotal =
+      c.total_cost_gbp != null
+        ? c.total_cost_gbp
+        : live
+        ? live.flight_return_gbp
+        : c.est_flight_return_gbp ?? null;
+    const hasFlight = flightForTotal != null;
     if (!hasFlight && c.est_daily_living_gbp == null) return null;
     const tripTotal =
-      c.est_flight_return_gbp != null && c.est_daily_living_gbp != null && avgNights
-        ? c.est_flight_return_gbp + c.est_daily_living_gbp * avgNights
+      flightForTotal != null && c.est_daily_living_gbp != null && avgNights
+        ? flightForTotal + c.est_daily_living_gbp * avgNights
         : null;
     return (
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
         {c.total_cost_gbp != null ? (
           <span title="Actual flight cost found in the flight search">
             ✈️ £{Math.round(c.total_cost_gbp).toLocaleString()} flights
+          </span>
+        ) : live ? (
+          <span className="text-emerald-600" title="Live cheapest return fare from London for your dates (Travelpayouts). The per-person search at the Flights step is exact.">
+            ✈️ £{live.flight_return_gbp.toLocaleString()} flights · live
           </span>
         ) : c.est_flight_return_gbp != null ? (
           <span title={`Rough return flight pp from the UK (≈ £${c.est_flight_low_gbp}–£${c.est_flight_high_gbp})`}>
@@ -296,6 +312,18 @@ export default function DestinationsPage() {
       return [...kept, ...added];
     });
   }, [candidates]);
+
+  // Fetch live flight prices whenever the set of candidates changes. Loads in
+  // the background — cards show offline region estimates until these land.
+  const iataKey = candidates.map((c) => c.iata_code).sort().join(",");
+  useEffect(() => {
+    const t = tokenRef.current;
+    if (!t || !iataKey) {
+      setLiveFlights({});
+      return;
+    }
+    getFlightEstimates(t, slug).then(setLiveFlights).catch(() => {});
+  }, [iataKey, slug]);
 
   function moveRank(id: string, dir: -1 | 1) {
     setRankOrder((prev) => {
