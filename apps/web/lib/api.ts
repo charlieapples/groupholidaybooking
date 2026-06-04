@@ -135,6 +135,11 @@ export function advanceStep(token: string, slug: string) {
   return apiFetch<Room>(`/rooms/${slug}/advance`, token, { method: "POST" });
 }
 
+/** Admin only: move the room back one planning step (no data deleted). */
+export function goBackStep(token: string, slug: string) {
+  return apiFetch<Room>(`/rooms/${slug}/go-back`, token, { method: "POST" });
+}
+
 export function deleteRoom(token: string, slug: string) {
   return apiFetch<void>(`/rooms/${slug}`, token, { method: "DELETE" });
 }

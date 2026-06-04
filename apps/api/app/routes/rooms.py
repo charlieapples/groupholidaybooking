@@ -666,6 +666,38 @@ def advance_step(slug: str, user: UserInfo = Depends(current_user)):
     return _room_with_member_count(db, updated.data[0], user.id)
 
 
+@router.post("/{slug}/go-back", response_model=RoomResponse)
+def go_back_step(slug: str, user: UserInfo = Depends(current_user)):
+    """Move the room back one planning step. Admin only.
+
+    Useful when the group advanced too far (e.g. someone clicked through to
+    Booking before the destination was actually chosen). Doesn't delete any
+    data — it just moves the shared 'current step' pointer back.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    membership = _assert_member(db, room["id"], user.id)
+    if not membership.get("is_admin"):
+        raise HTTPException(403, "Only room admins can change the step.")
+
+    current = room.get("current_step", "availability")
+    try:
+        idx = STEP_ORDER.index(current)
+    except ValueError:
+        idx = 0
+    if idx <= 0:
+        raise HTTPException(400, "Room is already at the first step.")
+    prev_step = STEP_ORDER[idx - 1]
+
+    updated = (
+        db.table("rooms")
+        .update({"current_step": prev_step})
+        .eq("id", room["id"])
+        .execute()
+    )
+    return _room_with_member_count(db, updated.data[0], user.id)
+
+
 # ── Public shareable summary (no auth required) ───────────────────────────────
 
 class PublicRoomSummary(BaseModel):

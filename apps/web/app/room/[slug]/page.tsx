@@ -7,6 +7,7 @@ import {
   getSubmissionStatus,
   updateMyPostcode,
   updateRoom,
+  goBackStep,
   deleteRoom,
   leaveRoom,
   kickMember,
@@ -251,6 +252,21 @@ export default function RoomPage() {
     }
   }
 
+  const [goingBack, setGoingBack] = useState(false);
+  async function handleGoBack() {
+    if (!token || !room?.is_admin) return;
+    setGoingBack(true);
+    try {
+      const updated = await goBackStep(token, slug);
+      setRoom(updated);
+      toast.success("Moved back a step.");
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Couldn't move the step back"));
+    } finally {
+      setGoingBack(false);
+    }
+  }
+
   // Build the rough_window display string in the same format the create modal
   // uses (so the parser reads it back correctly).
   function buildWindowString(): string | null {
@@ -456,6 +472,20 @@ export default function RoomPage() {
               );
             })}
           </div>
+          {/* Admin: undo an over-advance. The step is a shared group pointer the
+              admin moves forward — this lets them move it back without losing data. */}
+          {room.is_admin && stepIdx > 0 && (
+            <div className="mt-3 flex items-center gap-2 border-t pt-3">
+              <button
+                onClick={handleGoBack}
+                disabled={goingBack}
+                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {goingBack ? "Moving…" : `← Move group back to ${STEPS[stepIdx - 1]?.label}`}
+              </button>
+              <span className="text-xs text-gray-400">Admin only · no data is deleted</span>
+            </div>
+          )}
         </div>
 
         <div className="grid gap-8 lg:grid-cols-3">
