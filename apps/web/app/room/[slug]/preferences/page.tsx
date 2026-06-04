@@ -174,7 +174,12 @@ export default function PreferencesPage() {
             ← {room.name}
           </button>
           <span className="font-semibold text-gray-900">Duration &amp; Budget</span>
-          <div />
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+          >
+            Dashboard →
+          </button>
         </div>
       </nav>
 

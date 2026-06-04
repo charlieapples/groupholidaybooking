@@ -234,6 +234,48 @@ export default function DestinationsPage() {
   // The candidate THIS member proposed (ranked mode = their one pick).
   const myPick = candidates.find((c) => c.proposed_by === myUserId) || null;
 
+  // Rough trip length for the "total pp" estimate.
+  const avgNights =
+    room?.min_nights && room?.max_nights
+      ? Math.round((room.min_nights + room.max_nights) / 2)
+      : null;
+
+  // Small cost-guidance line shown under each destination.
+  function CostLine({ c }: { c: DestinationCandidate }) {
+    const hasFlight = c.total_cost_gbp != null || c.est_flight_return_gbp != null;
+    if (!hasFlight && c.est_daily_living_gbp == null) return null;
+    const tripTotal =
+      c.est_flight_return_gbp != null && c.est_daily_living_gbp != null && avgNights
+        ? c.est_flight_return_gbp + c.est_daily_living_gbp * avgNights
+        : null;
+    return (
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+        {c.total_cost_gbp != null ? (
+          <span title="Actual flight cost found in the flight search">
+            ✈️ £{Math.round(c.total_cost_gbp).toLocaleString()} flights
+          </span>
+        ) : c.est_flight_return_gbp != null ? (
+          <span title={`Rough return flight pp from the UK (≈ £${c.est_flight_low_gbp}–£${c.est_flight_high_gbp})`}>
+            ✈️ ~£{c.est_flight_return_gbp} flights
+          </span>
+        ) : null}
+        {c.est_daily_living_gbp != null && (
+          <span title={`Rough bare-minimum daily spend pp — budget bed + food + local transport, no activities (≈ £${c.est_daily_living_low_gbp}–£${c.est_daily_living_high_gbp}/day)`}>
+            🛏️🍽️ ~£{c.est_daily_living_gbp}/day
+          </span>
+        )}
+        {tripTotal != null && (
+          <span
+            className="font-medium text-gray-600"
+            title={`Very rough total pp for ~${avgNights} nights: flights + daily living. No activities.`}
+          >
+            ≈ £{Math.round(tripTotal).toLocaleString()} pp total
+          </span>
+        )}
+      </div>
+    );
+  }
+
   // Keep the local ranking order in sync with the candidate list. New
   // candidates are appended; removed ones drop out; the member's own order is
   // preserved as they reorder.
@@ -439,7 +481,12 @@ export default function DestinationsPage() {
             ← {room.name}
           </button>
           <span className="font-semibold text-gray-900">🗺️ Destinations</span>
-          <div />
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+          >
+            Dashboard →
+          </button>
         </div>
       </nav>
 
@@ -651,10 +698,18 @@ export default function DestinationsPage() {
                       key={idea.iata_code}
                       onClick={() => handlePropose(idea.iata_code)}
                       disabled={proposing}
+                      title={
+                        idea.est_flight_return_gbp != null || idea.est_daily_living_gbp != null
+                          ? `Rough: ✈️ ~£${idea.est_flight_return_gbp ?? "?"} flights · ~£${idea.est_daily_living_gbp ?? "?"}/day living`
+                          : undefined
+                      }
                       className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50"
                     >
                       <span>{flagFor(idea.iata_code)}</span>
                       {idea.name}
+                      {idea.est_daily_living_gbp != null && (
+                        <span className="text-[11px] font-normal text-gray-400">~£{idea.est_daily_living_gbp}/day</span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -808,6 +863,7 @@ export default function DestinationsPage() {
                           <p className="text-xs text-gray-400">
                             Your rank: {c.my_rank ?? "—"}{c.proposed_by === myUserId ? " · your pick" : ""}
                           </p>
+                          <CostLine c={c} />
                         </div>
                       </div>
                       <span className="text-sm font-bold text-gray-900 shrink-0">{c.borda_points} pts</span>
@@ -834,6 +890,7 @@ export default function DestinationsPage() {
                           <p className="text-xs text-gray-400">
                             {c.proposed_by === myUserId ? "Your pick" : "Proposed by member"}
                           </p>
+                          <CostLine c={c} />
                         </div>
                       </div>
                       {!locked && (
@@ -893,8 +950,8 @@ export default function DestinationsPage() {
                       <p className="font-semibold text-gray-900 truncate">{c.name}</p>
                       <p className="text-xs text-gray-400">
                         {c.proposed_by ? "Proposed by member" : "AI suggestion"}
-                        {c.total_cost_gbp ? ` · ~£${c.total_cost_gbp.toLocaleString()} pp` : ""}
                       </p>
+                      <CostLine c={c} />
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5">

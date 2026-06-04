@@ -844,7 +844,12 @@ export default function AvailabilityPage() {
             ← Back to room
           </button>
           <span className="font-semibold text-gray-900">Mark your availability</span>
-          <div />
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+          >
+            Dashboard →
+          </button>
         </div>
       </nav>
 

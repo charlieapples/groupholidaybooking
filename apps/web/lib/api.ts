@@ -228,6 +228,13 @@ export interface DestinationCandidate {
   // Ranked (Borda) mode:
   borda_points?: number | null;   // sum of ranks (lower = better); null until reveal
   my_rank?: number | null;        // caller's rank for this candidate (1 = first choice)
+  // Rough cost guidance (region-level estimates):
+  est_daily_living_gbp?: number | null;
+  est_daily_living_low_gbp?: number | null;
+  est_daily_living_high_gbp?: number | null;
+  est_flight_return_gbp?: number | null;
+  est_flight_low_gbp?: number | null;
+  est_flight_high_gbp?: number | null;
 }
 
 export function listDestinations(token: string, slug: string) {
@@ -237,6 +244,8 @@ export function listDestinations(token: string, slug: string) {
 export interface DestinationIdea {
   iata_code: string;
   name: string;
+  est_daily_living_gbp?: number | null;
+  est_flight_return_gbp?: number | null;
 }
 
 /** Ranked mode: AI ideas for one member to pick from (does NOT add candidates). */

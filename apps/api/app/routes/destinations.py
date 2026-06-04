@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..core.destinations import DEST_NAMES, POPULAR_LABELS, label as label_dest, score_destination
+from ..core.cost_of_living import cost_estimate
 from ..core.ai import GEMINI_MODEL
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user
@@ -200,9 +201,31 @@ class DestinationCandidate(BaseModel):
     # Ranked mode:
     borda_points: Optional[int] = None     # sum of ranks (lower = better); None until revealed
     my_rank: Optional[int] = None          # caller's rank for this candidate (1 = first choice)
+    # Rough cost guidance (region-level estimates, labelled as such in the UI):
+    est_daily_living_gbp: Optional[int] = None   # bare-min per person per day (bed+food+transit)
+    est_daily_living_low_gbp: Optional[int] = None
+    est_daily_living_high_gbp: Optional[int] = None
+    est_flight_return_gbp: Optional[int] = None  # rough return flight pp from the UK
+    est_flight_low_gbp: Optional[int] = None
+    est_flight_high_gbp: Optional[int] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _cost_fields(iata: str) -> dict:
+    """Rough region-level cost guidance for a destination card."""
+    est = cost_estimate(iata)
+    if not est:
+        return {}
+    return {
+        "est_daily_living_gbp": est["daily_living_gbp"],
+        "est_daily_living_low_gbp": est["daily_living_low_gbp"],
+        "est_daily_living_high_gbp": est["daily_living_high_gbp"],
+        "est_flight_return_gbp": est["flight_return_gbp"],
+        "est_flight_low_gbp": est["flight_low_gbp"],
+        "est_flight_high_gbp": est["flight_high_gbp"],
+    }
 
 
 def _candidate_to_dto(
@@ -226,6 +249,7 @@ def _candidate_to_dto(
         cost_breakdown=c.get("cost_breakdown") or {},
         vote_count=vote_count,
         my_vote=my_vote,
+        **_cost_fields(c["iata_code"]),
     )
 
 
@@ -253,6 +277,7 @@ def _ranked_candidate_to_dto(
         my_vote=0,
         borda_points=borda,
         my_rank=my_rank,
+        **_cost_fields(c["iata_code"]),
     )
 
 
@@ -905,6 +930,8 @@ def suggest_destinations(
 class DestinationIdea(BaseModel):
     iata_code: str
     name: str
+    est_daily_living_gbp: Optional[int] = None
+    est_flight_return_gbp: Optional[int] = None
 
 
 @router.get("/ideas", response_model=list[DestinationIdea])
@@ -953,7 +980,16 @@ def suggest_ideas(
     if not top:
         top = list(POPULAR_LABELS.values())[:top_n]
 
-    return [DestinationIdea(iata_code=iata, name=label_dest(iata, "name")) for iata in top]
+    out: list[DestinationIdea] = []
+    for iata in top:
+        est = cost_estimate(iata)
+        out.append(DestinationIdea(
+            iata_code=iata,
+            name=label_dest(iata, "name"),
+            est_daily_living_gbp=est["daily_living_gbp"] if est else None,
+            est_flight_return_gbp=est["flight_return_gbp"] if est else None,
+        ))
+    return out
 
 
 @router.get("/pick-random")
