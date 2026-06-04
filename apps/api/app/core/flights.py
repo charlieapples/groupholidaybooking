@@ -284,23 +284,24 @@ def cheapest_prices_by_destination(
     min_nights: int = 1,
     max_nights: int = 60,
     currency: str = "GBP",
-) -> dict[str, float]:
-    """Return {destination_iata: cheapest round-trip total price} for every
-    destination with a viable cached fare from `origin` in the window.
+) -> dict[str, tuple[float, float]]:
+    """Return {destination_iata: (cheapest, dearest) round-trip total price} for
+    every destination with a viable cached fare from `origin` in the window.
 
     Uses the all-destinations bucket query (a few HTTP calls per month, not one
     per destination), so it's cheap enough to price a whole candidate list at
     once. Result is cached for an hour. Prices are the round-trip total per
-    person (Travelpayouts returns combined round-trip fares).
+    person (Travelpayouts returns combined round-trip fares). The (min, max)
+    range spans the fares Travelpayouts has cached for that route/window.
     """
     cache_key = (
-        f"prices_by_dest:{origin}:{earliest_outbound}:{latest_inbound}"
+        f"price_range_by_dest:{origin}:{earliest_outbound}:{latest_inbound}"
         f":{min_nights}:{max_nights}:{currency}"
     )
     if cache_key in _CACHE:
         return _CACHE[cache_key]
 
-    best: dict[str, float] = {}
+    ranges: dict[str, tuple[float, float]] = {}
     latest_viable_out = latest_inbound - timedelta(days=min_nights)
 
     for month in _months_in_window(earliest_outbound, latest_inbound):
@@ -326,11 +327,11 @@ def cheapest_prices_by_destination(
                 price = float(info.get("price", 0))
                 if price <= 0:
                     continue
-                if dest_code not in best or price < best[dest_code]:
-                    best[dest_code] = price
+                lo, hi = ranges.get(dest_code, (price, price))
+                ranges[dest_code] = (min(lo, price), max(hi, price))
 
-    _CACHE.set(cache_key, best, expire=3600)
-    return best
+    _CACHE.set(cache_key, ranges, expire=3600)
+    return ranges
 
 
 def cheapest_one_way(

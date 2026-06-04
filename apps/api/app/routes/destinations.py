@@ -993,7 +993,8 @@ def suggest_ideas(
 
 
 class FlightEstimate(BaseModel):
-    flight_return_gbp: int
+    flight_min_gbp: int      # cheapest return fare found for the window
+    flight_max_gbp: int      # dearest return fare found for the window
     is_live: bool = True
 
 
@@ -1045,9 +1046,13 @@ def flight_estimates(slug: str, user: UserInfo = Depends(current_user)):
 
     out: dict[str, FlightEstimate] = {}
     for iata in wanted:
-        p = prices.get(iata)
-        if p and p > 0:
-            out[iata] = FlightEstimate(flight_return_gbp=round(p), is_live=True)
+        rng = prices.get(iata)
+        if rng:
+            lo, hi = rng
+            if lo > 0:
+                out[iata] = FlightEstimate(
+                    flight_min_gbp=round(lo), flight_max_gbp=round(hi), is_live=True
+                )
     return out
 
 

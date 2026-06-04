@@ -247,13 +247,14 @@ export default function DestinationsPage() {
   // Small cost-guidance line shown under each destination.
   function CostLine({ c }: { c: DestinationCandidate }) {
     // Prefer the live fare (Travelpayouts) over the offline region estimate.
+    // For the "trip total" we use the CHEAPEST (from) fare.
     const live = liveFlights[c.iata_code];
     const flightForTotal =
       c.total_cost_gbp != null
         ? c.total_cost_gbp
         : live
-        ? live.flight_return_gbp
-        : c.est_flight_return_gbp ?? null;
+        ? live.flight_min_gbp
+        : c.est_flight_low_gbp ?? c.est_flight_return_gbp ?? null;
     const hasFlight = flightForTotal != null;
     if (!hasFlight && c.est_daily_living_gbp == null) return null;
     const tripTotal =
@@ -267,12 +268,13 @@ export default function DestinationsPage() {
             ✈️ £{Math.round(c.total_cost_gbp).toLocaleString()} flights
           </span>
         ) : live ? (
-          <span className="text-emerald-600" title="Live cheapest return fare from London for your dates (Travelpayouts). The per-person search at the Flights step is exact.">
-            ✈️ £{live.flight_return_gbp.toLocaleString()} flights · live
+          <span className="text-emerald-600" title="Live return fares from London for your dates (Travelpayouts): cheapest–dearest currently cached. The per-person search at the Flights step is exact.">
+            ✈️ £{live.flight_min_gbp.toLocaleString()}
+            {live.flight_max_gbp > live.flight_min_gbp ? `–£${live.flight_max_gbp.toLocaleString()}` : ""} flights · live
           </span>
-        ) : c.est_flight_return_gbp != null ? (
-          <span title={`Rough return flight pp from the UK (≈ £${c.est_flight_low_gbp}–£${c.est_flight_high_gbp})`}>
-            ✈️ ~£{c.est_flight_return_gbp} flights
+        ) : c.est_flight_low_gbp != null ? (
+          <span title="Rough return flight pp from the UK (offline estimate)">
+            ✈️ ~£{c.est_flight_low_gbp}–£{c.est_flight_high_gbp} flights
           </span>
         ) : null}
         {c.est_daily_living_gbp != null && (
@@ -283,9 +285,9 @@ export default function DestinationsPage() {
         {tripTotal != null && (
           <span
             className="font-medium text-gray-600"
-            title={`Very rough total pp for ~${avgNights} nights: flights + daily living. No activities.`}
+            title={`Rough total pp from ~${avgNights} nights: cheapest flight + bare-minimum daily living. No activities.`}
           >
-            ≈ £{Math.round(tripTotal).toLocaleString()} pp total
+            from ≈ £{Math.round(tripTotal).toLocaleString()} pp total
           </span>
         )}
       </div>

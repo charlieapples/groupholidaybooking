@@ -262,7 +262,8 @@ export function getDestinationIdeas(token: string, slug: string, top_n = 6) {
 }
 
 export interface FlightEstimate {
-  flight_return_gbp: number;
+  flight_min_gbp: number;   // cheapest return fare found for the dates
+  flight_max_gbp: number;   // dearest return fare found for the dates
   is_live: boolean;
 }
 
