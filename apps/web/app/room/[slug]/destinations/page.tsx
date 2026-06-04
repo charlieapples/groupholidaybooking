@@ -15,8 +15,12 @@ import {
   getVoteStatus,
   lockVotes,
   unlockVotes,
+  updateRoom,
+  getDestinationIdeas,
+  submitRanking,
   type Room,
   type DestinationCandidate,
+  type DestinationIdea,
   type VoteStatus,
 } from "@/lib/api";
 import dynamic from "next/dynamic";
@@ -66,6 +70,13 @@ export default function DestinationsPage() {
 
   // AI suggest
   const [suggesting, setSuggesting] = useState(false);
+
+  // Ranked (Borda) mode state
+  const [ideas, setIdeas] = useState<DestinationIdea[]>([]);
+  const [loadingIdeas, setLoadingIdeas] = useState(false);
+  const [rankOrder, setRankOrder] = useState<string[]>([]);
+  const [submittingRank, setSubmittingRank] = useState(false);
+  const [changingMode, setChangingMode] = useState(false);
 
   // Pick random
   const [pickingRandom, setPickingRandom] = useState(false);
@@ -217,6 +228,99 @@ export default function DestinationsPage() {
     }
   }
 
+  // ── Ranked (Borda) mode ───────────────────────────────────────────────────
+  const votingStyle = room?.voting_style || "ranked";
+  const isRanked = votingStyle === "ranked";
+  // The candidate THIS member proposed (ranked mode = their one pick).
+  const myPick = candidates.find((c) => c.proposed_by === myUserId) || null;
+
+  // Keep the local ranking order in sync with the candidate list. New
+  // candidates are appended; removed ones drop out; the member's own order is
+  // preserved as they reorder.
+  useEffect(() => {
+    const ids = candidates.map((c) => c.id);
+    setRankOrder((prev) => {
+      const kept = prev.filter((id) => ids.includes(id));
+      if (kept.length === 0) {
+        // First load: seed from any saved ranks, else insertion order.
+        const ranked = [...candidates]
+          .filter((c) => c.my_rank != null)
+          .sort((a, b) => (a.my_rank! - b.my_rank!))
+          .map((c) => c.id);
+        const unranked = candidates.filter((c) => c.my_rank == null).map((c) => c.id);
+        return [...ranked, ...unranked];
+      }
+      const added = ids.filter((id) => !kept.includes(id));
+      return [...kept, ...added];
+    });
+  }, [candidates]);
+
+  function moveRank(id: string, dir: -1 | 1) {
+    setRankOrder((prev) => {
+      const i = prev.indexOf(id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
+
+  async function handleGetIdeas() {
+    if (!token) return;
+    setLoadingIdeas(true);
+    try {
+      const got = await getDestinationIdeas(token, slug, 6);
+      setIdeas(got);
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Couldn't get AI ideas"));
+    } finally {
+      setLoadingIdeas(false);
+    }
+  }
+
+  async function handleSubmitRanking() {
+    if (!token || rankOrder.length === 0) return;
+    setSubmittingRank(true);
+    try {
+      const rankings = rankOrder.map((id, i) => ({ candidate_id: id, rank: i + 1 }));
+      const vs = await submitRanking(token, slug, rankings);
+      setVoteStatus(vs);
+      listDestinations(token, slug).then(setCandidates).catch(() => {});
+      toast.success("Your ranking is locked in ✓");
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Couldn't submit your ranking"));
+    } finally {
+      setSubmittingRank(false);
+    }
+  }
+
+  async function handleEditRanking() {
+    if (!token) return;
+    setSubmittingRank(true);
+    try {
+      const vs = await unlockVotes(token, slug);
+      setVoteStatus(vs);
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Couldn't reopen your ranking"));
+    } finally {
+      setSubmittingRank(false);
+    }
+  }
+
+  async function handleSetVotingStyle(style: "ranked" | "open") {
+    if (!token || !room?.is_admin || style === votingStyle) return;
+    setChangingMode(true);
+    try {
+      const r = await updateRoom(token, slug, { voting_style: style });
+      setRoom(r);
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Couldn't change the voting mode"));
+    } finally {
+      setChangingMode(false);
+    }
+  }
+
   async function handlePropose(iata: string) {
     if (!token) return;
     setProposing(true);
@@ -340,6 +444,42 @@ export default function DestinationsPage() {
       </nav>
 
       <div className="mx-auto max-w-3xl px-6 py-10 space-y-8">
+
+        {/* Fairness mode selector */}
+        <div className="rounded-xl border bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-sm font-bold text-gray-900">⚖️ How the group decides</h2>
+              <p className="text-xs text-gray-500 mt-1 max-w-md">
+                {isRanked
+                  ? "Ranked vote: everyone puts forward one destination, then ranks the whole list from 1st to last. Lowest total score wins — the fairest for the group."
+                  : "Open vote: get AI suggestions and react 👍 / 😐 / 👎 to each. Quicker, but a big group can end up with a long list."}
+              </p>
+            </div>
+            {room.is_admin ? (
+              <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-1 shrink-0">
+                {([["ranked", "🏆 Ranked"], ["open", "👍 Open"]] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    onClick={() => handleSetVotingStyle(val)}
+                    disabled={changingMode}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                      votingStyle === val
+                        ? "bg-white text-blue-700 shadow-sm"
+                        : "text-gray-500 hover:text-gray-800"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className="shrink-0 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+                {isRanked ? "🏆 Ranked vote" : "👍 Open vote"}
+              </span>
+            )}
+          </div>
+        </div>
 
         {/* Questionnaire */}
         <div className="rounded-xl border bg-white p-6 shadow-sm space-y-5">
@@ -476,7 +616,52 @@ export default function DestinationsPage() {
 
         {/* Manual propose */}
         <div className="rounded-xl border bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-gray-900 mb-3">Propose a destination</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-1">
+            {isRanked ? "Put forward your destination" : "Propose a destination"}
+          </h2>
+          {isRanked && (
+            <p className="text-sm text-gray-500 mb-3">
+              Each person picks <strong>one</strong> destination for everyone to rank. Choose your own
+              below, or get a few AI ideas to pick from. Proposing again replaces your pick.
+            </p>
+          )}
+
+          {/* Ranked mode: your current pick + AI ideas */}
+          {isRanked && (
+            <div className="mb-4 space-y-3">
+              {myPick ? (
+                <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm">
+                  <span className="text-xl">{flagFor(myPick.iata_code)}</span>
+                  <span className="font-semibold text-green-800">Your pick: {myPick.name}</span>
+                </div>
+              ) : (
+                <p className="text-xs text-amber-600">You haven&apos;t put forward a destination yet.</p>
+              )}
+              <button
+                onClick={handleGetIdeas}
+                disabled={loadingIdeas}
+                className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+              >
+                {loadingIdeas ? "Asking Gemini…" : "✨ Give me AI ideas to pick from"}
+              </button>
+              {ideas.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {ideas.map((idea) => (
+                    <button
+                      key={idea.iata_code}
+                      onClick={() => handlePropose(idea.iata_code)}
+                      disabled={proposing}
+                      className="flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50"
+                    >
+                      <span>{flagFor(idea.iata_code)}</span>
+                      {idea.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="relative">
             <input
               type="text"
@@ -517,28 +702,32 @@ export default function DestinationsPage() {
               Destination candidates
               {candidates.length > 0 && <span className="ml-2 text-sm font-normal text-gray-500">({candidates.length})</span>}
             </h2>
-            <div className="flex gap-2 flex-wrap">
-              <button
-                onClick={handleSuggest}
-                disabled={suggesting}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {suggesting ? "Asking Gemini…" : candidates.length > 0 ? "✨ Refresh AI suggestions" : "✨ Get AI suggestions"}
-              </button>
-              {candidates.length > 0 && (
+            {!isRanked && (
+              <div className="flex gap-2 flex-wrap">
                 <button
-                  onClick={handlePickRandom}
-                  disabled={pickingRandom}
-                  title="Pick a random destination from the candidates, weighted by votes"
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  onClick={handleSuggest}
+                  disabled={suggesting}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {pickingRandom ? "Spinning…" : "🎲 Surprise us!"}
+                  {suggesting ? "Asking Gemini…" : candidates.length > 0 ? "✨ Refresh AI suggestions" : "✨ Get AI suggestions"}
                 </button>
-              )}
-            </div>
+                {candidates.length > 0 && (
+                  <button
+                    onClick={handlePickRandom}
+                    disabled={pickingRandom}
+                    title="Pick a random destination from the candidates, weighted by votes"
+                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    {pickingRandom ? "Spinning…" : "🎲 Surprise us!"}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <p className="text-xs text-gray-500 mb-4">
-            Gemini picks destinations matched to the group&apos;s combined questionnaire answers, dates, and budget. Tap 👍 or 👎 to vote.
+            {isRanked
+              ? "Everyone's picks appear here. Drag them into your order of preference (1st at the top), then lock in your ranking. Scores stay hidden until everyone has ranked."
+              : "Gemini picks destinations matched to the group's combined questionnaire answers, dates, and budget. Tap 👍 or 👎 to vote."}
           </p>
 
           {/* Blind-reveal banner */}
@@ -550,30 +739,35 @@ export default function DestinationsPage() {
             }`}>
               {voteStatus.votes_revealed ? (
                 <p className="text-sm text-green-800">
-                  ✅ <strong>Results revealed</strong> — everyone has voted. Candidates are now ranked by votes.
+                  ✅ <strong>Results revealed</strong> — everyone has {isRanked ? "ranked" : "voted"}.{" "}
+                  {isRanked ? "Winner = lowest total score (Borda)." : "Candidates are now ranked by votes."}
                 </p>
               ) : (
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <p className="text-sm text-indigo-800">
-                    🗳️ <strong>Blind vote in progress.</strong> Tallies stay hidden so nobody&apos;s
-                    swayed — revealed once everyone locks in.{" "}
-                    <span className="font-semibold">{voteStatus.voters_done}/{voteStatus.voters_total} locked in.</span>
+                    🗳️ <strong>Blind {isRanked ? "ranking" : "vote"} in progress.</strong>{" "}
+                    {isRanked
+                      ? "Scores stay hidden so nobody's swayed — revealed once everyone has ranked."
+                      : "Tallies stay hidden so nobody's swayed — revealed once everyone locks in."}{" "}
+                    <span className="font-semibold">{voteStatus.voters_done}/{voteStatus.voters_total} {isRanked ? "ranked" : "locked in"}.</span>
                   </p>
-                  <button
-                    onClick={handleLockVotes}
-                    disabled={lockingVotes}
-                    className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50 ${
-                      voteStatus.i_submitted
-                        ? "border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                        : "bg-indigo-600 text-white hover:bg-indigo-700"
-                    }`}
-                  >
-                    {lockingVotes
-                      ? "Saving…"
-                      : voteStatus.i_submitted
-                      ? "✓ Locked in — change my votes"
-                      : "Lock in my votes"}
-                  </button>
+                  {!isRanked && (
+                    <button
+                      onClick={handleLockVotes}
+                      disabled={lockingVotes}
+                      className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50 ${
+                        voteStatus.i_submitted
+                          ? "border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                          : "bg-indigo-600 text-white hover:bg-indigo-700"
+                      }`}
+                    >
+                      {lockingVotes
+                        ? "Saving…"
+                        : voteStatus.i_submitted
+                        ? "✓ Locked in — change my votes"
+                        : "Lock in my votes"}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -582,8 +776,110 @@ export default function DestinationsPage() {
           {candidates.length === 0 ? (
             <div className="py-10 text-center text-gray-500">
               <div className="text-3xl mb-2">🌍</div>
-              <p>No destinations yet. Click <strong>Get suggestions</strong> above or propose one.</p>
+              <p>
+                {isRanked
+                  ? "No picks yet — put your destination forward above so the group can rank it."
+                  : <>No destinations yet. Click <strong>Get suggestions</strong> above or propose one.</>}
+              </p>
             </div>
+          ) : isRanked ? (
+            voteStatus?.votes_revealed ? (
+              /* Ranked results — lowest Borda total wins */
+              <div className="space-y-2">
+                {[...candidates]
+                  .sort((a, b) => (a.borda_points ?? 1e9) - (b.borda_points ?? 1e9))
+                  .map((c, i) => (
+                    <div
+                      key={c.id}
+                      className={`flex items-center justify-between rounded-xl border px-4 py-3 ${
+                        i === 0 ? "border-yellow-300 bg-yellow-50" : "bg-gray-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="w-6 text-center text-sm font-bold text-gray-500">{i + 1}</span>
+                        <span className="text-2xl shrink-0">{flagFor(c.iata_code)}</span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-900 truncate">
+                            {c.name}
+                            {i === 0 && (
+                              <span className="ml-2 rounded-full bg-yellow-200 px-2 py-0.5 text-xs font-medium text-yellow-800">🏆 Winner</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Your rank: {c.my_rank ?? "—"}{c.proposed_by === myUserId ? " · your pick" : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-sm font-bold text-gray-900 shrink-0">{c.borda_points} pts</span>
+                    </div>
+                  ))}
+                <p className="pt-1 text-xs text-gray-400">Lowest total score wins (everyone&apos;s ranks added up).</p>
+              </div>
+            ) : (
+              /* Ranked voting — arrange into your preferred order then lock in */
+              <div className="space-y-2">
+                {rankOrder.map((id, i) => {
+                  const c = candidates.find((x) => x.id === id);
+                  if (!c) return null;
+                  const locked = voteStatus?.i_submitted;
+                  return (
+                    <div key={id} className="flex items-center justify-between rounded-xl border bg-gray-50 px-4 py-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                          {i + 1}
+                        </span>
+                        <span className="text-2xl shrink-0">{flagFor(c.iata_code)}</span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-gray-900 truncate">{c.name}</p>
+                          <p className="text-xs text-gray-400">
+                            {c.proposed_by === myUserId ? "Your pick" : "Proposed by member"}
+                          </p>
+                        </div>
+                      </div>
+                      {!locked && (
+                        <div className="flex flex-col gap-0.5 shrink-0">
+                          <button
+                            onClick={() => moveRank(id, -1)}
+                            disabled={i === 0}
+                            aria-label="Move up"
+                            className="rounded px-2 text-gray-500 hover:bg-gray-200 disabled:opacity-30"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            onClick={() => moveRank(id, 1)}
+                            disabled={i === rankOrder.length - 1}
+                            aria-label="Move down"
+                            className="rounded px-2 text-gray-500 hover:bg-gray-200 disabled:opacity-30"
+                          >
+                            ▼
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <div className="pt-3">
+                  {voteStatus?.i_submitted ? (
+                    <button
+                      onClick={handleEditRanking}
+                      disabled={submittingRank}
+                      className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {submittingRank ? "Saving…" : "✓ Ranking locked in — edit"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSubmitRanking}
+                      disabled={submittingRank}
+                      className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {submittingRank ? "Saving…" : "Lock in my ranking"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
           ) : (
             <div className="space-y-3">
               {candidates.map((c) => (

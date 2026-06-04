@@ -75,6 +75,9 @@ export interface Room {
   budget_gbp?: number | null;
   destination_iata?: string | null;
   time_value_per_hour?: number | null;
+  // 'ranked' (default) = each member proposes one + ranks all (Borda).
+  // 'open' = AI suggestions + 👍/😐/👎 voting.
+  voting_style?: "ranked" | "open";
 }
 
 export function createRoom(
@@ -119,6 +122,7 @@ export function updateRoom(
     budget_gbp?: number;
     destination_iata?: string;
     time_value_per_hour?: number;
+    voting_style?: "ranked" | "open";
   }
 ) {
   return apiFetch<Room>(`/rooms/${slug}`, token, {
@@ -221,10 +225,38 @@ export interface DestinationCandidate {
   cost_breakdown: Record<string, number>;
   vote_count: number;
   my_vote: number;
+  // Ranked (Borda) mode:
+  borda_points?: number | null;   // sum of ranks (lower = better); null until reveal
+  my_rank?: number | null;        // caller's rank for this candidate (1 = first choice)
 }
 
 export function listDestinations(token: string, slug: string) {
   return apiFetch<DestinationCandidate[]>(`/rooms/${slug}/destinations`, token);
+}
+
+export interface DestinationIdea {
+  iata_code: string;
+  name: string;
+}
+
+/** Ranked mode: AI ideas for one member to pick from (does NOT add candidates). */
+export function getDestinationIdeas(token: string, slug: string, top_n = 6) {
+  return apiFetch<DestinationIdea[]>(
+    `/rooms/${slug}/destinations/ideas?top_n=${top_n}`,
+    token
+  );
+}
+
+/** Ranked mode: submit a full 1..N ranking of all candidates and lock in. */
+export function submitRanking(
+  token: string,
+  slug: string,
+  rankings: { candidate_id: string; rank: number }[]
+) {
+  return apiFetch<VoteStatus>(`/rooms/${slug}/destinations/rank`, token, {
+    method: "POST",
+    body: JSON.stringify({ rankings }),
+  });
 }
 
 export function suggestDestinations(token: string, slug: string, top_n = 5) {
