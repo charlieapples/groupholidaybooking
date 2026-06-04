@@ -16,6 +16,9 @@ import { DashboardSkeleton } from "@/components/Skeleton";
 import { normalisePostcode } from "@/lib/postcode";
 import { destName, flagFor } from "@/lib/destinations";
 import FeedbackButton from "@/components/FeedbackButton";
+import dynamic from "next/dynamic";
+
+const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
 export default function Dashboard() {
   // Stable client — don't recreate on every render
@@ -512,6 +515,7 @@ export default function Dashboard() {
       )}
 
       <FeedbackButton token={token} page="dashboard" />
+      {token && <ChatWidget token={token} />}
     </main>
   );
 }

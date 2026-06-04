@@ -102,7 +102,7 @@ export default function ChatWidget({ token, roomSlug }: ChatWidgetProps) {
           <div className="flex items-center gap-3 rounded-t-2xl bg-blue-600 px-4 py-3">
             <span className="text-xl">✈️</span>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-white text-sm">Holiday Assistant</p>
+              <p className="font-semibold text-white text-sm">Help &amp; Holiday Assistant</p>
               <p className="text-xs text-blue-200">Powered by Gemini</p>
             </div>
             {messages.length > 0 && (
@@ -124,13 +124,14 @@ export default function ChatWidget({ token, roomSlug }: ChatWidgetProps) {
             {messages.length === 0 && (
               <div className="text-center py-6">
                 <p className="text-gray-500 text-sm">
-                  Ask me anything about your group holiday!
+                  Ask me how the site works, or anything about your group holiday!
                 </p>
                 <div className="mt-3 flex flex-col gap-2">
                   {[
-                    "What's everyone's availability look like?",
+                    "How does this website work?",
+                    "How does the destination voting work?",
                     "Which destination is cheapest?",
-                    "What should we pack for Ibiza?",
+                    "What's everyone's availability look like?",
                   ].map((q) => (
                     <button
                       key={q}
