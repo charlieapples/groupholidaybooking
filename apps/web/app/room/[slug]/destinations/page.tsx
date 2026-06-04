@@ -809,11 +809,19 @@ export default function DestinationsPage() {
               </div>
             )}
           </div>
-          <p className="text-xs text-gray-500 mb-4">
+          <p className="text-xs text-gray-500 mb-2">
             {isRanked
               ? "Everyone's picks appear here. Drag them into your order of preference (1st at the top), then lock in your ranking. Scores stay hidden until everyone has ranked."
               : "Gemini picks destinations matched to the group's combined questionnaire answers, dates, and budget. Tap 👍 or 👎 to vote."}
           </p>
+          {candidates.length > 0 && (
+            <p className="mb-4 text-[11px] text-gray-400">
+              💡 Costs are a rough guide. Flight figures are cheapest–dearest return fares
+              <strong> from London</strong> for your agreed dates (a comparison baseline) — your exact
+              price from your nearest airport is worked out at the Flights step. Daily living is a
+              bare-minimum estimate (budget bed + food + local transport, no activities).
+            </p>
+          )}
 
           {/* Blind-reveal banner */}
           {candidates.length > 0 && voteStatus && (
