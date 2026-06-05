@@ -254,18 +254,18 @@ def _candidate_to_dto(
 
 
 def _ranked_candidate_to_dto(
-    c: dict, my_user_id: str, votes: list[dict], reveal: bool
+    c: dict, my_user_id: str, votes: list[dict], reveal: bool,
+    borda_value: Optional[int] = None,
 ) -> DestinationCandidate:
     """Build a DTO for RANKED mode. votes.vote_value holds each person's rank
     (1 = first choice). borda_points (sum of ranks, lower = better) is hidden
-    until the blind reveal; my_rank is always visible to the caller."""
+    until the blind reveal; my_rank is always visible to the caller. The Borda
+    total is computed centrally (with worst-rank imputation) and passed in."""
     my_rank = next(
         (v["vote_value"] for v in votes if v["candidate_id"] == c["id"] and v["user_id"] == my_user_id),
         None,
     )
-    borda = (
-        sum(v["vote_value"] for v in votes if v["candidate_id"] == c["id"]) if reveal else None
-    )
+    borda = borda_value if reveal else None
     return DestinationCandidate(
         id=c["id"],
         iata_code=c["iata_code"],
@@ -312,6 +312,29 @@ def _vote_reveal_state(db, room_id: str, my_user_id: Optional[str] = None):
     return revealed, done, total, i_submitted
 
 
+def _borda_totals(candidates: list[dict], votes: list[dict]) -> dict[str, int]:
+    """Borda total (lower = better) per candidate, with worst-rank imputation.
+
+    Each voter who locked in should have ranked every candidate. If the candidate
+    set grew after someone locked in, their ballot can be missing the newcomer —
+    so for every voter who cast ANY rank, a candidate they didn't rank is treated
+    as their LAST choice (rank = number of candidates). This stops an unranked
+    option from unfairly winning with a low total.
+    """
+    n = len(candidates)
+    worst = max(n, 1)
+    voters = {v["user_id"] for v in votes}
+    # (candidate_id, user_id) -> rank
+    rank_by: dict[tuple[str, str], int] = {
+        (v["candidate_id"], v["user_id"]): (v["vote_value"] or worst) for v in votes
+    }
+    totals: dict[str, int] = {}
+    for c in candidates:
+        cid = c["id"]
+        totals[cid] = sum(rank_by.get((cid, u), worst) for u in voters)
+    return totals
+
+
 def _render_candidates(db, room: dict, user_id: str, candidates_data: list[dict], votes_data: list[dict]):
     """Build the candidate-list response, branching on the room's voting style.
 
@@ -324,15 +347,16 @@ def _render_candidates(db, room: dict, user_id: str, candidates_data: list[dict]
     rows = list(candidates_data)
 
     if style == "ranked":
+        borda = _borda_totals(rows, votes_data) if revealed else {}
         if revealed:
-            borda: dict[str, int] = {}
-            for v in votes_data:
-                borda[v["candidate_id"]] = borda.get(v["candidate_id"], 0) + (v["vote_value"] or 0)
-            # Lowest total rank points wins; un-ranked candidates sink to the bottom.
+            # Lowest total rank points wins.
             rows = sorted(rows, key=lambda c: borda.get(c["id"], 10**9))
         else:
             rows = sorted(rows, key=lambda c: c.get("created_at") or "")
-        return [_ranked_candidate_to_dto(c, user_id, votes_data, revealed) for c in rows]
+        return [
+            _ranked_candidate_to_dto(c, user_id, votes_data, revealed, borda.get(c["id"]))
+            for c in rows
+        ]
 
     # open mode
     if revealed:

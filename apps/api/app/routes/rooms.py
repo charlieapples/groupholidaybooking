@@ -498,8 +498,41 @@ def update_room(
     if not updates:
         return _room_with_member_count(db, room, user.id)
 
+    # Validate voting_style and, if it's actually CHANGING, wipe existing votes
+    # and lock-ins. The destination_votes.vote_value column means different
+    # things per mode (rank in 'ranked', +1/0/-1 in 'open'), so carrying votes
+    # across a mode switch would corrupt tallies and could falsely trigger the
+    # "everyone has voted" reveal. Resetting gives the new mode a clean slate.
+    new_style = updates.get("voting_style")
+    if new_style is not None:
+        if new_style not in ("ranked", "open"):
+            raise HTTPException(422, "voting_style must be 'ranked' or 'open'.")
+        if new_style != (room.get("voting_style") or "ranked"):
+            _reset_room_votes(db, room["id"])
+
     updated = db.table("rooms").update(updates).eq("id", room["id"]).execute()
     return _room_with_member_count(db, updated.data[0], user.id)
+
+
+def _reset_room_votes(db, room_id: str) -> None:
+    """Clear all destination votes + lock-ins for a room (best-effort).
+
+    Used when the voting style changes, since vote_value is interpreted
+    differently per mode. Candidates themselves are kept.
+    """
+    try:
+        db.table("destination_vote_submissions").delete().eq("room_id", room_id).execute()
+    except Exception:
+        log.warning("Failed to clear destination_vote_submissions for room %s", room_id)
+    try:
+        cands = (
+            db.table("destination_candidates").select("id").eq("room_id", room_id).execute()
+        )
+        candidate_ids = [c["id"] for c in (cands.data or [])]
+        if candidate_ids:
+            db.table("destination_votes").delete().in_("candidate_id", candidate_ids).execute()
+    except Exception:
+        log.warning("Failed to clear destination_votes for room %s", room_id)
 
 
 @router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT)

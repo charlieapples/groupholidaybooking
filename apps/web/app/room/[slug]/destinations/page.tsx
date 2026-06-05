@@ -386,6 +386,11 @@ export default function DestinationsPage() {
     try {
       const r = await updateRoom(token, slug, { voting_style: style });
       setRoom(r);
+      // Switching modes resets votes/lock-ins server-side — refresh so the UI
+      // reflects the clean slate.
+      listDestinations(token, slug).then(setCandidates).catch(() => {});
+      getVoteStatus(token, slug).then(setVoteStatus).catch(() => {});
+      toast.success(style === "ranked" ? "Switched to ranked voting." : "Switched to open voting.");
     } catch (e: unknown) {
       toast.error(errorMessage(e, "Couldn't change the voting mode"));
     } finally {
