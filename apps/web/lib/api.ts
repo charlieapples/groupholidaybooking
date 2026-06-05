@@ -78,6 +78,9 @@ export interface Room {
   // 'ranked' (default) = each member proposes one + ranks all (Borda).
   // 'open' = AI suggestions + 👍/😐/👎 voting.
   voting_style?: "ranked" | "open";
+  // Multiple candidate windows for the flight search.
+  search_windows?: { start_date: string; end_date: string }[];
+  multi_window_search?: boolean;
 }
 
 export function createRoom(
@@ -123,6 +126,8 @@ export function updateRoom(
     destination_iata?: string;
     time_value_per_hour?: number;
     voting_style?: "ranked" | "open";
+    search_windows?: { start_date: string; end_date: string }[];
+    multi_window_search?: boolean;
   }
 ) {
   return apiFetch<Room>(`/rooms/${slug}`, token, {

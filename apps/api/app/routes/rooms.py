@@ -56,6 +56,11 @@ class RoomResponse(BaseModel):
     # Destination voting style: 'ranked' (one proposal each + rank all) or 'open'
     # (free AI suggestions + thumbs voting).
     voting_style: str = "ranked"
+    # Multiple candidate windows for the flight search (each {start_date, end_date}).
+    # Empty = use the single agreed window. multi_window_search toggles whether the
+    # optimiser prices ALL windows (cheapest wins) or just the locked agreed one.
+    search_windows: list[dict] = []
+    multi_window_search: bool = True
 
 
 STEP_ORDER = ["availability", "duration", "budget", "destination", "flights", "booking", "done"]
@@ -74,6 +79,8 @@ class UpdateRoomRequest(BaseModel):
     destination_iata: Optional[str] = None
     time_value_per_hour: Optional[float] = None
     voting_style: Optional[str] = None
+    search_windows: Optional[list[dict]] = None
+    multi_window_search: Optional[bool] = None
 
 
 class MemberResponse(BaseModel):
@@ -151,6 +158,8 @@ def _room_with_member_count(db, room: dict, user_id: str) -> RoomResponse:
         destination_iata=room.get("destination_iata"),
         time_value_per_hour=room.get("time_value_per_hour") or 0.0,
         voting_style=room.get("voting_style") or "ranked",
+        search_windows=room.get("search_windows") or [],
+        multi_window_search=room.get("multi_window_search") if room.get("multi_window_search") is not None else True,
     )
 
 
@@ -214,6 +223,8 @@ def list_rooms(user: UserInfo = Depends(current_user)):
             destination_iata=room.get("destination_iata"),
             time_value_per_hour=room.get("time_value_per_hour") or 0.0,
             voting_style=room.get("voting_style") or "ranked",
+            search_windows=room.get("search_windows") or [],
+            multi_window_search=room.get("multi_window_search") if room.get("multi_window_search") is not None else True,
         ))
     return result
 
@@ -304,6 +315,8 @@ def create_room(
         budget_gbp=None, destination_iata=None,
         time_value_per_hour=0.0,
         voting_style="ranked",
+        search_windows=[],
+        multi_window_search=True,
     )
 
 

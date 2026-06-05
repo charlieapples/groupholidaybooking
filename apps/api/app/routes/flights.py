@@ -22,12 +22,64 @@ from ..core.config import Config, DateWindow, Person
 from ..core.destinations import label as label_dest
 from ..core.email import flights_ready_email, send_email
 from ..core.flights import live_price_for_dates
-from ..core.optimiser import optimise
+from ..core.optimiser import optimise, DestinationResult
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user
 from .rooms import _assert_member, _get_room_by_slug
 
 router = APIRouter()
+
+# Cap how many windows we price in one run, to bound API calls + latency.
+_MAX_SEARCH_WINDOWS = 4
+
+
+def _resolve_search_windows(room: dict) -> list[tuple[date, date]]:
+    """Return the list of (start, end) date windows the optimiser should price.
+
+    Multi-window mode (default): every valid window in room.search_windows.
+    Single/logistics mode, or no windows set: just the agreed window.
+    Always falls back to the agreed window so a run never has zero windows.
+    """
+    multi = room.get("multi_window_search")
+    multi = True if multi is None else bool(multi)
+    windows: list[tuple[date, date]] = []
+
+    if multi:
+        for w in (room.get("search_windows") or []):
+            try:
+                s = date.fromisoformat(str(w["start_date"])[:10])
+                e = date.fromisoformat(str(w["end_date"])[:10])
+            except (KeyError, ValueError, TypeError):
+                continue
+            if e >= s:
+                windows.append((s, e))
+
+    if not windows:
+        windows.append((
+            date.fromisoformat(room["agreed_start"]),
+            date.fromisoformat(room["agreed_end"]),
+        ))
+
+    # De-dupe and cap.
+    seen: set[tuple[date, date]] = set()
+    unique: list[tuple[date, date]] = []
+    for w in windows:
+        if w not in seen:
+            seen.add(w)
+            unique.append(w)
+    return unique[:_MAX_SEARCH_WINDOWS]
+
+
+def _better_result(a: Optional[DestinationResult], b: DestinationResult) -> DestinationResult:
+    """Pick the better of two results for the SAME destination across windows:
+    fully-viable beats partial, then more people covered, then cheaper group total."""
+    if a is None:
+        return b
+    if a.is_fully_viable != b.is_fully_viable:
+        return a if a.is_fully_viable else b
+    if a.viable_count != b.viable_count:
+        return a if a.viable_count > b.viable_count else b
+    return a if a.total_group_cost <= b.total_group_cost else b
 
 
 class LivePriceResponse(BaseModel):
@@ -244,27 +296,45 @@ def run_optimiser(slug: str, user: UserInfo = Depends(current_user)):
             "No destination candidates in this room. Add some via the destinations endpoints.",
         )
 
-    config = Config(
-        people=people,
-        destinations=destinations,
-        date_window=DateWindow(
-            earliest_outbound=date.fromisoformat(room["agreed_start"]),
-            latest_inbound=date.fromisoformat(room["agreed_end"]),
-            min_nights=room["min_nights"],
-            max_nights=room["max_nights"],
-        ),
-        budget_cap_per_person=room.get("budget_gbp"),
-        shared_dates=True,
-        # Group's £/hr valuation of ground-travel time. 0 = pure cheapest;
-        # higher weights toward airports closer to each member's home.
-        time_value_per_hour=float(room.get("time_value_per_hour") or 0.0),
-    )
+    # Work out which date windows to price. When multi-window search is on and
+    # the group selected several windows, we price flights across ALL of them and
+    # keep the cheapest per destination — more candidate days = cheaper fares.
+    # Otherwise we just use the single locked agreed window.
+    windows = _resolve_search_windows(room)
+
+    def _make_config(start: date, end: date) -> Config:
+        return Config(
+            people=people,
+            destinations=destinations,
+            date_window=DateWindow(
+                earliest_outbound=start,
+                latest_inbound=end,
+                min_nights=room["min_nights"],
+                max_nights=room["max_nights"],
+            ),
+            budget_cap_per_person=room.get("budget_gbp"),
+            shared_dates=True,
+            # Group's £/hr valuation of ground-travel time. 0 = pure cheapest;
+            # higher weights toward airports closer to each member's home.
+            time_value_per_hour=float(room.get("time_value_per_hour") or 0.0),
+        )
 
     # Surface optimiser failures with a useful message instead of generic 500.
     # Common causes: Travelpayouts token missing/quota exhausted, Google Maps
     # geocoding failed on a postcode, no flights found for the date window.
     try:
-        results = optimise(config)
+        best_by_dest: dict[str, "DestinationResult"] = {}
+        for (w_start, w_end) in windows:
+            for r in optimise(_make_config(w_start, w_end)):
+                best_by_dest[r.destination] = _better_result(
+                    best_by_dest.get(r.destination), r
+                )
+        results = list(best_by_dest.values())
+        # Re-sort after the merge: fully-viable first, then cheapest group total.
+        results.sort(key=lambda d: (
+            not d.is_fully_viable,
+            d.total_group_cost if d.is_fully_viable else float("inf"),
+        ))
     except Exception as exc:
         log.exception("Flight optimiser failed for room %s", slug)
         raise HTTPException(

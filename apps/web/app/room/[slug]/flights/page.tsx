@@ -181,8 +181,20 @@ export default function FlightsPage() {
           <div className="rounded-xl border bg-white p-4 shadow-sm flex flex-wrap gap-6 text-sm">
             {room.agreed_start && (
               <div>
-                <p className="text-gray-500">Travel window</p>
-                <p className="font-semibold text-gray-900">{room.agreed_start} → {room.agreed_end}</p>
+                <p className="text-gray-500">
+                  {room.multi_window_search && (room.search_windows?.length ?? 0) > 1
+                    ? `Travel windows (${room.search_windows!.length} — cheapest wins)`
+                    : "Travel window"}
+                </p>
+                {room.multi_window_search && (room.search_windows?.length ?? 0) > 1 ? (
+                  <ul className="font-semibold text-gray-900">
+                    {room.search_windows!.map((w, i) => (
+                      <li key={i}>{w.start_date} → {w.end_date}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="font-semibold text-gray-900">{room.agreed_start} → {room.agreed_end}</p>
+                )}
               </div>
             )}
             {room.min_nights && (

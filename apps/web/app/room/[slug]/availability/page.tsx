@@ -698,8 +698,12 @@ export default function AvailabilityPage() {
   }, [searchParams, providerToken, loading]);
 
   const [autoSyncProvider, setAutoSyncProvider] = useState<"google" | "outlook" | null>(null);
-  const [lockingWindow, setLockingWindow] = useState<number | null>(null);
   const [reminding, setReminding] = useState(false);
+  // Multi-window selection: which free windows to include in the flight search,
+  // and whether to search them all (cheapest wins) or lock one for logistics.
+  const [selectedWindows, setSelectedWindows] = useState<Set<number>>(new Set([0]));
+  const [windowMode, setWindowMode] = useState<"multi" | "single">("multi");
+  const [lockingWindows, setLockingWindows] = useState(false);
 
   // Keep a ref so realtime callbacks always have the latest token without
   // needing to close over the token state directly (which would be stale).
@@ -772,19 +776,43 @@ export default function AvailabilityPage() {
     });
   }
 
-  async function handleLockWindow(window: FreeWindow, idx: number) {
-    if (!token || !room?.is_admin) return;
-    setLockingWindow(idx);
+  function toggleWindow(idx: number) {
+    setSelectedWindows((prev) => {
+      if (windowMode === "single") return new Set([idx]);   // radio behaviour
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  }
+
+  // Lock in the selected window(s) and move on. In multi mode the optimiser
+  // prices every selected window and keeps the cheapest per destination; in
+  // single mode only the one window is searched (logistics certainty).
+  async function handleLockWindows() {
+    if (!token || !room?.is_admin || !windows) return;
+    const chosen = [...selectedWindows]
+      .filter((i) => i >= 0 && i < windows.length)
+      .map((i) => windows[i])
+      .sort((a, b) => a.start_date.localeCompare(b.start_date));
+    if (chosen.length === 0) {
+      toast.error("Pick at least one window.");
+      return;
+    }
+    setLockingWindows(true);
     try {
       await updateRoom(token, slug, {
-        agreed_start: window.start_date,
-        agreed_end: window.end_date,
+        // Earliest selected window is the "primary" (calendar/display + logistics).
+        agreed_start: chosen[0].start_date,
+        agreed_end: chosen[0].end_date,
+        search_windows: chosen.map((w) => ({ start_date: w.start_date, end_date: w.end_date })),
+        multi_window_search: windowMode === "multi",
       });
       await advanceStep(token, slug);
       router.push(`/room/${slug}/preferences`);
     } catch (e: unknown) {
-      toast.error(errorMessage(e, "Failed to lock in window"));
-      setLockingWindow(null);
+      toast.error(errorMessage(e, "Failed to lock in the window(s)"));
+      setLockingWindows(false);
     }
   }
 
@@ -1003,52 +1031,119 @@ export default function AvailabilityPage() {
         {windows && windows.length > 0 && (
           <div className="rounded-xl border bg-white p-6 shadow-sm">
             <h2 className="mb-1 font-semibold text-gray-900">🗓 Free windows for everyone</h2>
-            {room?.is_admin && (
-              <p className="mb-4 text-sm text-blue-700">
-                As admin, click <strong>Use these dates</strong> to lock in a window and move to the next step.
-              </p>
-            )}
-            <div className="space-y-3">
-              {windows.map((w, i) => (
-                <div
-                  key={i}
-                  className={`flex items-center justify-between rounded-xl px-5 py-3 gap-4 ${
-                    i === 0
-                      ? "bg-green-50 border border-green-200"
-                      : "bg-gray-50 border border-gray-100"
-                  }`}
-                >
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-900">
-                      {new Date(w.start_date).toLocaleDateString("en-GB", {
-                        day: "numeric", month: "short", timeZone: "UTC",
-                      })}
-                      {" – "}
-                      {new Date(w.end_date).toLocaleDateString("en-GB", {
-                        day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
-                      })}
-                    </p>
-                    <p className="text-sm text-gray-500">{w.days} days free</p>
+
+            {room?.is_admin ? (
+              <>
+                <p className="mb-3 text-sm text-blue-700">
+                  Pick the window(s) to search for flights. The more windows you include, the
+                  better the chance of finding cheap fares — we price every one and keep the
+                  cheapest per destination.
+                </p>
+
+                {/* Mode toggle */}
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                    {([
+                      ["multi", "🔎 Search multiple windows"],
+                      ["single", "📌 Lock one window"],
+                    ] as const).map(([val, label]) => (
+                      <button
+                        key={val}
+                        onClick={() => {
+                          setWindowMode(val);
+                          // Single mode keeps just one selection (the best window by default).
+                          if (val === "single") {
+                            setSelectedWindows((prev) => new Set([[...prev][0] ?? 0]));
+                          }
+                        }}
+                        className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                          windowMode === val ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-800"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">
+                    {windowMode === "multi"
+                      ? "Best for finding the cheapest trip."
+                      : "Best when you need date certainty early (e.g. booking time off)."}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="mb-4 text-sm text-gray-500">The admin will choose which window(s) to search.</p>
+            )}
+
+            <div className="space-y-3">
+              {windows.map((w, i) => {
+                const selected = selectedWindows.has(i);
+                return (
+                  <label
+                    key={i}
+                    className={`flex items-center justify-between rounded-xl px-5 py-3 gap-4 ${
+                      room?.is_admin ? "cursor-pointer" : ""
+                    } ${
+                      selected
+                        ? "bg-green-50 border-2 border-green-400"
+                        : "bg-gray-50 border border-gray-100"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {room?.is_admin && (
+                        <input
+                          type={windowMode === "single" ? "radio" : "checkbox"}
+                          name="search-window"
+                          checked={selected}
+                          onChange={() => toggleWindow(i)}
+                          className="h-4 w-4 shrink-0 accent-green-600"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900">
+                          {new Date(w.start_date).toLocaleDateString("en-GB", {
+                            day: "numeric", month: "short", timeZone: "UTC",
+                          })}
+                          {" – "}
+                          {new Date(w.end_date).toLocaleDateString("en-GB", {
+                            day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+                          })}
+                        </p>
+                        <p className="text-sm text-gray-500">{w.days} days free</p>
+                      </div>
+                    </div>
                     {i === 0 && (
                       <span className="rounded-full bg-green-600 px-3 py-1 text-xs font-bold text-white whitespace-nowrap">
-                        Best window
+                        Longest window
                       </span>
                     )}
-                    {room?.is_admin && (
-                      <button
-                        onClick={() => handleLockWindow(w, i)}
-                        disabled={lockingWindow !== null}
-                        className="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
-                      >
-                        {lockingWindow === i ? "Locking…" : "Use these dates →"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                  </label>
+                );
+              })}
             </div>
+
+            {room?.is_admin && (
+              <div className="mt-5 flex items-center justify-between gap-3 flex-wrap border-t pt-4">
+                <p className="text-xs text-gray-500">
+                  {selectedWindows.size === 0
+                    ? "Select at least one window."
+                    : windowMode === "multi"
+                    ? `${selectedWindows.size} window${selectedWindows.size !== 1 ? "s" : ""} will be searched for the cheapest flights.`
+                    : "Only this window will be searched."}
+                </p>
+                <button
+                  onClick={handleLockWindows}
+                  disabled={lockingWindows || selectedWindows.size === 0}
+                  className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                >
+                  {lockingWindows
+                    ? "Locking…"
+                    : windowMode === "multi" && selectedWindows.size > 1
+                    ? `Use these ${selectedWindows.size} windows →`
+                    : "Use this window →"}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
