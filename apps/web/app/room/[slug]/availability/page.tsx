@@ -175,6 +175,8 @@ function ImportPanel({
   const [activeTab, setActiveTab] = useState<"google" | "outlook" | "apple">("google");
   const [gcalStatus, setGcalStatus] = useState<"idle" | "syncing" | "done" | "needs_grant" | "error">("idle");
   const [gcalError, setGcalError] = useState("");
+  // The user's Google calendars, so they can choose which ones to include.
+  const [googleCals, setGoogleCals] = useState<{ id: string; summary: string; selected: boolean }[]>([]);
   const [outlookStatus, setOutlookStatus] = useState<"idle" | "syncing" | "done" | "needs_grant" | "error">("idle");
   const [outlookError, setOutlookError] = useState("");
   const [icsError, setIcsError] = useState("");
@@ -186,9 +188,9 @@ function ImportPanel({
   useEffect(() => {
     if (!autoSyncProvider || !providerToken) return;
     setOpen(true);
-    if (autoSyncProvider === "google" && gcalStatus === "idle") {
+    if (autoSyncProvider === "google" && gcalStatus === "idle" && googleCals.length === 0) {
       setActiveTab("google");
-      syncGoogle();
+      loadGoogleCalendars(); // load the list so the user can choose calendars
       onAutoSyncDone();
     } else if (autoSyncProvider === "outlook" && outlookStatus === "idle") {
       setActiveTab("outlook");
@@ -241,7 +243,8 @@ function ImportPanel({
   }
 
 
-  async function syncGoogle() {
+  // Step 1: fetch the user's calendar list so they can pick which to include.
+  async function loadGoogleCalendars() {
     if (!providerToken) {
       setGcalStatus("needs_grant");
       return;
@@ -249,8 +252,6 @@ function ImportPanel({
     setGcalStatus("syncing");
     setGcalError("");
     try {
-      // Step 1: list ALL the user's calendars (primary + work + shared + etc.)
-      // so a single sync pulls events from every calendar, not just primary.
       const listResp = await fetch(
         "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
         { headers: { Authorization: `Bearer ${providerToken}` } },
@@ -260,22 +261,40 @@ function ImportPanel({
         return;
       }
       const listData = await listResp.json();
-      // Auto-generated "informational" calendars that aren't real conflicts —
-      // these are the usual cause of a day showing busy with nothing in your own
-      // calendar. We skip them so availability reflects YOUR actual commitments.
+      // Auto-generated "informational" calendars (holidays, birthdays, week
+      // numbers, weather) — the usual cause of false-busy days, so default them OFF.
       const isNoiseCalendar = (id: string) =>
         /#(holiday|contacts|weeknum|weather)@group\.v\.calendar\.google\.com$/.test(id);
-      const calendarIds: string[] = (listData.items ?? [])
-        .filter((c: { selected?: boolean; id?: string }) =>
-          // Skip calendars hidden in the Google UI, and skip holiday/birthday/
-          // week-number/weather calendars.
-          c.selected !== false && c.id && !isNoiseCalendar(c.id)
-        )
-        .map((c: { id: string }) => c.id);
+      const cals = (listData.items ?? [])
+        .filter((c: { id?: string }) => c.id)
+        .map((c: { id: string; summary?: string; summaryOverride?: string; selected?: boolean }) => ({
+          id: c.id,
+          summary: c.summaryOverride || c.summary || c.id,
+          // Default-tick visible, non-noise calendars.
+          selected: c.selected !== false && !isNoiseCalendar(c.id),
+        }));
+      setGoogleCals(cals);
+      setGcalStatus("idle"); // show the picker
+    } catch {
+      setGcalStatus("error");
+      setGcalError("Failed to reach Google Calendar. Check your connection and try again.");
+    }
+  }
 
-      if (calendarIds.length === 0) calendarIds.push("primary");
-
-      // Step 2: fetch events from each calendar in parallel and merge.
+  // Step 2: sync events from the calendars the user ticked.
+  async function syncGoogleSelected() {
+    if (!providerToken) {
+      setGcalStatus("needs_grant");
+      return;
+    }
+    const calendarIds = googleCals.filter((c) => c.selected).map((c) => c.id);
+    if (calendarIds.length === 0) {
+      setGcalError("Pick at least one calendar to include.");
+      return;
+    }
+    setGcalStatus("syncing");
+    setGcalError("");
+    try {
       const allBusy = new Set<string>();
       const results = await Promise.allSettled(
         calendarIds.map(async (id) => {
@@ -437,8 +456,8 @@ function ImportPanel({
           {activeTab === "google" && (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-gray-600">
-                Syncs all your Google Calendars (primary, work, shared) — marks anything you have
-                scheduled in the holiday window as busy.
+                Pick which Google calendars to include, then sync — anything scheduled in the
+                holiday window is marked busy. Holiday/birthday calendars are off by default.
               </p>
 
               {gcalStatus === "needs_grant" ? (
@@ -455,23 +474,53 @@ function ImportPanel({
                     🗓 Grant calendar access →
                   </button>
                 </div>
-              ) : (
+              ) : googleCals.length === 0 ? (
                 <button
-                  onClick={syncGoogle}
-                  disabled={gcalStatus === "syncing" || gcalStatus === "done"}
-                  className={[
-                    "rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors",
-                    gcalStatus === "done"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60",
-                  ].join(" ")}
+                  onClick={loadGoogleCalendars}
+                  disabled={gcalStatus === "syncing"}
+                  className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                 >
-                  {gcalStatus === "syncing"
-                    ? "Syncing…"
-                    : gcalStatus === "done"
-                    ? "✓ Synced!"
-                    : "Sync Google Calendar"}
+                  {gcalStatus === "syncing" ? "Loading…" : "Choose calendars to sync"}
                 </button>
+              ) : (
+                <div className="space-y-3">
+                  {/* Calendar pick-list */}
+                  <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
+                    {googleCals.map((c) => (
+                      <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-gray-50">
+                        <input
+                          type="checkbox"
+                          checked={c.selected}
+                          onChange={() =>
+                            setGoogleCals((prev) =>
+                              prev.map((x) => (x.id === c.id ? { ...x, selected: !x.selected } : x))
+                            )
+                          }
+                          className="h-4 w-4 accent-blue-600"
+                        />
+                        <span className="truncate text-gray-800">{c.summary}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={syncGoogleSelected}
+                      disabled={gcalStatus === "syncing"}
+                      className={[
+                        "rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors",
+                        gcalStatus === "done"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60",
+                      ].join(" ")}
+                    >
+                      {gcalStatus === "syncing"
+                        ? "Syncing…"
+                        : gcalStatus === "done"
+                        ? "✓ Synced! — sync again"
+                        : `Sync ${googleCals.filter((c) => c.selected).length} selected calendar${googleCals.filter((c) => c.selected).length !== 1 ? "s" : ""}`}
+                    </button>
+                  </div>
+                </div>
               )}
               {/* Connect an additional Google account — its busy days are summed in. */}
               <button
