@@ -1,7 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { sendChatMessage } from "@/lib/api";
+
+// Maps a step keyword the assistant emits (e.g. [[NAV:duration]]) to its route.
+const NAV_ROUTES: Record<string, string> = {
+  availability: "availability",
+  duration: "preferences",
+  budget: "preferences",
+  destination: "destinations",
+  destinations: "destinations",
+  flights: "flights",
+  booking: "booking",
+};
 
 interface Message {
   role: "user" | "model";
@@ -14,6 +26,7 @@ interface ChatWidgetProps {
 }
 
 export default function ChatWidget({ token, roomSlug }: ChatWidgetProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -66,7 +79,23 @@ export default function ChatWidget({ token, roomSlug }: ChatWidgetProps) {
     try {
       const history = messages.map((m) => ({ role: m.role, content: m.content }));
       const { reply } = await sendChatMessage(token, text, roomSlug, history);
-      setMessages((prev) => [...prev, { role: "model", content: reply }]);
+
+      // The assistant can ask the app to navigate by including [[NAV:<step>]].
+      // We strip it from the visible text and actually change the page.
+      const navMatch = reply.match(/\[\[NAV:\s*(\w+)\s*\]\]/i);
+      let displayReply = reply;
+      if (navMatch) {
+        displayReply = reply.replace(navMatch[0], "").trim();
+        const key = navMatch[1].toLowerCase();
+        let target: string | null = null;
+        if (key === "dashboard") target = "/dashboard";
+        else if (roomSlug && NAV_ROUTES[key]) target = `/room/${roomSlug}/${NAV_ROUTES[key]}`;
+        if (target) {
+          if (!displayReply) displayReply = "Taking you there now… 🧭";
+          setTimeout(() => router.push(target!), 700);
+        }
+      }
+      setMessages((prev) => [...prev, { role: "model", content: displayReply || reply }]);
     } catch {
       setMessages((prev) => [
         ...prev,

@@ -367,8 +367,20 @@ def _render_candidates(db, room: dict, user_id: str, candidates_data: list[dict]
     if style == "ranked":
         borda = _borda_totals(rows, votes_data) if revealed else {}
         if revealed:
-            # Lowest total rank points wins.
-            rows = sorted(rows, key=lambda c: borda.get(c["id"], 10**9))
+            # Lowest total rank points wins. Ties are broken by who got more
+            # FIRST-CHOICE (rank 1) votes, then alphabetically so it's stable.
+            first_place: dict[str, int] = {}
+            for v in votes_data:
+                if v.get("vote_value") == 1:
+                    first_place[v["candidate_id"]] = first_place.get(v["candidate_id"], 0) + 1
+            rows = sorted(
+                rows,
+                key=lambda c: (
+                    borda.get(c["id"], 10**9),
+                    -first_place.get(c["id"], 0),
+                    label_dest(c["iata_code"], "name"),
+                ),
+            )
         else:
             rows = sorted(rows, key=lambda c: c.get("created_at") or "")
         return [

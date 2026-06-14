@@ -165,9 +165,16 @@ export default function DestinationsPage() {
       .channel(`dest-votes-${room.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "destination_votes" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "destination_vote_submissions" }, refresh)
+      // Proposals (someone putting a destination forward / removing one) — so the
+      // candidate list updates live for everyone, not just on a manual refresh.
+      .on("postgres_changes", { event: "*", schema: "public", table: "destination_candidates" }, refresh)
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    // Safety net: if realtime isn't enabled for a table, poll every 12s so the
+    // page still stays roughly in sync for collaborators without a manual reload.
+    const poll = setInterval(refresh, 12000);
+
+    return () => { supabase.removeChannel(channel); clearInterval(poll); };
   }, [room?.id, supabase, slug]);
 
   async function handleLockVotes() {
@@ -908,10 +915,10 @@ export default function DestinationsPage() {
             </div>
           ) : isRanked ? (
             voteStatus?.votes_revealed ? (
-              /* Ranked results — lowest Borda total wins */
+              /* Ranked results — lowest Borda total wins. The server already
+                 returns them in final order (ties broken by first-choice votes). */
               <div className="space-y-2">
-                {[...candidates]
-                  .sort((a, b) => (a.borda_points ?? 1e9) - (b.borda_points ?? 1e9))
+                {candidates
                   .map((c, i) => (
                     <div
                       key={c.id}
@@ -938,7 +945,10 @@ export default function DestinationsPage() {
                       <span className="text-sm font-bold text-gray-900 shrink-0">{c.borda_points} pts</span>
                     </div>
                   ))}
-                <p className="pt-1 text-xs text-gray-400">Lowest total score wins (everyone&apos;s ranks added up).</p>
+                <p className="pt-1 text-xs text-gray-400">
+                  Lowest total score wins (everyone&apos;s ranks added up). Ties go to the
+                  destination with more <strong>1st-choice</strong> votes.
+                </p>
               </div>
             ) : (
               /* Ranked voting — arrange into your preferred order then lock in */
