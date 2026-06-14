@@ -17,6 +17,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
 import FeedbackButton from "@/components/FeedbackButton";
 import AccountBadge from "@/components/AccountBadge";
+import StepBar from "@/components/StepBar";
 
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
@@ -177,6 +178,7 @@ export default function FlightsPage() {
           </div>
         </div>
       </nav>
+      <StepBar slug={slug} currentStep={room.current_step} activeRoute="flights" />
 
       <div className="mx-auto max-w-4xl px-6 py-10 space-y-8">
 

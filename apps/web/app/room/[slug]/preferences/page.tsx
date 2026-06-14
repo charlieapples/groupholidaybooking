@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import FeedbackButton from "@/components/FeedbackButton";
 import AccountBadge from "@/components/AccountBadge";
+import StepBar from "@/components/StepBar";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
@@ -186,6 +187,7 @@ export default function PreferencesPage() {
           </div>
         </div>
       </nav>
+      <StepBar slug={slug} currentStep={room.current_step} activeRoute="preferences" />
 
       <div className="mx-auto max-w-3xl px-6 py-10 space-y-8">
         {/* Step badges */}

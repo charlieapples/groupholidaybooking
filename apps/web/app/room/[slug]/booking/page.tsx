@@ -18,6 +18,7 @@ import { useToast, errorMessage } from "@/components/Toast";
 import { destName, accomEstimate, totalTripEstimate, cityName } from "@/lib/destinations";
 import FeedbackButton from "@/components/FeedbackButton";
 import AccountBadge from "@/components/AccountBadge";
+import StepBar from "@/components/StepBar";
 
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
@@ -277,6 +278,7 @@ export default function BookingPage() {
           </div>
         </div>
       </nav>
+      <StepBar slug={slug} currentStep={room.current_step} activeRoute="booking" />
 
       <div className="mx-auto max-w-3xl px-6 py-10 space-y-8">
 

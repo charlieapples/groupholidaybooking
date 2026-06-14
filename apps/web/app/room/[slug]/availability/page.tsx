@@ -27,6 +27,7 @@ import {
 import { parseIcal, parseRoughWindow, getMonthsInRange } from "@/lib/ical";
 import FeedbackButton from "@/components/FeedbackButton";
 import AccountBadge from "@/components/AccountBadge";
+import StepBar from "@/components/StepBar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
@@ -934,6 +935,7 @@ export default function AvailabilityPage() {
           </div>
         </div>
       </nav>
+      <StepBar slug={slug} currentStep={room?.current_step} activeRoute="availability" />
 
       <div className="mx-auto max-w-3xl space-y-6 px-6 py-10">
 
