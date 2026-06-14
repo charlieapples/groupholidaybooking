@@ -78,6 +78,7 @@ export default function DestinationsPage() {
   // Ranked (Borda) mode state
   const [ideas, setIdeas] = useState<DestinationIdea[]>([]);
   const [loadingIdeas, setLoadingIdeas] = useState(false);
+  const [aiReasoning, setAiReasoning] = useState<string | null>(null);
   const [rankOrder, setRankOrder] = useState<string[]>([]);
   const [submittingRank, setSubmittingRank] = useState(false);
   const [changingMode, setChangingMode] = useState(false);
@@ -225,8 +226,9 @@ export default function DestinationsPage() {
     if (!token) return;
     setSuggesting(true);
     try {
-      const results = await suggestDestinations(token, slug, 6);
-      setCandidates(results);
+      const res = await suggestDestinations(token, slug, 6);
+      setCandidates(res.candidates);
+      setAiReasoning(res.reasoning || null);
     } catch (e: unknown) {
       toast.error(errorMessage(e, "Failed to get suggestions"));
     } finally {
@@ -345,7 +347,8 @@ export default function DestinationsPage() {
     setLoadingIdeas(true);
     try {
       const got = await getDestinationIdeas(token, slug, 6);
-      setIdeas(got);
+      setIdeas(got.ideas);
+      setAiReasoning(got.reasoning || null);
     } catch (e: unknown) {
       toast.error(errorMessage(e, "Couldn't get AI ideas"));
     } finally {
@@ -832,6 +835,23 @@ export default function DestinationsPage() {
               price from your nearest airport is worked out at the Flights step. Daily living is a
               bare-minimum estimate (budget bed + food + local transport, no activities).
             </p>
+          )}
+
+          {/* Gemini's reasoning for its picks */}
+          {aiReasoning && (
+            <div className="mb-4 rounded-xl border border-purple-200 bg-purple-50 p-4">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <p className="text-sm font-semibold text-purple-900">🤖 Why the AI picked these</p>
+                <button
+                  onClick={() => setAiReasoning(null)}
+                  className="text-xs text-purple-400 hover:text-purple-700"
+                  title="Dismiss"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-sm text-purple-800 whitespace-pre-wrap">{aiReasoning}</p>
+            </div>
           )}
 
           {/* Blind-reveal banner */}

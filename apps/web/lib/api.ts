@@ -258,9 +258,14 @@ export interface DestinationIdea {
   est_flight_return_gbp?: number | null;
 }
 
+export interface IdeasResponse {
+  ideas: DestinationIdea[];
+  reasoning?: string | null;   // Gemini's rationale for these picks
+}
+
 /** Ranked mode: AI ideas for one member to pick from (does NOT add candidates). */
 export function getDestinationIdeas(token: string, slug: string, top_n = 6) {
-  return apiFetch<DestinationIdea[]>(
+  return apiFetch<IdeasResponse>(
     `/rooms/${slug}/destinations/ideas?top_n=${top_n}`,
     token
   );
@@ -293,8 +298,13 @@ export function submitRanking(
   });
 }
 
+export interface SuggestResponse {
+  candidates: DestinationCandidate[];
+  reasoning?: string | null;   // Gemini's rationale for these picks
+}
+
 export function suggestDestinations(token: string, slug: string, top_n = 5) {
-  return apiFetch<DestinationCandidate[]>(
+  return apiFetch<SuggestResponse>(
     `/rooms/${slug}/destinations/suggest?top_n=${top_n}`,
     token
   );

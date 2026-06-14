@@ -34,12 +34,12 @@ def _gemini_suggestions(
     prefs_list: list[dict],
     room: dict,
     top_n: int,
-) -> Optional[list[str]]:
+) -> Optional[tuple[list[str], str]]:
     """Ask Gemini to pick the best `top_n` IATA codes for the group.
 
-    Returns a list of IATA codes (subset of DEST_NAMES) or None if Gemini
-    isn't available or returned something unusable. Callers should fall back
-    to the rule-based scorer.
+    Returns (codes, reasoning) — a list of IATA codes (subset of DEST_NAMES) and
+    a short plain-text explanation of WHY — or None if Gemini isn't available or
+    returned something unusable. Callers should fall back to the rule-based scorer.
     """
     if not os.getenv("GEMINI_API_KEY"):
         return None
@@ -123,9 +123,13 @@ def _gemini_suggestions(
         "3. Give diverse picks (don't suggest 5 Spanish cities if the group wants mixed).\n"
         "4. Free-text notes from members take priority over button selections.\n"
         "5. Prefer destinations reachable within the group's budget (lower cost = better if budgets are tight).\n\n"
-        "Respond with ONLY a JSON array of IATA codes from the catalogue, in "
-        "rank order (best first). No prose, no markdown. Example: "
-        '["PRG","BER","CPH","VIE","EDI"]'
+        "Respond with ONLY a JSON object (no prose, no markdown) with two keys:\n"
+        '  "reasoning": a short paragraph (2-4 sentences) explaining how you '
+        "weighed the group's combined preferences, climate, budget and any free-text "
+        "notes to reach these picks. Write it for the group to read.\n"
+        '  "codes": an array of IATA codes from the catalogue, in rank order (best first).\n'
+        'Example: {"reasoning":"The group wants warm + nightlife on a tight budget, so...",'
+        '"codes":["BCN","LIS","VLC"]}'
     )
 
     try:
@@ -140,16 +144,30 @@ def _gemini_suggestions(
         log.warning("Gemini suggestion call failed: %s", exc)
         return None
 
-    # Extract the JSON array — model sometimes wraps in ```json``` despite instructions.
-    match = re.search(r"\[[^\]]*\]", text)
-    if not match:
-        log.warning("Gemini response had no JSON array: %s", text[:200])
-        return None
-    try:
-        codes_raw = _json.loads(match.group(0))
-    except Exception as exc:
-        log.warning("Failed to parse Gemini JSON: %s | %s", exc, text[:200])
-        return None
+    # Preferred path: a JSON object with reasoning + codes.
+    reasoning = ""
+    codes_raw = None
+    obj_match = re.search(r"\{.*\}", text, re.DOTALL)
+    if obj_match:
+        try:
+            obj = _json.loads(obj_match.group(0))
+            if isinstance(obj, dict):
+                reasoning = str(obj.get("reasoning") or "").strip()
+                if isinstance(obj.get("codes"), list):
+                    codes_raw = obj["codes"]
+        except Exception:
+            pass
+    # Fallback: a bare JSON array of codes (older prompt / model slip).
+    if codes_raw is None:
+        arr_match = re.search(r"\[[^\]]*\]", text)
+        if not arr_match:
+            log.warning("Gemini response had no usable JSON: %s", text[:200])
+            return None
+        try:
+            codes_raw = _json.loads(arr_match.group(0))
+        except Exception as exc:
+            log.warning("Failed to parse Gemini JSON: %s | %s", exc, text[:200])
+            return None
     if not isinstance(codes_raw, list):
         return None
 
@@ -165,7 +183,7 @@ def _gemini_suggestions(
             out.append(code)
         if len(out) >= top_n:
             break
-    return out or None
+    return (out, reasoning) if out else None
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
@@ -840,7 +858,12 @@ def submit_ranking(
     )
 
 
-@router.get("/suggest", response_model=list[DestinationCandidate])
+class SuggestResponse(BaseModel):
+    candidates: list[DestinationCandidate]
+    reasoning: Optional[str] = None      # Gemini's plain-text rationale, if available
+
+
+@router.get("/suggest", response_model=SuggestResponse)
 def suggest_destinations(
     slug: str,
     top_n: int = 5,
@@ -878,12 +901,13 @@ def suggest_destinations(
             prefs_list.append(raw)
 
     top: list[str] = []
+    ai_reasoning = ""
 
     # Path 1: Gemini (requires GEMINI_API_KEY + at least one preference set)
     if prefs_list:
         gemini_picks = _gemini_suggestions(prefs_list, room, top_n)
         if gemini_picks:
-            top = gemini_picks
+            top, ai_reasoning = gemini_picks
             log.info("Gemini suggested %d destinations for room %s", len(top), slug)
 
     # Path 2: rule-based scorer fallback
@@ -948,7 +972,10 @@ def suggest_destinations(
         )
         votes_data = votes_res.data
 
-    return _render_candidates(db, room, user.id, candidates_res.data, votes_data)
+    return SuggestResponse(
+        candidates=_render_candidates(db, room, user.id, candidates_res.data, votes_data),
+        reasoning=ai_reasoning or None,
+    )
 
 
 class DestinationIdea(BaseModel):
@@ -958,7 +985,12 @@ class DestinationIdea(BaseModel):
     est_flight_return_gbp: Optional[int] = None
 
 
-@router.get("/ideas", response_model=list[DestinationIdea])
+class IdeasResponse(BaseModel):
+    ideas: list[DestinationIdea]
+    reasoning: Optional[str] = None      # Gemini's plain-text rationale, if available
+
+
+@router.get("/ideas", response_model=IdeasResponse)
 def suggest_ideas(
     slug: str,
     top_n: int = 6,
@@ -993,10 +1025,11 @@ def suggest_ideas(
             prefs_list.append(raw)
 
     top: list[str] = []
+    ai_reasoning = ""
     if prefs_list:
         gemini_picks = _gemini_suggestions(prefs_list, room, top_n)
         if gemini_picks:
-            top = gemini_picks
+            top, ai_reasoning = gemini_picks
     if not top and prefs_list:
         scored = [(iata, score_destination(iata, prefs_list)) for iata in DEST_NAMES]
         scored.sort(key=lambda x: -x[1])
@@ -1013,7 +1046,7 @@ def suggest_ideas(
             est_daily_living_gbp=est["daily_living_gbp"] if est else None,
             est_flight_return_gbp=est["flight_return_gbp"] if est else None,
         ))
-    return out
+    return IdeasResponse(ideas=out, reasoning=ai_reasoning or None)
 
 
 class FlightEstimate(BaseModel):
