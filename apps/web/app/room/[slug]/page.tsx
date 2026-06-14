@@ -278,8 +278,29 @@ export default function RoomPage() {
     return `${fmt(winFrom)} – ${fmt(winTo)}`;
   }
 
+  // Parse a month ("YYYY-MM") or date ("YYYY-MM-DD") input into a Date.
+  function winValueToDate(v: string): Date | null {
+    if (!v) return null;
+    const p = v.split("-").map(Number);
+    return winMode === "month"
+      ? new Date(p[0], (p[1] || 1) - 1, 1)
+      : new Date(p[0], (p[1] || 1) - 1, p[2] || 1);
+  }
+  // True when the end is before the start (e.g. a 2026 → 2007 typo).
+  const windowInvalid = (() => {
+    const s = winValueToDate(winFrom);
+    const e = winValueToDate(winTo);
+    return !!(s && e && e < s);
+  })();
+  const windowInvalidBorder = windowInvalid ? "border-red-400 bg-red-50" : "border-gray-300";
+
   async function handleSaveWindow() {
     if (!token || !room?.is_admin) return;
+    if (!winFrom || !winTo) { toast.error("Pick both a start and end."); return; }
+    if (windowInvalid) {
+      toast.error("End must be after the start — check the years (you can't go back in time).");
+      return;
+    }
     const str = buildWindowString();
     if (!str) { toast.error("Pick both a start and end."); return; }
     setSavingWindow(true);
@@ -721,20 +742,25 @@ export default function RoomPage() {
                           type={winMode === "month" ? "month" : "date"}
                           value={winFrom}
                           onChange={(e) => setWinFrom(e.target.value)}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900"
+                          className={`w-full rounded border px-2 py-1 text-xs text-gray-900 ${windowInvalidBorder}`}
                         />
                         <span className="text-gray-400 text-xs">to</span>
                         <input
                           type={winMode === "month" ? "month" : "date"}
                           value={winTo}
                           onChange={(e) => setWinTo(e.target.value)}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900"
+                          className={`w-full rounded border px-2 py-1 text-xs text-gray-900 ${windowInvalidBorder}`}
                         />
                       </div>
+                      {windowInvalid && (
+                        <p className="text-xs font-medium text-red-600">
+                          ⚠️ End is before the start — check the years. You can&apos;t pick a window that goes back in time.
+                        </p>
+                      )}
                       <div className="flex gap-2">
                         <button
                           onClick={handleSaveWindow}
-                          disabled={savingWindow}
+                          disabled={savingWindow || windowInvalid || !winFrom || !winTo}
                           className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                         >{savingWindow ? "Saving…" : "Save"}</button>
                         <button

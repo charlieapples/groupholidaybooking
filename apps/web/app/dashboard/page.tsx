@@ -55,6 +55,21 @@ export default function Dashboard() {
     return fmt(fromVal) || fmt(toVal);
   }
 
+  // Parse a month ("YYYY-MM") or date ("YYYY-MM-DD") value, then flag a window
+  // whose end is before its start (e.g. a 2026 → 2007 typo).
+  function winToDate(v: string): Date | null {
+    if (!v) return null;
+    const p = v.split("-").map(Number);
+    return windowMode === "month"
+      ? new Date(p[0], (p[1] || 1) - 1, 1)
+      : new Date(p[0], (p[1] || 1) - 1, p[2] || 1);
+  }
+  const createWindowInvalid = (() => {
+    const s = winToDate(fromVal);
+    const e = winToDate(toVal);
+    return !!(s && e && e < s);
+  })();
+
   function resetWindow() {
     setFromVal(""); setToVal(""); setWindowMode("month");
   }
@@ -118,6 +133,10 @@ export default function Dashboard() {
 
   async function handleCreateRoom() {
     if (!token || !newName.trim()) return;
+    if (createWindowInvalid) {
+      toast.error("End must be after the start — check the years (you can't go back in time).");
+      return;
+    }
     // Validate postcode if one was entered (it's optional)
     let normalisedPostcode: string | undefined;
     if (newPostcode.trim()) {
@@ -464,7 +483,9 @@ export default function Dashboard() {
                       type={windowMode}
                       value={fromVal}
                       onChange={(e) => setFromVal(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+                      className={`w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none ${
+                        createWindowInvalid ? "border-red-400 bg-red-50 focus:border-red-500" : "border-gray-300 focus:border-blue-500"
+                      }`}
                     />
                   </div>
                   <div>
@@ -473,11 +494,17 @@ export default function Dashboard() {
                       type={windowMode}
                       value={toVal}
                       onChange={(e) => setToVal(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+                      className={`w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none ${
+                        createWindowInvalid ? "border-red-400 bg-red-50 focus:border-red-500" : "border-gray-300 focus:border-blue-500"
+                      }`}
                     />
                   </div>
                 </div>
-                {buildWindow() && (
+                {createWindowInvalid ? (
+                  <p className="mt-1.5 text-xs font-medium text-red-600">
+                    ⚠️ The end is before the start — check the years. A window can&apos;t go back in time.
+                  </p>
+                ) : buildWindow() && (
                   <p className="mt-1.5 text-xs text-blue-600">📅 {buildWindow()}</p>
                 )}
               </div>
@@ -503,7 +530,7 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={handleCreateRoom}
-                  disabled={creating || !newName.trim()}
+                  disabled={creating || !newName.trim() || createWindowInvalid}
                   className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                 >
                   {creating ? "Creating…" : "Plan Holiday"}

@@ -104,6 +104,11 @@ export function parseRoughWindow(rough: string | null): { start: Date; end: Date
   const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const defaultEnd   = new Date(now.getFullYear(), now.getMonth() + 6, 0);
 
+  // Guard: a window whose end is before its start (e.g. a 2026 → 2007 typo) is
+  // nonsense — fall back to the default range so the calendar still renders.
+  const guard = (start: Date, end: Date) =>
+    end < start ? { start: defaultStart, end: defaultEnd } : { start, end };
+
   if (!rough) return { start: defaultStart, end: defaultEnd };
 
   // "Month YYYY – Month YYYY"
@@ -112,7 +117,7 @@ export function parseRoughWindow(rough: string | null): { start: Date; end: Date
     const sm = monthFromName(m1[1]); const sy = parseInt(m1[2]);
     const em = monthFromName(m1[3]); const ey = parseInt(m1[4]);
     if (sm !== undefined && em !== undefined)
-      return { start: new Date(sy, sm, 1), end: new Date(ey, em + 1, 0) };
+      return guard(new Date(sy, sm, 1), new Date(ey, em + 1, 0));
   }
 
   // "Month–Month YYYY"
@@ -120,7 +125,7 @@ export function parseRoughWindow(rough: string | null): { start: Date; end: Date
   if (m2) {
     const sm = monthFromName(m2[1]); const em = monthFromName(m2[2]); const y = parseInt(m2[3]);
     if (sm !== undefined && em !== undefined)
-      return { start: new Date(y, sm, 1), end: new Date(y, em + 1, 0) };
+      return guard(new Date(y, sm, 1), new Date(y, em + 1, 0));
   }
 
   // "D Mon YYYY – D Mon YYYY" (exact date range from our date picker)
@@ -128,10 +133,10 @@ export function parseRoughWindow(rough: string | null): { start: Date; end: Date
   if (m3) {
     const sm = monthFromName(m3[2]); const em = monthFromName(m3[5]);
     if (sm !== undefined && em !== undefined)
-      return {
-        start: new Date(parseInt(m3[3]), sm, parseInt(m3[1])),
-        end:   new Date(parseInt(m3[6]), em, parseInt(m3[4])),
-      };
+      return guard(
+        new Date(parseInt(m3[3]), sm, parseInt(m3[1])),
+        new Date(parseInt(m3[6]), em, parseInt(m3[4])),
+      );
   }
 
   // "Month YYYY" single
