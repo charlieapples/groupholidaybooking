@@ -26,6 +26,7 @@ import {
 } from "@/lib/api";
 import { parseIcal, parseRoughWindow, getMonthsInRange } from "@/lib/ical";
 import FeedbackButton from "@/components/FeedbackButton";
+import AccountBadge from "@/components/AccountBadge";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
@@ -872,12 +873,15 @@ export default function AvailabilityPage() {
             ← Back to room
           </button>
           <span className="font-semibold text-gray-900">Mark your availability</span>
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="text-sm font-medium text-blue-600 hover:text-blue-800"
-          >
-            Dashboard →
-          </button>
+          <div className="flex items-center gap-3">
+            <AccountBadge className="hidden sm:flex" />
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="text-sm font-medium text-blue-600 hover:text-blue-800"
+            >
+              Dashboard →
+            </button>
+          </div>
         </div>
       </nav>
 

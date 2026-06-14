@@ -8,7 +8,6 @@ import {
   updateMyPostcode,
   updateRoom,
   goBackStep,
-  deleteRoom,
   leaveRoom,
   kickMember,
   remindPendingMembers,
@@ -23,6 +22,7 @@ import { useToast, errorMessage } from "@/components/Toast";
 import { normalisePostcode } from "@/lib/postcode";
 import { destName } from "@/lib/destinations";
 import FeedbackButton from "@/components/FeedbackButton";
+import AccountBadge from "@/components/AccountBadge";
 
 // Lazy-load the chat widget so it doesn't block initial render
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
@@ -181,24 +181,16 @@ export default function RoomPage() {
   }
 
 
-  async function handleDelete() {
-    if (!token || !room) return;
-    if (!window.confirm(`Delete "${room.name}"? This permanently removes the Holiday and all its data — this cannot be undone.`)) return;
-    try {
-      await deleteRoom(token, slug);
-      toast.success(`Deleted "${room.name}"`);
-      router.replace("/dashboard");
-    } catch (e: unknown) {
-      toast.error(errorMessage(e, "Failed to delete Holiday"));
-    }
-  }
-
   async function handleLeave() {
     if (!token || !room) return;
-    if (!window.confirm(`Leave "${room.name}"? You won't be able to rejoin unless re-invited.`)) return;
+    const lastOne = (room.member_count ?? 1) <= 1;
+    const msg = lastOne
+      ? `Leave "${room.name}"? You're the only member, so the Holiday will be deleted.`
+      : `Leave "${room.name}"? You won't be able to rejoin unless re-invited.${room.is_admin ? " Admin will pass to another member." : ""}`;
+    if (!window.confirm(msg)) return;
     try {
       await leaveRoom(token, slug);
-      toast.success(`Left "${room.name}"`);
+      toast.success(lastOne ? `Deleted "${room.name}"` : `Left "${room.name}"`);
       router.replace("/dashboard");
     } catch (e: unknown) {
       toast.error(errorMessage(e, "Failed to leave Holiday"));
@@ -434,12 +426,15 @@ export default function RoomPage() {
               )}
             </div>
           )}
-          <button
-            onClick={shareLink}
-            className="rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
-          >
-            Invite friends
-          </button>
+          <div className="flex items-center gap-3">
+            <AccountBadge className="hidden sm:flex" />
+            <button
+              onClick={shareLink}
+              className="rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
+            >
+              Invite friends
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -954,34 +949,23 @@ export default function RoomPage() {
               </div>
             </div>
 
-            {/* Danger zone — admin can delete, non-admin can leave */}
+            {/* Danger zone — anyone can leave; a Holiday is only deleted once
+                everyone has left (or by its sole member). */}
             <div className="rounded-xl border border-red-100 bg-white p-4 shadow-sm">
               <h3 className="text-sm font-semibold text-gray-900 mb-1">Danger zone</h3>
-              {room.is_admin ? (
-                <>
-                  <p className="text-xs text-gray-500 mb-3">
-                    Permanently removes this Holiday and all its data.
-                  </p>
-                  <button
-                    onClick={handleDelete}
-                    className="w-full rounded-lg border border-red-200 bg-red-50 py-2 text-xs font-medium text-red-700 hover:bg-red-100"
-                  >
-                    Delete this Holiday
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-xs text-gray-500 mb-3">
-                    Remove yourself from this Holiday.
-                  </p>
-                  <button
-                    onClick={handleLeave}
-                    className="w-full rounded-lg border border-red-200 bg-red-50 py-2 text-xs font-medium text-red-700 hover:bg-red-100"
-                  >
-                    Leave this Holiday
-                  </button>
-                </>
-              )}
+              <p className="text-xs text-gray-500 mb-3">
+                {(room.member_count ?? 1) <= 1
+                  ? "You're the only member — leaving deletes this Holiday."
+                  : room.is_admin
+                  ? "Leave this Holiday. Admin passes to another member; it's deleted once everyone has left."
+                  : "Leave this Holiday. It's deleted once everyone has left."}
+              </p>
+              <button
+                onClick={handleLeave}
+                className="w-full rounded-lg border border-red-200 bg-red-50 py-2 text-xs font-medium text-red-700 hover:bg-red-100"
+              >
+                {(room.member_count ?? 1) <= 1 ? "Leave & delete this Holiday" : "Leave this Holiday"}
+              </button>
             </div>
           </div>
         </div>

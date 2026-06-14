@@ -5,7 +5,7 @@ import {
   createRoom,
   joinRoom,
   listRooms,
-  deleteRoom,
+  leaveRoom,
   getMyProfile,
   type Room,
 } from "@/lib/api";
@@ -166,15 +166,19 @@ export default function Dashboard() {
     }
   }
 
-  async function handleDeleteRoom(slug: string, name: string) {
+  async function handleLeaveRoom(room: Room) {
     if (!token) return;
-    if (!window.confirm(`Delete "${name}"? This permanently removes the Holiday and all its data — this cannot be undone.`)) return;
+    const lastOne = (room.member_count ?? 1) <= 1;
+    const msg = lastOne
+      ? `Leave "${room.name}"? You're the only member, so it will be deleted.`
+      : `Leave "${room.name}"? You won't be able to rejoin unless re-invited.${room.is_admin ? " Admin will pass to another member." : ""}`;
+    if (!window.confirm(msg)) return;
     try {
-      await deleteRoom(token, slug);
-      setRooms((prev) => prev.filter((r) => r.slug !== slug));
-      toast.success(`Deleted "${name}"`);
+      await leaveRoom(token, room.slug);
+      setRooms((prev) => prev.filter((r) => r.slug !== room.slug));
+      toast.success(lastOne ? `Deleted "${room.name}"` : `Left "${room.name}"`);
     } catch (e: unknown) {
-      toast.error(errorMessage(e, "Failed to delete Holiday"));
+      toast.error(errorMessage(e, "Failed to leave Holiday"));
     }
   }
 
@@ -387,19 +391,19 @@ export default function Dashboard() {
                       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                     </svg>
                   </button>
-                  {room.is_admin && (
-                    <button
-                      onClick={() => handleDeleteRoom(room.slug, room.name)}
-                      title="Delete this Holiday"
-                      className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                      aria-label="Delete Holiday"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleLeaveRoom(room)}
+                    title={(room.member_count ?? 1) <= 1 ? "Leave & delete this Holiday" : "Leave this Holiday"}
+                    className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                    aria-label="Leave Holiday"
+                  >
+                    {/* exit/leave icon */}
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                      <polyline points="16 17 21 12 16 7" />
+                      <line x1="21" y1="12" x2="9" y2="12" />
+                    </svg>
+                  </button>
                 </div>
               </div>
             ))}

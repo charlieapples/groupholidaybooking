@@ -550,17 +550,26 @@ def _reset_room_votes(db, room_id: str) -> None:
 
 @router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_room(slug: str, user: UserInfo = Depends(current_user)):
-    """Delete a Holiday (room) and all related rows (cascade). Admin only.
+    """Delete a Holiday — only allowed when you're the SOLE member.
 
-    Database FKs use ON DELETE CASCADE so members, availability blocks,
-    preferences, destination candidates/votes, and flight results are
-    all cleaned up automatically.
+    A Holiday is a group thing: once others have joined, no single person can
+    delete it for everyone. With other members present, use 'leave' instead —
+    the Holiday is removed automatically once the last person leaves. When you're
+    the only member, deleting is just leaving as the last person.
     """
     db = get_client()
     room = _get_room_by_slug(db, slug)
-    membership = _assert_member(db, room["id"], user.id)
-    if not membership.get("is_admin"):
-        raise HTTPException(403, "Only the Holiday admin can delete it.")
+    _assert_member(db, room["id"], user.id)
+
+    count_res = (
+        db.table("room_members").select("user_id", count="exact").eq("room_id", room["id"]).execute()
+    )
+    if (count_res.count or 0) > 1:
+        raise HTTPException(
+            403,
+            "This Holiday has other members, so it can't be deleted for everyone. "
+            "Leave it instead — it's removed automatically once everyone has left.",
+        )
 
     db.table("rooms").delete().eq("id", room["id"]).execute()
     return None
@@ -607,21 +616,44 @@ def _purge_member_room_data(db, room_id: str, user_id: str) -> None:
 
 @router.delete("/{slug}/leave", status_code=status.HTTP_204_NO_CONTENT)
 def leave_room(slug: str, user: UserInfo = Depends(current_user)):
-    """Remove the calling user from a room.
+    """Remove the calling user from a Holiday.
 
-    Admins cannot leave their own room — they must transfer admin or delete it.
+    Anyone can leave — a Holiday is a group thing, so no single person can delete
+    it for everyone. Rules:
+      * If the leaver was the admin and others remain, admin passes to the
+        longest-standing remaining member (so the Holiday is never orphaned).
+      * If they were the last member, the Holiday is deleted (cascades).
     """
     db = get_client()
     room = _get_room_by_slug(db, slug)
     membership = _assert_member(db, room["id"], user.id)
-    if membership.get("is_admin"):
-        raise HTTPException(
-            400,
-            "Admins cannot leave their own Holiday. "
-            "Delete the Holiday instead, or ask another member to become admin.",
-        )
+    was_admin = bool(membership.get("is_admin"))
+
     db.table("room_members").delete().eq("room_id", room["id"]).eq("user_id", user.id).execute()
     _purge_member_room_data(db, room["id"], user.id)
+
+    # Who's left?
+    remaining = (
+        db.table("room_members")
+        .select("user_id, is_admin, joined_at")
+        .eq("room_id", room["id"])
+        .order("joined_at")
+        .execute()
+    )
+    rows = remaining.data or []
+
+    if not rows:
+        # Last one out — delete the Holiday (FKs cascade members/votes/etc.).
+        db.table("rooms").delete().eq("id", room["id"]).execute()
+        return None
+
+    # Hand over admin if the leaver was the admin and nobody else holds it.
+    if was_admin and not any(r.get("is_admin") for r in rows):
+        new_admin = rows[0]["user_id"]
+        db.table("room_members").update({"is_admin": True}).eq(
+            "room_id", room["id"]
+        ).eq("user_id", new_admin).execute()
+
     return None
 
 

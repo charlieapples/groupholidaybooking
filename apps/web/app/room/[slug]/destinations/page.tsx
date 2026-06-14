@@ -27,6 +27,7 @@ import {
 } from "@/lib/api";
 import dynamic from "next/dynamic";
 import FeedbackButton from "@/components/FeedbackButton";
+import AccountBadge from "@/components/AccountBadge";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
@@ -516,12 +517,15 @@ export default function DestinationsPage() {
             ← {room.name}
           </button>
           <span className="font-semibold text-gray-900">🗺️ Destinations</span>
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="text-sm font-medium text-blue-600 hover:text-blue-800"
-          >
-            Dashboard →
-          </button>
+          <div className="flex items-center gap-3">
+            <AccountBadge className="hidden sm:flex" />
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="text-sm font-medium text-blue-600 hover:text-blue-800"
+            >
+              Dashboard →
+            </button>
+          </div>
         </div>
       </nav>
 

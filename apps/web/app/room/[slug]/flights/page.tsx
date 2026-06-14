@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
 import FeedbackButton from "@/components/FeedbackButton";
+import AccountBadge from "@/components/AccountBadge";
 
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
 
@@ -165,12 +166,15 @@ export default function FlightsPage() {
             ← {room.name}
           </button>
           <span className="font-semibold text-gray-900">✈️ Flights</span>
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="text-sm font-medium text-blue-600 hover:text-blue-800"
-          >
-            Dashboard →
-          </button>
+          <div className="flex items-center gap-3">
+            <AccountBadge className="hidden sm:flex" />
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="text-sm font-medium text-blue-600 hover:text-blue-800"
+            >
+              Dashboard →
+            </button>
+          </div>
         </div>
       </nav>
 

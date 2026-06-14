@@ -11,6 +11,7 @@ import {
   type DurationBudgetAggregate,
 } from "@/lib/api";
 import FeedbackButton from "@/components/FeedbackButton";
+import AccountBadge from "@/components/AccountBadge";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
@@ -174,12 +175,15 @@ export default function PreferencesPage() {
             ← {room.name}
           </button>
           <span className="font-semibold text-gray-900">Duration &amp; Budget</span>
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="text-sm font-medium text-blue-600 hover:text-blue-800"
-          >
-            Dashboard →
-          </button>
+          <div className="flex items-center gap-3">
+            <AccountBadge className="hidden sm:flex" />
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="text-sm font-medium text-blue-600 hover:text-blue-800"
+            >
+              Dashboard →
+            </button>
+          </div>
         </div>
       </nav>
 
