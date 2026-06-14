@@ -278,19 +278,33 @@ export default function RoomPage() {
       ? new Date(p[0], (p[1] || 1) - 1, 1)
       : new Date(p[0], (p[1] || 1) - 1, p[2] || 1);
   }
-  // True when the end is before the start (e.g. a 2026 → 2007 typo).
-  const windowInvalid = (() => {
+  // Earliest selectable value (this month / today) + a validation message that
+  // covers past dates and backwards ranges (e.g. a 2026 → 2007 typo).
+  const _now = new Date();
+  const winMin =
+    winMode === "month"
+      ? `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`
+      : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+  const windowError = (() => {
+    const floor =
+      winMode === "month"
+        ? new Date(_now.getFullYear(), _now.getMonth(), 1)
+        : new Date(_now.getFullYear(), _now.getMonth(), _now.getDate());
     const s = winValueToDate(winFrom);
     const e = winValueToDate(winTo);
-    return !!(s && e && e < s);
+    if (s && s < floor) return "Start is in the past — pick a future date.";
+    if (e && e < floor) return "End is in the past — pick a future date.";
+    if (s && e && e < s) return "The end is before the start — check the years.";
+    return null;
   })();
+  const windowInvalid = windowError !== null;
   const windowInvalidBorder = windowInvalid ? "border-red-400 bg-red-50" : "border-gray-300";
 
   async function handleSaveWindow() {
     if (!token || !room?.is_admin) return;
     if (!winFrom || !winTo) { toast.error("Pick both a start and end."); return; }
-    if (windowInvalid) {
-      toast.error("End must be after the start — check the years (you can't go back in time).");
+    if (windowError) {
+      toast.error(windowError);
       return;
     }
     const str = buildWindowString();
@@ -735,6 +749,7 @@ export default function RoomPage() {
                       <div className="flex items-center gap-1.5">
                         <input
                           type={winMode === "month" ? "month" : "date"}
+                          min={winMin}
                           value={winFrom}
                           onChange={(e) => setWinFrom(e.target.value)}
                           className={`w-full rounded border px-2 py-1 text-xs text-gray-900 ${windowInvalidBorder}`}
@@ -742,15 +757,14 @@ export default function RoomPage() {
                         <span className="text-gray-400 text-xs">to</span>
                         <input
                           type={winMode === "month" ? "month" : "date"}
+                          min={winFrom || winMin}
                           value={winTo}
                           onChange={(e) => setWinTo(e.target.value)}
                           className={`w-full rounded border px-2 py-1 text-xs text-gray-900 ${windowInvalidBorder}`}
                         />
                       </div>
-                      {windowInvalid && (
-                        <p className="text-xs font-medium text-red-600">
-                          ⚠️ End is before the start — check the years. You can&apos;t pick a window that goes back in time.
-                        </p>
+                      {windowError && (
+                        <p className="text-xs font-medium text-red-600">⚠️ {windowError}</p>
                       )}
                       <div className="flex gap-2">
                         <button

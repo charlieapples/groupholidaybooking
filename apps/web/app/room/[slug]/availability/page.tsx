@@ -55,7 +55,8 @@ function MonthGrid({
   year,
   month,
   busyDates,
-  onToggle,
+  onCellDown,
+  onCellEnter,
   windowStart,
   windowEnd,
   disabled,
@@ -63,7 +64,8 @@ function MonthGrid({
   year: number;
   month: number;
   busyDates: Set<string>;
-  onToggle: (iso: string) => void;
+  onCellDown: (iso: string) => void;   // press / tap a day (starts a drag-paint)
+  onCellEnter: (iso: string) => void;  // drag over a day
   windowStart: Date;
   windowEnd: Date;
   disabled: boolean;
@@ -112,10 +114,18 @@ function MonthGrid({
           return (
             <button
               key={iso}
-              onClick={() => !isPast && !outOfWindow && !disabled && onToggle(iso)}
+              onMouseDown={(e) => {
+                if (isPast || outOfWindow || disabled) return;
+                e.preventDefault(); // stop text selection while dragging
+                onCellDown(iso);
+              }}
+              onMouseEnter={() => {
+                if (isPast || outOfWindow || disabled) return;
+                onCellEnter(iso);
+              }}
               disabled={isPast || outOfWindow || disabled}
               title={
-                isBusy ? "Busy — click to unmark" : isPast ? "Past date" : "Click to mark busy"
+                isBusy ? "Busy — click to unmark (or drag)" : isPast ? "Past date" : "Click or drag to mark busy"
               }
               className={[
                 "aspect-square rounded-lg text-sm font-medium transition-colors",
@@ -249,10 +259,17 @@ function ImportPanel({
         return;
       }
       const listData = await listResp.json();
+      // Auto-generated "informational" calendars that aren't real conflicts —
+      // these are the usual cause of a day showing busy with nothing in your own
+      // calendar. We skip them so availability reflects YOUR actual commitments.
+      const isNoiseCalendar = (id: string) =>
+        /#(holiday|contacts|weeknum|weather)@group\.v\.calendar\.google\.com$/.test(id);
       const calendarIds: string[] = (listData.items ?? [])
-        // Skip calendars the user has hidden in the Google UI — they probably
-        // don't want them counted as "busy" (e.g. holidays in your country).
-        .filter((c: { selected?: boolean; id?: string }) => c.selected !== false && c.id)
+        .filter((c: { selected?: boolean; id?: string }) =>
+          // Skip calendars hidden in the Google UI, and skip holiday/birthday/
+          // week-number/weather calendars.
+          c.selected !== false && c.id && !isNoiseCalendar(c.id)
+        )
         .map((c: { id: string }) => c.id);
 
       if (calendarIds.length === 0) calendarIds.push("primary");
@@ -756,18 +773,51 @@ export default function AvailabilityPage() {
     };
   }, [room]);
 
-  const toggleDate = useCallback(
-    (iso: string) => {
+  // Drag-to-paint: press a day to flip it, then drag across days to set them all
+  // to the same state (busy or free). paintMode holds the value being painted.
+  const paintMode = useRef<boolean | null>(null);
+
+  const setDay = useCallback(
+    (iso: string, busy: boolean) => {
       if (submitted) return;
       setBusyDates((prev) => {
         const next = new Set(prev);
-        if (next.has(iso)) next.delete(iso);
-        else next.add(iso);
+        if (busy) next.add(iso);
+        else next.delete(iso);
         return next;
       });
     },
     [submitted]
   );
+
+  const handleCellDown = useCallback(
+    (iso: string) => {
+      if (submitted) return;
+      const makeBusy = !busyDates.has(iso); // flip the first cell, then paint that value
+      paintMode.current = makeBusy;
+      setDay(iso, makeBusy);
+    },
+    [submitted, busyDates, setDay]
+  );
+
+  const handleCellEnter = useCallback(
+    (iso: string) => {
+      if (paintMode.current === null) return;
+      setDay(iso, paintMode.current);
+    },
+    [setDay]
+  );
+
+  // End any drag-paint when the mouse/finger is released anywhere.
+  useEffect(() => {
+    const end = () => { paintMode.current = null; };
+    window.addEventListener("mouseup", end);
+    window.addEventListener("touchend", end);
+    return () => {
+      window.removeEventListener("mouseup", end);
+      window.removeEventListener("touchend", end);
+    };
+  }, []);
 
   function handleImport(dates: string[]) {
     setBusyDates((prev) => {
@@ -937,7 +987,7 @@ export default function AvailabilityPage() {
             <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-white px-5 py-3">
               <p className="text-sm text-gray-600 flex-1">
                 <strong>Green = free</strong>, <strong>red = busy</strong>.
-                Click any date to flip it.
+                Click a date to flip it, or <strong>click and drag</strong> to mark several at once.
               </p>
               <div className="flex items-center gap-4 text-sm">
                 <span className="flex items-center gap-1.5">
@@ -978,7 +1028,8 @@ export default function AvailabilityPage() {
                     year={year}
                     month={month}
                     busyDates={busyDates}
-                    onToggle={toggleDate}
+                    onCellDown={handleCellDown}
+                    onCellEnter={handleCellEnter}
                     windowStart={windowStart}
                     windowEnd={windowEnd}
                     disabled={submitted}

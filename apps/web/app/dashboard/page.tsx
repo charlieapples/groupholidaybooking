@@ -64,11 +64,26 @@ export default function Dashboard() {
       ? new Date(p[0], (p[1] || 1) - 1, 1)
       : new Date(p[0], (p[1] || 1) - 1, p[2] || 1);
   }
-  const createWindowInvalid = (() => {
+  // Earliest selectable value for the inputs (this month / today), and a
+  // validation message covering past dates and backwards ranges.
+  const now = new Date();
+  const winMin =
+    windowMode === "month"
+      ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+      : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const createWindowError = (() => {
+    const floor =
+      windowMode === "month"
+        ? new Date(now.getFullYear(), now.getMonth(), 1)
+        : new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const s = winToDate(fromVal);
     const e = winToDate(toVal);
-    return !!(s && e && e < s);
+    if (s && s < floor) return "Start is in the past — pick a future date.";
+    if (e && e < floor) return "End is in the past — pick a future date.";
+    if (s && e && e < s) return "The end is before the start — check the years.";
+    return null;
   })();
+  const createWindowInvalid = createWindowError !== null;
 
   function resetWindow() {
     setFromVal(""); setToVal(""); setWindowMode("month");
@@ -133,8 +148,8 @@ export default function Dashboard() {
 
   async function handleCreateRoom() {
     if (!token || !newName.trim()) return;
-    if (createWindowInvalid) {
-      toast.error("End must be after the start — check the years (you can't go back in time).");
+    if (createWindowError) {
+      toast.error(createWindowError);
       return;
     }
     // Validate postcode if one was entered (it's optional)
@@ -485,6 +500,7 @@ export default function Dashboard() {
                     <p className="mb-1 text-xs text-gray-500">From</p>
                     <input
                       type={windowMode}
+                      min={winMin}
                       value={fromVal}
                       onChange={(e) => setFromVal(e.target.value)}
                       className={`w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none ${
@@ -496,6 +512,7 @@ export default function Dashboard() {
                     <p className="mb-1 text-xs text-gray-500">To</p>
                     <input
                       type={windowMode}
+                      min={fromVal || winMin}
                       value={toVal}
                       onChange={(e) => setToVal(e.target.value)}
                       className={`w-full rounded-lg border px-3 py-2 text-sm text-gray-900 focus:outline-none ${
@@ -504,10 +521,8 @@ export default function Dashboard() {
                     />
                   </div>
                 </div>
-                {createWindowInvalid ? (
-                  <p className="mt-1.5 text-xs font-medium text-red-600">
-                    ⚠️ The end is before the start — check the years. A window can&apos;t go back in time.
-                  </p>
+                {createWindowError ? (
+                  <p className="mt-1.5 text-xs font-medium text-red-600">⚠️ {createWindowError}</p>
                 ) : buildWindow() && (
                   <p className="mt-1.5 text-xs text-blue-600">📅 {buildWindow()}</p>
                 )}

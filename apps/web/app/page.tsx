@@ -33,7 +33,29 @@ function LandingPageContent() {
 
   useEffect(() => {
     if (searchParams.get("error") === "auth_failed") {
-      setError("Sign-in failed. Please try again.");
+      // Supabase puts the real reason in the URL hash (e.g.
+      // #error=server_error&error_code=identity_already_exists&error_description=...).
+      // Surface it so the user knows what's actually wrong.
+      let detail = "";
+      let code = "";
+      if (typeof window !== "undefined" && window.location.hash) {
+        const h = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+        code = h.get("error_code") || "";
+        detail = (h.get("error_description") || "").replace(/\+/g, " ");
+      }
+      if (code === "identity_already_exists") {
+        setError(
+          "That Microsoft/Google account is already linked to a different sign-in here. " +
+          "Sign in with the method you originally used to create the account (e.g. email & password), " +
+          "then connect the calendar from inside a Holiday."
+        );
+      } else {
+        setError(detail ? `Sign-in failed: ${detail}` : "Sign-in failed. Please try again.");
+      }
+      // Clean the error out of the URL so a refresh doesn't keep showing it.
+      if (typeof window !== "undefined") {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
       setLoading(false);
       return;
     }
