@@ -249,29 +249,37 @@ export default function DestinationsPage() {
   // The candidate THIS member proposed (ranked mode = their one pick).
   const myPick = candidates.find((c) => c.proposed_by === myUserId) || null;
 
-  // Rough trip length for the "total pp" estimate.
-  const avgNights =
-    room?.min_nights && room?.max_nights
-      ? Math.round((room.min_nights + room.max_nights) / 2)
-      : null;
+  // Trip length range for the "total pp" estimate (lower & upper bounds).
+  const minNights = room?.min_nights ?? null;
+  const maxNights = room?.max_nights ?? null;
 
   // Small cost-guidance line shown under each destination.
   function CostLine({ c }: { c: DestinationCandidate }) {
     // Prefer the live fare (Travelpayouts) over the offline region estimate.
-    // For the "trip total" we use the CHEAPEST (from) fare.
     const live = liveFlights[c.iata_code];
-    const flightForTotal =
-      c.total_cost_gbp != null
-        ? c.total_cost_gbp
-        : live
-        ? live.flight_min_gbp
-        : c.est_flight_low_gbp ?? c.est_flight_return_gbp ?? null;
-    const hasFlight = flightForTotal != null;
-    if (!hasFlight && c.est_daily_living_gbp == null) return null;
-    const tripTotal =
-      flightForTotal != null && c.est_daily_living_gbp != null && avgNights
-        ? flightForTotal + c.est_daily_living_gbp * avgNights
-        : null;
+    // Flight low/high: real search cost if present, else live min/max, else offline band.
+    const flightLow =
+      c.total_cost_gbp != null ? c.total_cost_gbp
+      : live ? live.flight_min_gbp
+      : c.est_flight_low_gbp ?? c.est_flight_return_gbp ?? null;
+    const flightHigh =
+      c.total_cost_gbp != null ? c.total_cost_gbp
+      : live ? live.flight_max_gbp
+      : c.est_flight_high_gbp ?? c.est_flight_return_gbp ?? null;
+    const dayLow = c.est_daily_living_low_gbp ?? c.est_daily_living_gbp ?? null;
+    const dayHigh = c.est_daily_living_high_gbp ?? c.est_daily_living_gbp ?? null;
+
+    if (flightLow == null && c.est_daily_living_gbp == null) return null;
+
+    // Lower bound: cheapest flight + cheap daily × fewest nights.
+    // Upper bound: dearest flight + higher daily × most nights.
+    const nLow = minNights ?? maxNights;
+    const nHigh = maxNights ?? minNights;
+    const tripLow =
+      flightLow != null && dayLow != null && nLow != null ? flightLow + dayLow * nLow : null;
+    const tripHigh =
+      flightHigh != null && dayHigh != null && nHigh != null ? flightHigh + dayHigh * nHigh : null;
+
     return (
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
         {c.total_cost_gbp != null ? (
@@ -293,12 +301,12 @@ export default function DestinationsPage() {
             🛏️🍽️ ~£{c.est_daily_living_gbp}/day
           </span>
         )}
-        {tripTotal != null && (
+        {tripLow != null && tripHigh != null && (
           <span
             className="font-medium text-gray-600"
-            title={`Rough total pp from ~${avgNights} nights: cheapest flight + bare-minimum daily living. No activities.`}
+            title={`Rough total pp range over your ${minNights ?? "?"}–${maxNights ?? "?"} night trip: (cheapest flight + low daily × ${nLow} nights) to (dearest flight + higher daily × ${nHigh} nights). Flights + bare-minimum living, no activities.`}
           >
-            from ≈ £{Math.round(tripTotal).toLocaleString()} pp total
+            ≈ £{Math.round(tripLow).toLocaleString()}–£{Math.round(tripHigh).toLocaleString()} pp total
           </span>
         )}
       </div>

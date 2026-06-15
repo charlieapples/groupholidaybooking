@@ -32,6 +32,8 @@ export default function PreferencesPage() {
   const [minNights, setMinNights] = useState("");
   const [maxNights, setMaxNights] = useState("");
   const [budget, setBudget] = useState("");
+  // "cheapest" = no cap (just rank cheapest first); "cap" = a specific £ limit.
+  const [budgetMode, setBudgetMode] = useState<"cheapest" | "cap">("cheapest");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -39,6 +41,7 @@ export default function PreferencesPage() {
   const [agreedMin, setAgreedMin] = useState("");
   const [agreedMax, setAgreedMax] = useState("");
   const [agreedBudget, setAgreedBudget] = useState("");
+  const [agreedBudgetMode, setAgreedBudgetMode] = useState<"cheapest" | "cap">("cheapest");
   // Group's £/hr valuation of airport travel time (flight optimiser).
   // 0 = cheapest regardless of distance; 50 = strongly prefer nearby airports.
   const [timeValue, setTimeValue] = useState(0);
@@ -58,14 +61,14 @@ export default function PreferencesPage() {
         // otherwise compute the overlap range from responses
         if (r.min_nights) setAgreedMin(String(r.min_nights));
         if (r.max_nights) setAgreedMax(String(r.max_nights));
-        if (r.budget_gbp) setAgreedBudget(String(r.budget_gbp));
+        if (r.budget_gbp) { setAgreedBudget(String(r.budget_gbp)); setAgreedBudgetMode("cap"); }
         if (r.time_value_per_hour != null) setTimeValue(r.time_value_per_hour);
         // Pre-fill my personal preferences from saved answers
         const mine = d.responses.find((row) => row.user_id === uid);
         if (mine) {
           if (mine.min_nights) setMinNights(String(mine.min_nights));
           if (mine.max_nights) setMaxNights(String(mine.max_nights));
-          if (mine.budget_gbp) setBudget(String(mine.budget_gbp));
+          if (mine.budget_gbp) { setBudget(String(mine.budget_gbp)); setBudgetMode("cap"); }
         }
       } catch {
         router.replace("/dashboard");
@@ -255,24 +258,44 @@ export default function PreferencesPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Max budget per person (£) <span className="text-gray-400 font-normal">— optional</span>
-            </label>
-            <input
-              type="number"
-              min={0}
-              placeholder="Leave blank to just rank by cheapest"
-              value={budget}
-              onChange={(e) => setBudget(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSave()}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              If everyone leaves this blank, destinations are simply ranked from cheapest to most expensive.
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              Total including flights, accommodation, and travel to airport.
-            </p>
+            <label className="mb-2 block text-sm font-medium text-gray-700">Budget per person</label>
+            <div className="mb-2 flex rounded-lg border border-gray-200 bg-gray-50 p-1 w-fit">
+              {([
+                ["cheapest", "💸 Aim for cheapest"],
+                ["cap", "🎯 Set a max budget"],
+              ] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => { setBudgetMode(val); if (val === "cheapest") setBudget(""); }}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    budgetMode === val ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-800"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {budgetMode === "cap" ? (
+              <>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="e.g. 500"
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSave()}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Total including flights, accommodation, and travel to airport.
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-gray-500">
+                No cap — destinations will just be ranked from cheapest to most expensive for the group.
+              </p>
+            )}
           </div>
 
           <button
@@ -443,7 +466,7 @@ export default function PreferencesPage() {
                 onClick={() => {
                   if (suggestedMin) setAgreedMin(String(suggestedMin));
                   if (suggestedMax) setAgreedMax(String(suggestedMax));
-                  if (minBudget) setAgreedBudget(String(minBudget));
+                  if (minBudget) { setAgreedBudget(String(minBudget)); setAgreedBudgetMode("cap"); }
                 }}
                 className="text-sm text-blue-600 hover:underline"
               >
@@ -452,16 +475,39 @@ export default function PreferencesPage() {
             )}
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-blue-800">Budget cap per person (£)</label>
-              <input
-                type="number"
-                min={0}
-                placeholder="Leave blank for no cap"
-                value={agreedBudget}
-                onChange={(e) => setAgreedBudget(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAdvance()}
-                className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
-              />
+              <label className="mb-2 block text-sm font-medium text-blue-800">Group budget per person</label>
+              <div className="mb-2 flex rounded-lg border border-blue-200 bg-white p-1 w-fit">
+                {([
+                  ["cheapest", "💸 Aim for cheapest"],
+                  ["cap", "🎯 Set a max budget"],
+                ] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => { setAgreedBudgetMode(val); if (val === "cheapest") setAgreedBudget(""); }}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      agreedBudgetMode === val ? "bg-blue-600 text-white" : "text-blue-700 hover:bg-blue-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {agreedBudgetMode === "cap" ? (
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="e.g. 500"
+                  value={agreedBudget}
+                  onChange={(e) => setAgreedBudget(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAdvance()}
+                  className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
+                />
+              ) : (
+                <p className="text-xs text-blue-700">
+                  No cap — the optimiser ranks destinations cheapest-first and shows every price (over-budget ones are just flagged, never hidden).
+                </p>
+              )}
             </div>
 
             {/* Travel-time vs money trade-off for the flight optimiser */}
