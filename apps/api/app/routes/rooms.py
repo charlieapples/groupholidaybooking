@@ -511,6 +511,12 @@ def update_room(
     if not updates:
         return _room_with_member_count(db, room, user.id)
 
+    # Guard: minimum nights can't exceed maximum nights (no 6–5 night trips).
+    new_min = updates.get("min_nights", room.get("min_nights"))
+    new_max = updates.get("max_nights", room.get("max_nights"))
+    if new_min is not None and new_max is not None and new_min > new_max:
+        raise HTTPException(422, "min_nights cannot be greater than max_nights.")
+
     # Validate voting_style and, if it's actually CHANGING, wipe existing votes
     # and lock-ins. The destination_votes.vote_value column means different
     # things per mode (rank in 'ranked', +1/0/-1 in 'open'), so carrying votes

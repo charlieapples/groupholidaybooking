@@ -84,8 +84,18 @@ export default function PreferencesPage() {
     return () => { document.title = "Group Holiday Booking — plan your trip together"; };
   }, [room?.name]);
 
+  // Min nights must be ≤ max nights (you can't have a 6–5 night trip).
+  const memberDurationInvalid =
+    !!minNights && !!maxNights && Number(minNights) > Number(maxNights);
+  const agreedDurationInvalid =
+    !!agreedMin && !!agreedMax && Number(agreedMin) > Number(agreedMax);
+
   async function handleSave() {
     if (!token) return;
+    if (memberDurationInvalid) {
+      toast.error("Minimum nights can't be more than the maximum.");
+      return;
+    }
     setSaving(true);
     try {
       const body: { min_nights?: number; max_nights?: number; budget_gbp?: number } = {};
@@ -108,6 +118,10 @@ export default function PreferencesPage() {
     if (!token || !room?.is_admin) return;
     if (!agreedMin || !agreedMax) {
       toast.error("Please set agreed min and max nights before advancing.");
+      return;
+    }
+    if (agreedDurationInvalid) {
+      toast.error("Minimum nights can't be more than the maximum.");
       return;
     }
     setAdvancing(true);
@@ -227,10 +241,17 @@ export default function PreferencesPage() {
                   value={maxNights}
                   onChange={(e) => setMaxNights(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none ${
+                    memberDurationInvalid ? "border-red-400 bg-red-50 focus:border-red-500" : "border-gray-300 focus:border-blue-500"
+                  }`}
                 />
               </div>
             </div>
+            {memberDurationInvalid && (
+              <p className="mt-1.5 text-xs font-medium text-red-600">
+                ⚠️ Minimum can&apos;t be more than the maximum — set it lowest first, then highest.
+              </p>
+            )}
           </div>
 
           <div>
@@ -256,7 +277,7 @@ export default function PreferencesPage() {
 
           <button
             onClick={handleSave}
-            disabled={saving || (!minNights && !maxNights && !budget)}
+            disabled={saving || memberDurationInvalid || (!minNights && !maxNights && !budget)}
             className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? "Saving…" : saved ? "✓ Saved!" : "Save preferences"}
@@ -401,14 +422,21 @@ export default function PreferencesPage() {
                 <label className="mb-1 block text-sm font-medium text-blue-800">Max nights</label>
                 <input
                   type="number"
-                  min={1}
+                  min={agreedMin || 1}
                   value={agreedMax}
                   onChange={(e) => setAgreedMax(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleAdvance()}
-                  className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+                  className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none ${
+                    agreedDurationInvalid ? "border-red-400 bg-red-50 focus:border-red-500" : "border-blue-300 focus:border-blue-500"
+                  }`}
                 />
               </div>
             </div>
+            {agreedDurationInvalid && (
+              <p className="mt-2 text-xs font-medium text-red-600">
+                ⚠️ Min nights can&apos;t be more than max — enter the smaller number on the left.
+              </p>
+            )}
             {(suggestedMin || suggestedMax) && (
               <button
                 type="button"
@@ -468,7 +496,7 @@ export default function PreferencesPage() {
 
             <button
               onClick={handleAdvance}
-              disabled={advancing || !agreedMin || !agreedMax}
+              disabled={advancing || !agreedMin || !agreedMax || agreedDurationInvalid}
               className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
             >
               {advancing ? "Saving…" : "Lock in & move to destinations →"}

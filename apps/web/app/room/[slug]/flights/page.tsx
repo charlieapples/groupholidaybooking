@@ -474,8 +474,25 @@ export default function FlightsPage() {
           </div>
         )}
 
-        {/* Admin: pick destination note */}
-        {room.is_admin && results.length > 0 && !room.destination_iata && (
+        {/* Search ran but NO destination had any viable flights — explain why,
+            instead of an empty "Ready to choose?" with nothing to choose. */}
+        {results.length > 0 && viableResults.length === 0 && (
+          <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-6 space-y-2">
+            <h2 className="text-lg font-bold text-amber-900">😬 No flights came back for any destination</h2>
+            <p className="text-sm text-amber-800">
+              The search ran but couldn&apos;t find fares for these dates/destinations. Common causes:
+            </p>
+            <ul className="text-sm text-amber-900 ml-5 list-disc space-y-1">
+              <li>The <strong>budget cap</strong> (£{room.budget_gbp ?? "—"} pp) is lower than the cheapest flights found — try raising it on the Budget step.</li>
+              <li>Long-haul picks (e.g. Sao Paulo) rarely fit a tight budget or short window.</li>
+              <li>No cached fares yet for your exact dates — try <strong>Re-run search</strong>, or widen the travel window.</li>
+              <li>Add more (closer/cheaper) destination candidates.</li>
+            </ul>
+          </div>
+        )}
+
+        {/* Admin: pick destination note (only when there's actually something to choose) */}
+        {room.is_admin && viableResults.length > 0 && !room.destination_iata && (
           <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-6">
             <h2 className="text-lg font-bold text-blue-900 mb-2">Ready to choose?</h2>
             <p className="text-sm text-blue-700">

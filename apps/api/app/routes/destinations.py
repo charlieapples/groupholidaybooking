@@ -443,6 +443,13 @@ def submit_duration_budget(
     room = _get_room_by_slug(db, slug)
     _assert_member(db, room["id"], user.id)
 
+    if (
+        body.min_nights is not None
+        and body.max_nights is not None
+        and body.min_nights > body.max_nights
+    ):
+        raise HTTPException(422, "Minimum nights can't be more than maximum nights.")
+
     update: dict = {}
     if body.min_nights is not None:
         update["pref_min_nights"] = body.min_nights
