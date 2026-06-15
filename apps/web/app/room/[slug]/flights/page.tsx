@@ -325,6 +325,8 @@ export default function FlightsPage() {
             <p className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-xs text-blue-800">
               💡 Prices are indicative and update through the day. Flight fares change by the minute,
               so the live price you book at may vary slightly — confirm on the booking step before you book.
+              The cheapest fare often has <strong>only a few seats</strong>, so for a group not everyone may
+              get that exact price — book promptly, and each person books their own seat.
             </p>
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-xl font-bold text-gray-900">Results</h2>
@@ -650,10 +652,20 @@ function ResultsList({
                             : <span className="text-green-600">Cabin bag incl.</span>
                           }
                           {p.ground_cost_gbp > 0 && (
-                            <span className={p.ground_hours > 2.5 ? "text-amber-700 font-medium" : ""}>
-                              Ground: £{Math.round(p.ground_cost_gbp)}
+                            <span
+                              className={p.ground_hours > 2.5 ? "text-amber-700 font-medium" : ""}
+                              title={
+                                p.ground_source === "google_maps"
+                                  ? `Real ${p.ground_mode === "driving" ? "driving" : "public-transport"} route from Google Maps, home postcode → airport. Cost ≈ distance × ${p.ground_mode === "driving" ? "£0.25/km (fuel+wear)" : "£0.15/km (rail/bus)"}.`
+                                  : `Rough estimate: straight-line distance (postcode → airport) × 1.3 for roads, ÷ 65 km/h. No Google Maps key configured, so this is approximate.`
+                              }
+                            >
+                              {p.ground_mode === "driving" ? "🚗" : "🚆"} Ground to airport: £{Math.round(p.ground_cost_gbp)}
                               {p.ground_hours > 0 && ` (${p.ground_hours < 1 ? Math.round(p.ground_hours * 60) + "m" : Math.round(p.ground_hours * 10) / 10 + "h"})`}
                               {p.ground_hours > 3 && " ⚠️"}
+                              <span className="ml-1 text-gray-400">
+                                · {p.ground_source === "google_maps" ? "via Google Maps" : "distance estimate"}
+                              </span>
                             </span>
                           )}
                         </div>

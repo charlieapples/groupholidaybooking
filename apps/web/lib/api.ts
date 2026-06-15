@@ -464,6 +464,8 @@ export interface PersonResult {
   baggage_cost_gbp: number;
   ground_cost_gbp: number;
   ground_hours: number;
+  ground_source?: string | null;   // "google_maps" | "estimate"
+  ground_mode?: string | null;     // "transit" | "driving"
   outbound_date: string | null;
   inbound_date: string | null;
   total_money_gbp: number;

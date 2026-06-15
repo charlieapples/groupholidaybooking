@@ -50,6 +50,10 @@ class GroundLeg:
     duration_hours: float
     distance_km: float
     estimated_cost_gbp: float
+    # Where the numbers came from, so the UI can be honest:
+    #   "google_maps" = real route from Google Maps Directions
+    #   "estimate"    = straight-line distance ÷ avg speed (no Maps key/quota)
+    source: str = "estimate"
 
 
 def _api_key() -> str:
@@ -132,6 +136,7 @@ def _fallback_leg(origin: str, destination: str, mode: str) -> Optional[GroundLe
         duration_hours=round(duration_hours, 2),
         distance_km=round(distance_km, 1),
         estimated_cost_gbp=estimated_cost,
+        source="estimate",
     )
 
 
@@ -191,6 +196,7 @@ def ground_leg(
             duration_hours=round(duration_hours, 2),
             distance_km=round(distance_km, 1),
             estimated_cost_gbp=estimated_cost,
+            source="google_maps",
         )
         _CACHE.set(cache_key, result, expire=86400)
         return result

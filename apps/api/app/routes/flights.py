@@ -154,6 +154,8 @@ class PersonResultDTO(BaseModel):
     chosen_airport: Optional[str] = None
     ground_cost_gbp: float = 0.0
     ground_hours: float = 0.0
+    ground_source: Optional[str] = None   # "google_maps" | "estimate"
+    ground_mode: Optional[str] = None     # "transit" | "driving"
     outbound_cost_gbp: float = 0.0
     inbound_cost_gbp: float = 0.0
     baggage_cost_gbp: float = 0.0
@@ -210,6 +212,8 @@ def _serialise(dr) -> DestinationResultDTO:
                 chosen_airport=p.chosen_airport,
                 ground_cost_gbp=p.ground_cost,
                 ground_hours=p.ground_hours,
+                ground_source=(p.ground_leg.source if p.ground_leg else None),
+                ground_mode=(p.ground_leg.mode if p.ground_leg else None),
                 outbound_cost_gbp=p.outbound_cost,
                 inbound_cost_gbp=p.inbound_cost,
                 baggage_cost_gbp=p.baggage_cost_gbp,
