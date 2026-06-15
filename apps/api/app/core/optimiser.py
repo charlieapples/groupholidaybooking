@@ -256,7 +256,53 @@ def _optimise_destination_shared(
                 _build_result(person.name, None, "No flight data for any airport"))
         return dest_result
 
-    # For each candidate date pair, score the group's total cost.
+    # SAME-AIRPORT mode: everyone must depart the same airport. Pick the single
+    # (airport, date-pair) that works for the most people at the lowest total.
+    if config.same_airport:
+        all_airports = {o[0] for _, options in all_person_options for o in options}
+        best_combo: Optional[tuple[str, tuple[date, date]]] = None
+        best_choices_sa: dict[str, Optional[tuple]] = {}
+        best_score_sa: tuple[int, float] = (0, float("inf"))
+        for airport in all_airports:
+            for pair in candidate_pairs:
+                group_total = 0.0
+                choices: dict[str, Optional[tuple]] = {}
+                viable_count = 0
+                for person, options in all_person_options:
+                    matching = [
+                        o for o in options
+                        if o[0] == airport
+                        and (o[2].departure_date, o[3].departure_date) == pair
+                    ]
+                    if matching:
+                        cheapest = min(matching, key=lambda o: o[5])
+                        choices[person.name] = cheapest
+                        group_total += cheapest[5]
+                        viable_count += 1
+                    else:
+                        choices[person.name] = None
+                score = (-viable_count, group_total)
+                if score < best_score_sa:
+                    best_score_sa = score
+                    best_combo = (airport, pair)
+                    best_choices_sa = choices
+        if best_combo is None:
+            for person in config.people:
+                dest_result.person_results.append(_build_result(person.name, None))
+            return dest_result
+        chosen_airport, chosen_pair = best_combo
+        dest_result.shared_out_date, dest_result.shared_return_date = chosen_pair
+        for person, _ in all_person_options:
+            opt = best_choices_sa.get(person.name)
+            if opt is None:
+                note = f"No flight from {chosen_airport} on the chosen group dates"
+                dest_result.person_results.append(_build_result(person.name, None, note))
+            else:
+                dest_result.person_results.append(
+                    _build_result(person.name, opt, baggage_uplift_gbp=config.baggage_uplift_gbp, budget_cap=config.budget_cap_per_person))
+        return dest_result
+
+    # DIFFERENT-AIRPORT (default): for each candidate date pair, score the group's total cost.
     # Score is (-viable_count, group_total) — more viable people wins, ties broken by cost.
     best_pair: Optional[tuple[date, date]] = None
     best_choices: dict[str, Optional[tuple]] = {}

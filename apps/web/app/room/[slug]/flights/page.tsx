@@ -34,6 +34,7 @@ export default function FlightsPage() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [choosingDest, setChoosingDest] = useState<string | null>(null);
+  const [savingAirport, setSavingAirport] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [partialExpanded, setPartialExpanded] = useState(false);
   const [excludedPerson, setExcludedPerson] = useState<string | null>(null);
@@ -106,6 +107,20 @@ export default function FlightsPage() {
       setError(e instanceof Error ? e.message : "Flight search failed. Please check all prerequisites are complete.");
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function handleSetSameAirport(value: boolean) {
+    if (!token || !room?.is_admin || !!room.same_airport === value) return;
+    setSavingAirport(true);
+    try {
+      const r = await updateRoom(token, slug, { same_airport: value });
+      setRoom(r);
+      toast.success(value ? "Set: everyone flies from the same airport." : "Set: each from their own airport.");
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Couldn't change the airport setting"));
+    } finally {
+      setSavingAirport(false);
     }
   }
 
@@ -237,6 +252,33 @@ export default function FlightsPage() {
               Checks every UK airport each member can reach (not just the closest) against all destination candidates, and picks the cheapest overall combination.
               This can take 15–30 seconds.
             </p>
+
+            {/* Same-airport vs own-airport toggle */}
+            <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <p className="text-xs font-semibold text-gray-700 mb-2">Departure airport</p>
+              <div className="flex rounded-lg border border-gray-200 bg-white p-1 w-fit">
+                {([
+                  [false, "🛫 Each from their own (cheapest)"],
+                  [true, "👥 Everyone same airport"],
+                ] as const).map(([val, label]) => (
+                  <button
+                    key={String(val)}
+                    onClick={() => handleSetSameAirport(val)}
+                    disabled={savingAirport}
+                    className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                      !!room.same_airport === val ? "bg-blue-600 text-white" : "text-gray-500 hover:text-gray-800"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-gray-400">
+                {room.same_airport
+                  ? "The whole group departs the same airport (travel together). Often pricier, but simpler."
+                  : "Each member flies from their own nearest/cheapest airport — usually the cheapest overall. Re-run the search after changing this."}
+              </p>
+            </div>
 
             {/* Pre-flight checklist */}
             {!running && (

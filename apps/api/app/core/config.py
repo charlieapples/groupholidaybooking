@@ -89,6 +89,8 @@ class Config(BaseModel):
     max_ground_hours: Optional[float] = None   # None = no limit
     time_value_per_hour: float = 0.0           # £/hr — cost of travel time
     shared_dates: bool = True                  # group flies together on same dates
+    same_airport: bool = False                 # everyone departs the SAME airport
+                                               # (False = each from their own cheapest)
     # Baggage uplift in £ — added to each person's round-trip flight total to
     # reflect realistic prices (Travelpayouts returns "personal item only" fares
     # which most travellers will upgrade). Default = £40 carry-on for the

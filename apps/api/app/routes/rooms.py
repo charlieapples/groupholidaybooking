@@ -61,6 +61,8 @@ class RoomResponse(BaseModel):
     # optimiser prices ALL windows (cheapest wins) or just the locked agreed one.
     search_windows: list[dict] = []
     multi_window_search: bool = True
+    # True = whole group departs the same airport; False = each from their own cheapest.
+    same_airport: bool = False
 
 
 STEP_ORDER = ["availability", "duration", "budget", "destination", "flights", "booking", "done"]
@@ -81,6 +83,7 @@ class UpdateRoomRequest(BaseModel):
     voting_style: Optional[str] = None
     search_windows: Optional[list[dict]] = None
     multi_window_search: Optional[bool] = None
+    same_airport: Optional[bool] = None
 
 
 class MemberResponse(BaseModel):
@@ -160,6 +163,7 @@ def _room_with_member_count(db, room: dict, user_id: str) -> RoomResponse:
         voting_style=room.get("voting_style") or "ranked",
         search_windows=room.get("search_windows") or [],
         multi_window_search=room.get("multi_window_search") if room.get("multi_window_search") is not None else True,
+        same_airport=bool(room.get("same_airport")),
     )
 
 
@@ -225,6 +229,7 @@ def list_rooms(user: UserInfo = Depends(current_user)):
             voting_style=room.get("voting_style") or "ranked",
             search_windows=room.get("search_windows") or [],
             multi_window_search=room.get("multi_window_search") if room.get("multi_window_search") is not None else True,
+            same_airport=bool(room.get("same_airport")),
         ))
     return result
 
@@ -317,6 +322,7 @@ def create_room(
         voting_style="ranked",
         search_windows=[],
         multi_window_search=True,
+        same_airport=False,
     )
 
 

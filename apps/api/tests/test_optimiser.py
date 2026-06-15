@@ -141,3 +141,40 @@ def test_budget_cap_flags_but_keeps_expensive_options(monkeypatch):
     assert dr.viable_count > 0
     # ...but every viable person is flagged as over the budget cap.
     assert all(p.over_budget for p in dr.person_results if p.viable)
+
+
+def test_same_airport_forces_one_common_airport(monkeypatch):
+    """same_airport=True puts the whole group on a single shared airport, even if
+    each person has a cheaper option from their own local airport."""
+    out, back = date(2026, 7, 5), date(2026, 7, 12)
+
+    def fake_nearest(home, candidates, max_hours):
+        # A reaches STN+LHR; B reaches EDI+LHR. Only LHR is common.
+        if home == "M1 1AE":
+            return [("STN", _ground("STN")), ("LHR", _ground("LHR"))]
+        return [("EDI", _ground("EDI")), ("LHR", _ground("LHR"))]
+
+    def pair(origin, destination, earliest_outbound, latest_inbound, min_nights, max_nights):
+        price = {"STN": 50.0, "EDI": 40.0, "LHR": 60.0}[origin]
+        return (
+            Fare(origin=origin, destination=destination, departure_date=out, price_gbp=price, airline="FR", return_date=back),
+            Fare(origin=destination, destination=origin, departure_date=back, price_gbp=price, airline="FR", return_date=None),
+        )
+
+    monkeypatch.setattr(opt_mod, "nearest_airports", fake_nearest)
+    monkeypatch.setattr(opt_mod, "cheapest_return_pair", pair)
+
+    # Same airport → both forced onto LHR (the only airport both can use).
+    cfg = _config()
+    cfg.same_airport = True
+    dr = opt_mod.optimise(cfg)[0]
+    chosen = {p.chosen_airport for p in dr.person_results if p.viable}
+    assert chosen == {"LHR"}
+
+    # Different airports → each uses their own cheapest.
+    cfg2 = _config()
+    cfg2.same_airport = False
+    dr2 = opt_mod.optimise(cfg2)[0]
+    by_name = {p.person_name: p.chosen_airport for p in dr2.person_results if p.viable}
+    assert by_name["A"] == "STN"
+    assert by_name["B"] == "EDI"

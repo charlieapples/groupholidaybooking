@@ -81,6 +81,8 @@ export interface Room {
   // Multiple candidate windows for the flight search.
   search_windows?: { start_date: string; end_date: string }[];
   multi_window_search?: boolean;
+  // True = whole group departs the same airport; false = each their own cheapest.
+  same_airport?: boolean;
 }
 
 export function createRoom(
@@ -128,6 +130,7 @@ export function updateRoom(
     voting_style?: "ranked" | "open";
     search_windows?: { start_date: string; end_date: string }[];
     multi_window_search?: boolean;
+    same_airport?: boolean;
   }
 ) {
   return apiFetch<Room>(`/rooms/${slug}`, token, {
