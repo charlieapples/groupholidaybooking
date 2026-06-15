@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { getMyProfile } from "@/lib/api";
 
 export default function AccountBadge({ className = "" }: { className?: string }) {
   const router = useRouter();
@@ -16,9 +17,20 @@ export default function AccountBadge({ className = "" }: { className?: string })
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getSession().then(({ data }) => {
-      const u = data.session?.user;
-      if (u) setLabel((u.user_metadata?.full_name as string) || u.email || null);
+    supabase.auth.getSession().then(async ({ data }) => {
+      const session = data.session;
+      const u = session?.user;
+      if (!u) return;
+      // Prefer the app DISPLAY NAME the user set (profiles table) over the raw
+      // Google/Microsoft account name — otherwise a "Everything Appleyard"
+      // account whose Google name is "Charles Appleyard" shows the wrong name.
+      const fallback = (u.user_metadata?.full_name as string) || u.email || null;
+      try {
+        const p = await getMyProfile(session.access_token);
+        setLabel(p.display_name || fallback);
+      } catch {
+        setLabel(fallback);
+      }
     });
   }, []);
 

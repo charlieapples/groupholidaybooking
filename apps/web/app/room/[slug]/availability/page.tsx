@@ -434,6 +434,11 @@ function ImportPanel({
 
       {open && (
         <div className="border-t px-6 pb-6">
+          {/* Merge reassurance */}
+          <div className="mt-4 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-800">
+            🔁 Syncing <strong>adds to</strong> the busy days you&apos;ve already marked — it never erases them.
+            Import from as many calendars/accounts as you like and they all stack up.
+          </div>
           {/* Tab row */}
           <div className="mt-4 flex gap-2 border-b">
             {(["google", "outlook", "apple"] as const).map((tab) => (
