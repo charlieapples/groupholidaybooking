@@ -42,6 +42,7 @@ class PersonResult:
     total_cost_gbp: float           # money + time value (used for ranking)
     flight_plus_ground_gbp: float   # raw money only (incl baggage uplift)
     viable: bool
+    over_budget: bool = False       # a fare was found but it's above the budget cap
     baggage_cost_gbp: float = 0.0   # the carry-on/hold-bag uplift applied
     note: str = ""
 
@@ -151,8 +152,9 @@ def _options_for_person(
         time_cost = ground.duration_hours * 2 * config.time_value_per_hour
         total = money_cost + time_cost
 
-        if config.budget_cap_per_person and money_cost > config.budget_cap_per_person:
-            continue
+        # NOTE: we do NOT discard options over the budget cap. Hiding them just
+        # showed "no flights" with no explanation. Instead we keep the cheapest
+        # real fare and flag it as over-budget so the group sees the actual price.
 
         options.append((airport_code, ground, outbound, inbound, money_cost, total))
 
@@ -164,6 +166,7 @@ def _build_result(
     option: Optional[tuple[str, GroundLeg, Fare, Fare, float, float]],
     note: str = "",
     baggage_uplift_gbp: float = 0.0,  # kept for call-site compat; overridden below
+    budget_cap: Optional[float] = None,
 ) -> PersonResult:
     if option is None:
         return PersonResult(
@@ -175,12 +178,13 @@ def _build_result(
             total_cost_gbp=0.0,
             flight_plus_ground_gbp=0.0,
             viable=False,
-            note=note or "No viable flights found",
+            note=note or "No fares found from this person's airports for these dates",
         )
     code, ground, out, inn, money, total = option
     # Derive the displayed baggage cost from the actual airline rather than
     # using the fallback passed in — the airline may have a £0 cabin-bag policy.
     displayed_baggage = _baggage_for_fare(out, fallback=baggage_uplift_gbp)
+    over = bool(budget_cap) and money > budget_cap
     return PersonResult(
         person_name=person_name,
         chosen_airport=code,
@@ -191,6 +195,8 @@ def _build_result(
         flight_plus_ground_gbp=round(money, 2),
         baggage_cost_gbp=round(displayed_baggage, 2),
         viable=True,
+        over_budget=over,
+        note=f"£{money:.0f} — over the £{budget_cap:.0f} budget" if over else "",
     )
 
 
@@ -210,7 +216,7 @@ def _optimise_destination_individual(
             continue
 
         best = min(options, key=lambda o: o[5])
-        pr = _build_result(person.name, best, baggage_uplift_gbp=config.baggage_uplift_gbp)
+        pr = _build_result(person.name, best, baggage_uplift_gbp=config.baggage_uplift_gbp, budget_cap=config.budget_cap_per_person)
         dest_result.person_results.append(pr)
         if pr.out_date:
             out_dates.append(pr.out_date)
@@ -297,7 +303,7 @@ def _optimise_destination_shared(
             )
             dest_result.person_results.append(_build_result(person.name, None, note))
         else:
-            dest_result.person_results.append(_build_result(person.name, opt, baggage_uplift_gbp=config.baggage_uplift_gbp))
+            dest_result.person_results.append(_build_result(person.name, opt, baggage_uplift_gbp=config.baggage_uplift_gbp, budget_cap=config.budget_cap_per_person))
 
     return dest_result
 

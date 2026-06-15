@@ -457,6 +457,7 @@ export interface FlightResult {
 export interface PersonResult {
   person_name: string;
   viable: boolean;
+  over_budget?: boolean;
   chosen_airport: string | null;
   outbound_cost_gbp: number;
   inbound_cost_gbp: number;

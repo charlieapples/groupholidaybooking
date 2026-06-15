@@ -474,20 +474,22 @@ export default function FlightsPage() {
           </div>
         )}
 
-        {/* Search ran but NO destination had any viable flights — explain why,
-            instead of an empty "Ready to choose?" with nothing to choose. */}
+        {/* Search ran but NO destination had any fares — state the actual reason. */}
         {results.length > 0 && viableResults.length === 0 && (
           <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-6 space-y-2">
-            <h2 className="text-lg font-bold text-amber-900">😬 No flights came back for any destination</h2>
+            <h2 className="text-lg font-bold text-amber-900">😬 No fares found for these dates</h2>
             <p className="text-sm text-amber-800">
-              The search ran but couldn&apos;t find fares for these dates/destinations. Common causes:
+              <strong>What happened:</strong> the flight price source (Travelpayouts) returned no
+              fares from any of your group&apos;s home airports
+              {allPeople.length > 0 ? ` (${allPeople.join(", ")})` : ""} for{" "}
+              {results[0]?.shared_out_date ? "the chosen dates" : "these dates"}. This is a gap in the
+              fare data for those specific regional airports + dates — it is <strong>not</strong> a
+              budget issue (over-budget flights would still be shown).
             </p>
-            <ul className="text-sm text-amber-900 ml-5 list-disc space-y-1">
-              <li>The <strong>budget cap</strong> (£{room.budget_gbp ?? "—"} pp) is lower than the cheapest flights found — try raising it on the Budget step.</li>
-              <li>Long-haul picks (e.g. Sao Paulo) rarely fit a tight budget or short window.</li>
-              <li>No cached fares yet for your exact dates — try <strong>Re-run search</strong>, or widen the travel window.</li>
-              <li>Add more (closer/cheaper) destination candidates.</li>
-            </ul>
+            <p className="text-sm text-amber-800">
+              <strong>What to do:</strong> click <strong>Re-run search</strong> (the cache fills in over
+              time), shift the travel window by a few days, or add destinations served by more airlines.
+            </p>
           </div>
         )}
 

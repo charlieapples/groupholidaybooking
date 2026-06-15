@@ -525,9 +525,9 @@ export default function RoomPage() {
             <div className="rounded-xl border bg-white p-8 shadow-sm">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <span className="text-4xl">{activeStep?.icon}</span>
+                  <span className="text-4xl">{activeStep?.icon ?? "🎉"}</span>
                   <h2 className="mt-2 text-xl font-bold text-gray-900">
-                    Step {stepIdx + 1}: {activeStep?.label}
+                    {activeStep ? `Step ${stepIdx + 1}: ${activeStep.label}` : "Trip complete"}
                   </h2>
                 </div>
               </div>
@@ -658,8 +658,39 @@ export default function RoomPage() {
                 </div>
               )}
 
+              {/* Done — but only a real "booked" if a destination was actually chosen.
+                  If the group jumped to 'done' without picking flights, say so and
+                  point them back, rather than wrongly celebrating. */}
+              {room.current_step === "done" && !room.destination_iata && (
+                <div className="text-center py-6 space-y-3">
+                  <div className="text-5xl">🤔</div>
+                  <h3 className="text-xl font-bold text-amber-700">Marked complete — but no destination was chosen</h3>
+                  <p className="text-gray-600 max-w-md mx-auto text-sm">
+                    This Holiday is on the final step, but a destination was never locked in (the flight
+                    search may not have found anything yet). Go back to choose flights and a destination.
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-3 pt-1">
+                    <button
+                      onClick={() => router.push(`/room/${slug}/flights`)}
+                      className="rounded-xl bg-blue-600 px-6 py-2.5 font-semibold text-white hover:bg-blue-700"
+                    >
+                      Go to flights →
+                    </button>
+                    {room.is_admin && (
+                      <button
+                        onClick={handleGoBack}
+                        disabled={goingBack}
+                        className="rounded-xl border border-gray-300 bg-white px-6 py-2.5 font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {goingBack ? "Moving…" : "← Move group back a step"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Done! */}
-              {room.current_step === "done" && (
+              {room.current_step === "done" && room.destination_iata && (
                 <div className="text-center py-6">
                   <div className="text-6xl mb-4 animate-bounce">🎉</div>
                   <h3 className="text-2xl font-bold text-green-700">Holiday booked!</h3>

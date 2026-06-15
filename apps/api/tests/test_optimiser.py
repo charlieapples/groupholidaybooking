@@ -120,7 +120,10 @@ def test_results_sorted_fully_viable_first_then_cost(monkeypatch):
     assert not results[1].is_fully_viable
 
 
-def test_budget_cap_excludes_expensive_options(monkeypatch):
+def test_budget_cap_flags_but_keeps_expensive_options(monkeypatch):
+    """Over-budget fares are no longer hidden — they're returned and flagged so
+    the group sees the real price (over_budget=True) rather than an unexplained
+    'no flights'."""
     out, back = date(2026, 7, 5), date(2026, 7, 12)
 
     def pair(origin, destination, earliest_outbound, latest_inbound, min_nights, max_nights):
@@ -134,5 +137,7 @@ def test_budget_cap_excludes_expensive_options(monkeypatch):
     cfg.budget_cap_per_person = 200.0
     _patch(monkeypatch, pair)
     dr = opt_mod.optimise(cfg)[0]
-    # Everyone is over budget → nobody viable
-    assert dr.viable_count == 0
+    # Fares were found, so people are still "viable" (a real option exists)...
+    assert dr.viable_count > 0
+    # ...but every viable person is flagged as over the budget cap.
+    assert all(p.over_budget for p in dr.person_results if p.viable)

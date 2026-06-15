@@ -150,6 +150,7 @@ def _parse_json_field(value) -> list:
 class PersonResultDTO(BaseModel):
     person_name: str
     viable: bool
+    over_budget: bool = False
     chosen_airport: Optional[str] = None
     ground_cost_gbp: float = 0.0
     ground_hours: float = 0.0
@@ -205,6 +206,7 @@ def _serialise(dr) -> DestinationResultDTO:
             PersonResultDTO(
                 person_name=p.person_name,
                 viable=p.viable,
+                over_budget=getattr(p, "over_budget", False),
                 chosen_airport=p.chosen_airport,
                 ground_cost_gbp=p.ground_cost,
                 ground_hours=p.ground_hours,
