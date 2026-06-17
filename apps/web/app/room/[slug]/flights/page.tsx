@@ -7,6 +7,7 @@ import {
   runFlightOptimiser,
   advanceStep,
   updateRoom,
+  testLiveSearch,
   type Room,
   type FlightResult,
 } from "@/lib/api";
@@ -107,6 +108,27 @@ export default function FlightsPage() {
       setError(e instanceof Error ? e.message : "Flight search failed. Please check all prerequisites are complete.");
     } finally {
       setRunning(false);
+    }
+  }
+
+  const [testingLive, setTestingLive] = useState(false);
+  async function handleTestLiveSearch() {
+    if (!token) return;
+    setTestingLive(true);
+    try {
+      const dest = room?.destination_iata || results[0]?.destination || "MAD";
+      const depart = room?.agreed_start || "2026-08-09";
+      const ret = room?.agreed_end || "2026-08-16";
+      const res = await testLiveSearch(token, { origin: "LON", destination: dest, depart, return_date: ret });
+      if (res.ok) {
+        toast.success(`✅ Live API works! LON→${dest}: £${Math.round(res.price ?? 0)} (${res.airline}).`);
+      } else {
+        toast.error(`Live API returned nothing: ${res.note ?? "no result"}`);
+      }
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Live search test failed"));
+    } finally {
+      setTestingLive(false);
     }
   }
 
@@ -278,6 +300,15 @@ export default function FlightsPage() {
                   ? "The whole group departs the same airport (travel together). Often pricier, but simpler."
                   : "Each member flies from their own nearest/cheapest airport — usually the cheapest overall. Re-run the search after changing this."}
               </p>
+              {/* Diagnostic: verify the live Travelpayouts Search API works. */}
+              <button
+                onClick={handleTestLiveSearch}
+                disabled={testingLive}
+                className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                title="Runs one live flight search to confirm the live-fares API is working with your token"
+              >
+                {testingLive ? "Testing live API…" : "🧪 Test live-fare API"}
+              </button>
             </div>
 
             {/* Pre-flight checklist */}

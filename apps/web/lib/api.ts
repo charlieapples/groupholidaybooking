@@ -548,6 +548,18 @@ export function getLivePrice(
   return apiFetch<LivePrice>(`/flights/live-price?${qs}`, token);
 }
 
+/** Diagnostic: run the LIVE Travelpayouts Search API for one route to verify it. */
+export function testLiveSearch(
+  token: string,
+  params: { origin: string; destination: string; depart: string; return_date: string }
+) {
+  const qs = new URLSearchParams(params).toString();
+  return apiFetch<{ ok: boolean; note?: string; price?: number; airline?: string; booking_url?: string }>(
+    `/flights/live-search-test?${qs}`,
+    token
+  );
+}
+
 // ── Feedback ──────────────────────────────────────────────────────────────────
 
 export function submitFeedback(
