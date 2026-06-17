@@ -11,7 +11,7 @@ import {
   type Room,
   type FlightResult,
 } from "@/lib/api";
-import { totalTripEstimate, destName, AIRPORT_DISPLAY } from "@/lib/destinations";
+import { destName, AIRPORT_DISPLAY } from "@/lib/destinations";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -655,23 +655,36 @@ function ResultsList({
                 {r.shared_out_date && (
                   <p className="text-xs text-gray-500 mt-0.5">
                     {r.shared_out_date} → {r.shared_return_date}
+                    {nights && nights > 0 ? ` · ${nights} nights` : ""}
                   </p>
                 )}
               </div>
             </button>
             <div className="flex items-center gap-3 shrink-0">
               <div className="text-right">
-                <p className="text-xl font-bold text-gray-900">
-                  ~£{Math.round(r.avg_individual_cost).toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-500">flights avg/person</p>
-                {nights && nights > 0 && (() => {
-                  const est = totalTripEstimate(r.destination, Math.round(r.avg_individual_cost), nights, memberCount);
-                  if (!est) return null;
+                {(() => {
+                  // Overall trip cost is the headline — flights + daily living × nights.
+                  const flights = Math.round(r.avg_individual_cost);
+                  const dLow = r.est_daily_living_low_gbp ?? r.est_daily_living_gbp ?? null;
+                  const dHigh = r.est_daily_living_high_gbp ?? r.est_daily_living_gbp ?? null;
+                  if (nights && nights > 0 && dLow != null && dHigh != null) {
+                    const lo = flights + dLow * nights;
+                    const hi = flights + dHigh * nights;
+                    return (
+                      <>
+                        <p className="text-2xl font-bold text-gray-900" title={`Flights + ~£${r.est_daily_living_gbp}/day bare-minimum living (bed + food + local transport) over ${nights} nights. No activities.`}>
+                          ~£{lo.toLocaleString()}–£{hi.toLocaleString()}
+                        </p>
+                        <p className="text-[11px] text-gray-500">est. total pp · {nights} nights</p>
+                        <p className="text-[11px] text-gray-400">✈️ £{flights.toLocaleString()} flights · 🛏️🍽️ ~£{r.est_daily_living_gbp}/day</p>
+                      </>
+                    );
+                  }
                   return (
-                    <p className="text-xs text-gray-400" title="Estimated total including typical accommodation cost">
-                      ~£{est.budget}–£{est.mid} incl. hotel
-                    </p>
+                    <>
+                      <p className="text-xl font-bold text-gray-900">~£{flights.toLocaleString()}</p>
+                      <p className="text-xs text-gray-500">flights avg/person</p>
+                    </>
                   );
                 })()}
               </div>

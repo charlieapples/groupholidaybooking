@@ -467,6 +467,9 @@ export interface FlightResult {
   destination: string;
   destination_name: string;
   is_fully_viable: boolean;
+  est_daily_living_gbp?: number | null;
+  est_daily_living_low_gbp?: number | null;
+  est_daily_living_high_gbp?: number | null;
   viable_count: number;
   total_group_money_cost: number;
   total_group_cost: number;

@@ -206,6 +206,10 @@ class DestinationResultDTO(BaseModel):
     date_spread_days: int = 0
     note: str = ""
     computed_at: Optional[str] = None
+    # Daily living estimate (Numbeo-grounded) so the UI can show a real trip total.
+    est_daily_living_gbp: Optional[int] = None
+    est_daily_living_low_gbp: Optional[int] = None
+    est_daily_living_high_gbp: Optional[int] = None
     people: list[PersonResultDTO]
 
 
@@ -213,9 +217,14 @@ class DestinationResultDTO(BaseModel):
 
 
 def _serialise(dr) -> DestinationResultDTO:
+    from ..core.cost_of_living import cost_estimate
+    _est = cost_estimate(dr.destination)
     return DestinationResultDTO(
         destination=dr.destination,
         destination_name=label_dest(dr.destination, "name"),
+        est_daily_living_gbp=_est["daily_living_gbp"] if _est else None,
+        est_daily_living_low_gbp=_est["daily_living_low_gbp"] if _est else None,
+        est_daily_living_high_gbp=_est["daily_living_high_gbp"] if _est else None,
         is_fully_viable=dr.is_fully_viable,
         viable_count=dr.viable_count,
         total_group_money_cost=dr.total_group_money_cost,
@@ -464,10 +473,15 @@ def get_results(slug: str, user: UserInfo = Depends(current_user)):
         group_money_total = sum(money_costs)
         # fairness_ratio = max / avg — ratio of 1.0 means perfectly equal cost
         fairness_ratio = (max_money_cost / avg_money_cost) if avg_money_cost > 0 else 1.0
+        from ..core.cost_of_living import cost_estimate
+        _est = cost_estimate(row["destination_iata"])
         dtos.append(
             DestinationResultDTO(
                 destination=row["destination_iata"],
                 destination_name=label_dest(row["destination_iata"], "name"),
+                est_daily_living_gbp=_est["daily_living_gbp"] if _est else None,
+                est_daily_living_low_gbp=_est["daily_living_low_gbp"] if _est else None,
+                est_daily_living_high_gbp=_est["daily_living_high_gbp"] if _est else None,
                 is_fully_viable=all(p.get("viable", False) for p in people_data),
                 viable_count=len(viable_people),
                 total_group_money_cost=group_money_total,
