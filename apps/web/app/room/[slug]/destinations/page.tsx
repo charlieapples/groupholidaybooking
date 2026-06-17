@@ -82,6 +82,7 @@ export default function DestinationsPage() {
   const [aiReasoning, setAiReasoning] = useState<string | null>(null);
   const [groupRec, setGroupRec] = useState<import("@/lib/api").GroupRecommendation | null>(null);
   const [loadingRec, setLoadingRec] = useState(false);
+  const [showCostMethod, setShowCostMethod] = useState(false);
   const [rankOrder, setRankOrder] = useState<string[]>([]);
   const [submittingRank, setSubmittingRank] = useState(false);
   const [changingMode, setChangingMode] = useState(false);
@@ -779,12 +780,15 @@ export default function DestinationsPage() {
                 <button
                   onClick={handleGroupRecommendation}
                   disabled={loadingRec}
-                  title="Weighs everyone's preferences and suggests ONE place for the whole group"
+                  title="Weighs everyone's preferences and suggests ONE place for the whole group. Best once everyone has submitted their preferences."
                   className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                 >
                   {loadingRec ? "Thinking…" : "🌍 AI pick for everyone"}
                 </button>
               </div>
+              <p className="text-[11px] text-gray-400">
+                🌍 weighs <em>everyone&apos;s</em> preferences — best once all members have submitted theirs (it&apos;ll tell you how many have).
+              </p>
               {groupRec?.iata_code && (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
@@ -922,11 +926,18 @@ export default function DestinationsPage() {
           </p>
           {candidates.length > 0 && (
             <p className="mb-4 text-[11px] text-gray-400">
-              💡 Costs are a rough guide. Flight figures are cheapest–dearest return fares
-              <strong> from London</strong> for your agreed dates (a comparison baseline) — your exact
-              price from your nearest airport is worked out at the Flights step. Daily living is a
-              bare-minimum estimate (budget bed + food + local transport, no activities).
+              💡 Costs are a rough guide.{" "}
+              <button onClick={() => setShowCostMethod((s) => !s)} className="underline hover:text-gray-600">
+                {showCostMethod ? "Hide" : "How are these worked out?"}
+              </button>
             </p>
+          )}
+          {candidates.length > 0 && showCostMethod && (
+            <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-[11px] text-gray-500 space-y-1">
+              <p><strong>✈️ Flights</strong> = real cheapest–dearest <em>cached</em> return fares <strong>from London</strong> for your dates (Travelpayouts). It&apos;s a fair <em>comparison baseline</em>, not your personal price — your exact fare from your nearest airport is computed at the Flights step. The range narrows to live data once live fares are enabled.</p>
+              <p><strong>🛏️🍽️ Daily living</strong> = a Numbeo-grounded per-country bare-minimum (budget bed + food + local transport, no activities), shown ±15%. Live cost-of-living is on the roadmap.</p>
+              <p><strong>≈ total</strong> = cheapest flight + low daily × min nights, up to dearest flight + higher daily × max nights.</p>
+            </div>
           )}
 
           {/* Blind-reveal banner */}
