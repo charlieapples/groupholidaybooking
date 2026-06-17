@@ -1106,6 +1106,73 @@ def suggest_ideas(
     return IdeasResponse(ideas=out, reasoning=ai_reasoning or None)
 
 
+class GroupRecommendation(BaseModel):
+    iata_code: Optional[str] = None
+    name: Optional[str] = None
+    reasoning: Optional[str] = None
+    members_responded: int = 0
+    members_total: int = 0
+    est_daily_living_gbp: Optional[int] = None
+    est_flight_return_gbp: Optional[int] = None
+
+
+@router.get("/recommend", response_model=GroupRecommendation)
+def recommend_for_group(slug: str, user: UserInfo = Depends(current_user)):
+    """ONE AI pick for the WHOLE group: weighs every member's submitted
+    preferences/free-text and returns the single place most would enjoy, with
+    concrete reasoning. Anyone can then propose it. Use after preferences are in.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+
+    members_total = (
+        db.table("room_members").select("user_id", count="exact").eq("room_id", room["id"]).execute().count or 0
+    )
+    prefs_res = (
+        db.table("trip_preferences")
+        .select("pref_destination_answers")
+        .eq("room_id", room["id"])
+        .execute()
+    )
+    prefs_list: list[dict] = []
+    for row in prefs_res.data:
+        raw = row.get("pref_destination_answers")
+        if not raw:
+            continue
+        if isinstance(raw, str):
+            try:
+                prefs_list.append(_json.loads(raw))
+            except Exception:
+                pass
+        elif isinstance(raw, dict):
+            prefs_list.append(raw)
+
+    iata: Optional[str] = None
+    reasoning = ""
+    if prefs_list:
+        picks = _gemini_suggestions(prefs_list, room, 1)
+        if picks:
+            codes, reasoning = picks
+            iata = codes[0] if codes else None
+    if iata is None and prefs_list:
+        scored = sorted(((i, score_destination(i, prefs_list)) for i in DEST_NAMES), key=lambda x: -x[1])
+        iata = next((i for i, s in scored if s > 0), None)
+    if iata is None:
+        iata = list(POPULAR_LABELS.values())[0]
+
+    est = cost_estimate(iata)
+    return GroupRecommendation(
+        iata_code=iata,
+        name=label_dest(iata, "name"),
+        reasoning=reasoning or None,
+        members_responded=len(prefs_list),
+        members_total=members_total,
+        est_daily_living_gbp=est["daily_living_gbp"] if est else None,
+        est_flight_return_gbp=est["flight_return_gbp"] if est else None,
+    )
+
+
 class FlightEstimate(BaseModel):
     flight_min_gbp: int      # cheapest return fare found for the window
     flight_max_gbp: int      # dearest return fare found for the window

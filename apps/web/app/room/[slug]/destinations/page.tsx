@@ -17,6 +17,7 @@ import {
   unlockVotes,
   updateRoom,
   getDestinationIdeas,
+  getGroupRecommendation,
   submitRanking,
   getFlightEstimates,
   type Room,
@@ -79,6 +80,8 @@ export default function DestinationsPage() {
   const [ideas, setIdeas] = useState<DestinationIdea[]>([]);
   const [loadingIdeas, setLoadingIdeas] = useState(false);
   const [aiReasoning, setAiReasoning] = useState<string | null>(null);
+  const [groupRec, setGroupRec] = useState<import("@/lib/api").GroupRecommendation | null>(null);
+  const [loadingRec, setLoadingRec] = useState(false);
   const [rankOrder, setRankOrder] = useState<string[]>([]);
   const [submittingRank, setSubmittingRank] = useState(false);
   const [changingMode, setChangingMode] = useState(false);
@@ -377,6 +380,19 @@ export default function DestinationsPage() {
       toast.error(errorMessage(e, "Couldn't get AI ideas"));
     } finally {
       setLoadingIdeas(false);
+    }
+  }
+
+  async function handleGroupRecommendation() {
+    if (!token) return;
+    setLoadingRec(true);
+    try {
+      const rec = await getGroupRecommendation(token, slug);
+      setGroupRec(rec);
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Couldn't get the group recommendation"));
+    } finally {
+      setLoadingRec(false);
     }
   }
 
@@ -752,13 +768,48 @@ export default function DestinationsPage() {
               ) : (
                 <p className="text-xs text-amber-600">You haven&apos;t put forward a destination yet.</p>
               )}
-              <button
-                onClick={handleGetIdeas}
-                disabled={loadingIdeas}
-                className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
-              >
-                {loadingIdeas ? "Asking Gemini…" : "✨ Give me AI ideas to pick from"}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleGetIdeas}
+                  disabled={loadingIdeas}
+                  className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                >
+                  {loadingIdeas ? "Asking Gemini…" : "✨ Give me AI ideas to pick from"}
+                </button>
+                <button
+                  onClick={handleGroupRecommendation}
+                  disabled={loadingRec}
+                  title="Weighs everyone's preferences and suggests ONE place for the whole group"
+                  className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                >
+                  {loadingRec ? "Thinking…" : "🌍 AI pick for everyone"}
+                </button>
+              </div>
+              {groupRec?.iata_code && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-emerald-900">
+                      🌍 AI pick for the whole group: {flagFor(groupRec.iata_code)} {groupRec.name}
+                    </p>
+                    <button onClick={() => setGroupRec(null)} className="text-xs text-emerald-400 hover:text-emerald-700" title="Dismiss">✕</button>
+                  </div>
+                  {groupRec.members_responded < groupRec.members_total && (
+                    <p className="text-[11px] text-amber-600">
+                      ⚠️ Only {groupRec.members_responded}/{groupRec.members_total} members have submitted preferences — this improves once everyone has.
+                    </p>
+                  )}
+                  {groupRec.reasoning && (
+                    <p className="text-xs text-emerald-800 whitespace-pre-wrap">{groupRec.reasoning}</p>
+                  )}
+                  <button
+                    onClick={() => handlePropose(groupRec.iata_code!)}
+                    disabled={proposing}
+                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    Put this forward as my pick →
+                  </button>
+                </div>
+              )}
               {ideas.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {ideas.map((idea) => (

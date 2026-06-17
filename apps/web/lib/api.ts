@@ -298,6 +298,21 @@ export function getFlightEstimates(token: string, slug: string) {
   );
 }
 
+export interface GroupRecommendation {
+  iata_code: string | null;
+  name: string | null;
+  reasoning: string | null;
+  members_responded: number;
+  members_total: number;
+  est_daily_living_gbp?: number | null;
+  est_flight_return_gbp?: number | null;
+}
+
+/** ONE AI pick for the whole group, weighing everyone's preferences. */
+export function getGroupRecommendation(token: string, slug: string) {
+  return apiFetch<GroupRecommendation>(`/rooms/${slug}/destinations/recommend`, token);
+}
+
 /** Ranked mode: submit a full 1..N ranking of all candidates and lock in. */
 export function submitRanking(
   token: string,
