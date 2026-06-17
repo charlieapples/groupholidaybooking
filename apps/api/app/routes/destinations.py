@@ -124,12 +124,17 @@ def _gemini_suggestions(
         "4. Free-text notes from members take priority over button selections.\n"
         "5. Prefer destinations reachable within the group's budget (lower cost = better if budgets are tight).\n\n"
         "Respond with ONLY a JSON object (no prose, no markdown) with two keys:\n"
-        '  "reasoning": a short paragraph (2-4 sentences) explaining how you '
-        "weighed the group's combined preferences, climate, budget and any free-text "
-        "notes to reach these picks. Write it for the group to read.\n"
         '  "codes": an array of IATA codes from the catalogue, in rank order (best first).\n'
-        'Example: {"reasoning":"The group wants warm + nightlife on a tight budget, so...",'
-        '"codes":["BCN","LIS","VLC"]}'
+        '  "reasoning": a SPECIFIC, CONCRETE explanation. Do NOT write fluffy '
+        "marketing copy. For EACH place you picked, name it and give the concrete "
+        "reason it fits THIS group's stated preferences — cite the actual thing "
+        "(e.g. the specific WW2 site, the specific coast/beach, why it's relaxed not "
+        "hectic). One short sentence per destination. If a pick is a compromise, say so.\n"
+        'Format reasoning like: "Naples — base for Pompeii + the WW2 Gustav Line and '
+        'Amalfi coast nearby, relaxed pace. Malta — Mediterranean beaches + the WW2 '
+        'Siege of Malta history (Lascaris War Rooms). Gdansk — WW2 started here '
+        '(Westerplatte) and it\'s a calm Baltic coastal city."\n'
+        'Example: {"codes":["NAP","MLA","GDN"],"reasoning":"Naples — ... Malta — ... Gdansk — ..."}'
     )
 
     try:
@@ -212,6 +217,7 @@ class DestinationCandidate(BaseModel):
     iata_code: str
     name: str
     proposed_by: Optional[str] = None      # None = algorithm, else user display name
+    proposer_count: int = 0                # how many members put this place forward
     total_cost_gbp: Optional[float] = None
     cost_breakdown: dict = {}
     vote_count: int = 0
@@ -263,6 +269,7 @@ def _candidate_to_dto(
         iata_code=c["iata_code"],
         name=label_dest(c["iata_code"], "name"),
         proposed_by=c.get("proposed_by"),
+        proposer_count=len(c.get("proposers") or []),
         total_cost_gbp=c.get("total_cost_gbp"),
         cost_breakdown=c.get("cost_breakdown") or {},
         vote_count=vote_count,
@@ -289,6 +296,7 @@ def _ranked_candidate_to_dto(
         iata_code=c["iata_code"],
         name=label_dest(c["iata_code"], "name"),
         proposed_by=c.get("proposed_by"),
+        proposer_count=len(c.get("proposers") or []),
         total_cost_gbp=c.get("total_cost_gbp"),
         cost_breakdown=c.get("cost_breakdown") or {},
         vote_count=0,
@@ -652,27 +660,57 @@ def propose_destination(
     style = room.get("voting_style") or "ranked"
 
     if style == "ranked":
-        # One pick per person: clear this member's previous proposal first.
-        # (Cascades to any ranks on it — fine, ranking happens after proposing.)
-        db.table("destination_candidates").delete().eq("room_id", room["id"]).eq(
-            "proposed_by", user.id
-        ).execute()
+        # One pick per person, but several people can pick the SAME place — track
+        # every proposer so we can show "Proposed by N members".
+        existing = (
+            db.table("destination_candidates")
+            .select("id, iata_code, proposers, proposed_by")
+            .eq("room_id", room["id"])
+            .execute()
+        )
+        rows = existing.data or []
+        # Remove this member from any OTHER candidate they previously picked.
+        for c in rows:
+            proposers = c.get("proposers") or []
+            if user.id in proposers and c["iata_code"] != iata_upper:
+                proposers = [p for p in proposers if p != user.id]
+                if not proposers and c.get("proposed_by") is not None:
+                    db.table("destination_candidates").delete().eq("id", c["id"]).execute()
+                else:
+                    db.table("destination_candidates").update({"proposers": proposers}).eq("id", c["id"]).execute()
 
-    # Upsert (in case it was already algorithm-proposed or proposed by someone else)
+        target = next((c for c in rows if c["iata_code"] == iata_upper), None)
+        if target:
+            proposers = target.get("proposers") or []
+            if user.id not in proposers:
+                proposers.append(user.id)
+            res = (
+                db.table("destination_candidates")
+                .update({"proposers": proposers, "proposed_by": proposers[0]})
+                .eq("id", target["id"])
+                .execute()
+            )
+        else:
+            res = (
+                db.table("destination_candidates")
+                .upsert(
+                    {"room_id": room["id"], "iata_code": iata_upper, "proposed_by": user.id, "proposers": [user.id]},
+                    on_conflict="room_id,iata_code",
+                )
+                .execute()
+            )
+        return _candidate_to_dto(res.data[0], user.id, [])
+
+    # OPEN mode: plain add.
     res = (
         db.table("destination_candidates")
         .upsert(
-            {
-                "room_id": room["id"],
-                "iata_code": iata_upper,
-                "proposed_by": user.id,
-            },
+            {"room_id": room["id"], "iata_code": iata_upper, "proposed_by": user.id, "proposers": [user.id]},
             on_conflict="room_id,iata_code",
         )
         .execute()
     )
-    c = res.data[0]
-    return _candidate_to_dto(c, user.id, [])
+    return _candidate_to_dto(res.data[0], user.id, [])
 
 
 @router.delete("/{candidate_id}", status_code=204)

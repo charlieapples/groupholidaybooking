@@ -253,6 +253,15 @@ export default function DestinationsPage() {
   const minNights = room?.min_nights ?? null;
   const maxNights = room?.max_nights ?? null;
 
+  // How a candidate's origin is described ("Proposed by 2 members", etc.).
+  function proposerLabel(c: DestinationCandidate): string {
+    if (!c.proposed_by) return "AI suggestion";
+    const n = c.proposer_count ?? 1;
+    if (n > 1) return `Proposed by ${n} members`;
+    if (c.proposed_by === myUserId) return "Your pick";
+    return "Proposed by member";
+  }
+
   // Small cost-guidance line shown under each destination.
   function CostLine({ c }: { c: DestinationCandidate }) {
     // Prefer the live fare (Travelpayouts) over the offline region estimate.
@@ -773,6 +782,23 @@ export default function DestinationsPage() {
                   ))}
                 </div>
               )}
+              {/* Gemini's reasoning for these ideas — belongs here, since the
+                  ideas are for THIS person to pick one from. */}
+              {aiReasoning && (
+                <div className="rounded-xl border border-purple-200 bg-purple-50 p-3">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <p className="text-xs font-semibold text-purple-900">🤖 Why the AI suggested these</p>
+                    <button
+                      onClick={() => setAiReasoning(null)}
+                      className="text-xs text-purple-400 hover:text-purple-700"
+                      title="Dismiss"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <p className="text-xs text-purple-800 whitespace-pre-wrap">{aiReasoning}</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -852,23 +878,6 @@ export default function DestinationsPage() {
             </p>
           )}
 
-          {/* Gemini's reasoning for its picks */}
-          {aiReasoning && (
-            <div className="mb-4 rounded-xl border border-purple-200 bg-purple-50 p-4">
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <p className="text-sm font-semibold text-purple-900">🤖 Why the AI picked these</p>
-                <button
-                  onClick={() => setAiReasoning(null)}
-                  className="text-xs text-purple-400 hover:text-purple-700"
-                  title="Dismiss"
-                >
-                  ✕
-                </button>
-              </div>
-              <p className="text-sm text-purple-800 whitespace-pre-wrap">{aiReasoning}</p>
-            </div>
-          )}
-
           {/* Blind-reveal banner */}
           {candidates.length > 0 && voteStatus && (
             <div className={`mb-4 rounded-xl border px-4 py-3 ${
@@ -945,7 +954,7 @@ export default function DestinationsPage() {
                             )}
                           </p>
                           <p className="text-xs text-gray-400">
-                            Your rank: {c.my_rank ?? "—"}{c.proposed_by === myUserId ? " · your pick" : ""}
+                            Your rank: {c.my_rank ?? "—"} · {proposerLabel(c)}
                           </p>
                           <CostLine c={c} />
                         </div>
@@ -974,9 +983,7 @@ export default function DestinationsPage() {
                         <span className="text-2xl shrink-0">{flagFor(c.iata_code)}</span>
                         <div className="min-w-0">
                           <p className="font-semibold text-gray-900 truncate">{c.name}</p>
-                          <p className="text-xs text-gray-400">
-                            {c.proposed_by === myUserId ? "Your pick" : "Proposed by member"}
-                          </p>
+                          <p className="text-xs text-gray-400">{proposerLabel(c)}</p>
                           <CostLine c={c} />
                         </div>
                       </div>
@@ -1035,9 +1042,7 @@ export default function DestinationsPage() {
                     <span className="text-2xl shrink-0" aria-hidden="true">{flagFor(c.iata_code)}</span>
                     <div className="min-w-0">
                       <p className="font-semibold text-gray-900 truncate">{c.name}</p>
-                      <p className="text-xs text-gray-400">
-                        {c.proposed_by ? "Proposed by member" : "AI suggestion"}
-                      </p>
+                      <p className="text-xs text-gray-400">{proposerLabel(c)}</p>
                       <CostLine c={c} />
                     </div>
                   </div>

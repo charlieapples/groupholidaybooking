@@ -242,6 +242,7 @@ export interface DestinationCandidate {
   iata_code: string;
   name: string;
   proposed_by: string | null;
+  proposer_count?: number;
   total_cost_gbp: number | null;
   cost_breakdown: Record<string, number>;
   vote_count: number;
