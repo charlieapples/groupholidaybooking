@@ -513,6 +513,7 @@ export default function BookingPage() {
                           {token && p.chosen_airport && destIata && p.outbound_date && p.inbound_date && (
                             <LivePriceCheck
                               token={token}
+                              slug={slug}
                               origin={p.chosen_airport}
                               destination={destIata}
                               depart={p.outbound_date}
@@ -691,12 +692,14 @@ function CopyGroupPlanButton({
 
 function LivePriceCheck({
   token,
+  slug,
   origin,
   destination,
   depart,
   returnDate,
 }: {
   token: string;
+  slug: string;
   origin: string;
   destination: string;
   depart: string;
@@ -709,7 +712,7 @@ function LivePriceCheck({
   async function check() {
     setState("loading");
     try {
-      const lp = await getLivePrice(token, { origin, destination, depart, return_date: returnDate });
+      const lp = await getLivePrice(token, slug, { origin, destination, depart, return_date: returnDate });
       setPrice(lp.price_gbp);
       setLink(lp.deep_link);
       setState("done");

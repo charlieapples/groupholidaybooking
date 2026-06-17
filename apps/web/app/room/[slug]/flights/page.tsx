@@ -119,7 +119,7 @@ export default function FlightsPage() {
       const dest = room?.destination_iata || results[0]?.destination || "MAD";
       const depart = room?.agreed_start || "2026-08-09";
       const ret = room?.agreed_end || "2026-08-16";
-      const res = await testLiveSearch(token, { origin: "LON", destination: dest, depart, return_date: ret });
+      const res = await testLiveSearch(token, slug, { origin: "LON", destination: dest, depart, return_date: ret });
       if (res.ok) {
         toast.success(`✅ Live API works! LON→${dest}: £${Math.round(res.price ?? 0)} (${res.airline}).`);
       } else {
