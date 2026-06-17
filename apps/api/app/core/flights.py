@@ -205,9 +205,10 @@ def cheapest_return_pair(
                     f"https://www.aviasales.com/search/"
                     f"{origin}{dep_date.strftime('%d%m')}"
                     f"{destination}{ret_date.strftime('%d%m')}1"
+                    f"?currency=gbp"   # open in GBP, not the default USD
                 )
                 if marker_val:
-                    deep = f"{deep}?marker={marker_val}"
+                    deep = f"{deep}&marker={marker_val}"
                 best_out = Fare(
                     origin=origin, destination=destination,
                     departure_date=dep_date, price_gbp=half,
@@ -451,16 +452,18 @@ def live_price_for_dates(
     api_link = row.get("link", "")
     if api_link:
         deep = f"https://www.aviasales.com{api_link}"
+        sep = "&" if "?" in deep else "?"
+        deep = f"{deep}{sep}currency=gbp"   # open in GBP, not the default USD
         if marker:
-            sep = "&" if "?" in deep else "?"
-            deep = f"{deep}{sep}marker={marker}"
+            deep = f"{deep}&marker={marker}"
     else:
         deep = (
             f"https://www.aviasales.com/search/"
             f"{origin}{depart.strftime('%d%m')}{destination}{return_date.strftime('%d%m')}1"
+            f"?currency=gbp"
         )
         if marker:
-            deep = f"{deep}?marker={marker}"
+            deep = f"{deep}&marker={marker}"
 
     result = LivePrice(
         origin=origin,
