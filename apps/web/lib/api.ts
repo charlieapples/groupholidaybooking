@@ -148,6 +148,14 @@ export function goBackStep(token: string, slug: string) {
   return apiFetch<Room>(`/rooms/${slug}/go-back`, token, { method: "POST" });
 }
 
+/** Admin only: reset the Holiday back to a step, clearing work from there on. */
+export function resetRoom(token: string, slug: string, target_step: string) {
+  return apiFetch<Room>(`/rooms/${slug}/reset`, token, {
+    method: "POST",
+    body: JSON.stringify({ target_step }),
+  });
+}
+
 export function deleteRoom(token: string, slug: string) {
   return apiFetch<void>(`/rooms/${slug}`, token, { method: "DELETE" });
 }

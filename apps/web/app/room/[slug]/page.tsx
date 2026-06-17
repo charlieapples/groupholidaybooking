@@ -8,6 +8,7 @@ import {
   updateMyPostcode,
   updateRoom,
   goBackStep,
+  resetRoom,
   leaveRoom,
   kickMember,
   remindPendingMembers,
@@ -241,6 +242,26 @@ export default function RoomPage() {
       toast.error(errorMessage(e, "Failed to rename Holiday"));
     } finally {
       setSavingName(false);
+    }
+  }
+
+  const [resetting, setResetting] = useState(false);
+  async function handleReset(targetStep: string, label: string) {
+    if (!token || !room?.is_admin) return;
+    const msg =
+      targetStep === "availability"
+        ? `Start "${room.name}" over? This keeps everyone and the rough dates, but clears all progress (availability, votes, picks, flights) back to the start.`
+        : `Reset "${room.name}" back to ${label}? This clears everything done from that step onward. Members and saved preferences are kept.`;
+    if (!window.confirm(msg)) return;
+    setResetting(true);
+    try {
+      const updated = await resetRoom(token, slug, targetStep);
+      setRoom(updated);
+      toast.success(`Reset to ${label}.`);
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Couldn't reset the Holiday"));
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -505,7 +526,7 @@ export default function RoomPage() {
           {/* Admin: undo an over-advance. The step is a shared group pointer the
               admin moves forward — this lets them move it back without losing data. */}
           {room.is_admin && stepIdx > 0 && (
-            <div className="mt-3 flex items-center gap-2 border-t pt-3">
+            <div className="mt-3 flex items-center gap-2 border-t pt-3 flex-wrap">
               <button
                 onClick={handleGoBack}
                 disabled={goingBack}
@@ -513,7 +534,29 @@ export default function RoomPage() {
               >
                 {goingBack ? "Moving…" : `← Move group back to ${STEPS[stepIdx - 1]?.label}`}
               </button>
-              <span className="text-xs text-gray-400">Admin only · no data is deleted</span>
+              <span className="text-xs text-gray-400">moves the pointer · no data deleted</span>
+            </div>
+          )}
+          {/* Admin: reset to any step (clears work from there onward). */}
+          {room.is_admin && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium text-gray-500">Reset Holiday to:</span>
+              {STEPS.map((step) => (
+                <button
+                  key={step.key}
+                  onClick={() => handleReset(step.key, step.label)}
+                  disabled={resetting}
+                  title={
+                    step.key === "availability"
+                      ? "Start over — keep the group & rough dates, clear all progress"
+                      : `Clear everything from ${step.label} onward and go back there`
+                  }
+                  className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {step.icon} {step.label}
+                </button>
+              ))}
+              <span className="text-xs text-gray-400">clears work from that step on · keeps members &amp; prefs</span>
             </div>
           )}
         </div>

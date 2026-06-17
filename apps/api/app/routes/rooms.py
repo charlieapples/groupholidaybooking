@@ -701,6 +701,60 @@ def kick_member(
     return None
 
 
+class ResetRequest(BaseModel):
+    target_step: str   # one of STEP_ORDER — reset back to this step
+
+
+@router.post("/{slug}/reset", response_model=RoomResponse)
+def reset_room(slug: str, body: ResetRequest, user: UserInfo = Depends(current_user)):
+    """Admin: reset the Holiday back to an earlier step, clearing the work done
+    from that step onward. Keeps the group + the original rough window.
+
+    e.g. target_step='availability' starts the whole plan over; 'destination'
+    wipes the votes/picks so the group can re-decide; 'flights' clears the
+    flight results + chosen destination. Members, postcodes, busy days and each
+    person's saved preferences are kept.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    membership = _assert_member(db, room["id"], user.id)
+    if not membership.get("is_admin"):
+        raise HTTPException(403, "Only the admin can reset the Holiday.")
+
+    target = (body.target_step or "").strip()
+    if target not in STEP_ORDER:
+        raise HTTPException(422, f"target_step must be one of {STEP_ORDER}.")
+
+    room_id = room["id"]
+    idx = STEP_ORDER.index(target)
+    updates: dict[str, Any] = {"current_step": target}
+
+    def _safe_delete(table: str):
+        try:
+            db.table(table).delete().eq("room_id", room_id).execute()
+        except Exception:
+            log.warning("reset: failed clearing %s for room %s", table, room_id)
+
+    # Clear artifacts produced AT or AFTER the target step.
+    if idx <= STEP_ORDER.index("availability"):
+        _safe_delete("availability_submissions")   # re-do the blind reveal
+        updates.update(agreed_start=None, agreed_end=None, search_windows=[])
+    if idx <= STEP_ORDER.index("duration"):
+        updates.update(min_nights=None, max_nights=None)
+    if idx <= STEP_ORDER.index("budget"):
+        updates.update(budget_gbp=None)
+    if idx <= STEP_ORDER.index("destination"):
+        _safe_delete("destination_vote_submissions")
+        _safe_delete("destination_candidates")     # cascades destination_votes
+        updates.update(destination_iata=None)
+    if idx <= STEP_ORDER.index("flights"):
+        _safe_delete("flight_results")
+        updates.update(destination_iata=None)
+
+    updated = db.table("rooms").update(updates).eq("id", room_id).execute()
+    return _room_with_member_count(db, updated.data[0], user.id)
+
+
 @router.post("/{slug}/advance", response_model=RoomResponse)
 def advance_step(slug: str, user: UserInfo = Depends(current_user)):
     """Advance the room to the next planning step. Admin only."""
