@@ -8,6 +8,7 @@ import {
   advanceStep,
   updateRoom,
   testLiveSearch,
+  getMyProfile,
   type Room,
   type FlightResult,
 } from "@/lib/api";
@@ -36,6 +37,18 @@ export default function FlightsPage() {
   const [error, setError] = useState<string | null>(null);
   const [choosingDest, setChoosingDest] = useState<string | null>(null);
   const [savingAirport, setSavingAirport] = useState(false);
+  // The signed-in user's own name + postcode, so we only enable THEIR row's
+  // booking/route links and build their route from their saved postcode.
+  const [myName, setMyName] = useState<string | null>(null);
+  const [myPostcode, setMyPostcode] = useState<string | null>(null);
+  // Baggage definitions: remember whether the user wants them expanded.
+  const [bagDefsOpen, setBagDefsOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined") setBagDefsOpen(localStorage.getItem("bagDefsOpen") === "1");
+  }, []);
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("bagDefsOpen", bagDefsOpen ? "1" : "0");
+  }, [bagDefsOpen]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [partialExpanded, setPartialExpanded] = useState(false);
   const [excludedPerson, setExcludedPerson] = useState<string | null>(null);
@@ -65,6 +78,11 @@ export default function FlightsPage() {
       try {
         const r = await getRoom(t, slug);
         setRoom(r);
+        // Who am I (to gate booking links to my own row)?
+        getMyProfile(t).then((p) => {
+          setMyName(p.display_name || s.session!.user.user_metadata?.full_name || null);
+          setMyPostcode(p.default_home_postcode || null);
+        }).catch(() => {});
         // Try to load cached results
         const res = await getFlightResults(t, slug).catch(() => null);
         if (res) setResults(res);
@@ -255,15 +273,26 @@ export default function FlightsPage() {
           </div>
         )}
 
-        {/* Baggage info banner */}
-        <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900 flex items-start gap-2">
-          <span className="text-lg leading-none">🧳</span>
-          <p>
-            Prices include a per-airline <strong>carry-on estimate</strong> —
-            Travelpayouts returns rock-bottom &ldquo;personal item only&rdquo; fares. Airlines
-            like BA &amp; easyJet include cabin bags; Ryanair/Wizz Air charge extra.
-            Hold luggage can be added at checkout.
-          </p>
+        {/* Baggage info banner with expandable definitions (remembers your choice) */}
+        <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <div className="flex items-start gap-2">
+            <span className="text-lg leading-none">🧳</span>
+            <p className="flex-1">
+              Prices include a per-airline <strong>cabin-bag estimate</strong> on top of the
+              rock-bottom &ldquo;personal item only&rdquo; fare.{" "}
+              <button onClick={() => setBagDefsOpen((o) => !o)} className="underline font-medium hover:text-blue-700">
+                {bagDefsOpen ? "Hide" : "What do the baggage terms mean?"}
+              </button>
+            </p>
+          </div>
+          {bagDefsOpen && (
+            <ul className="mt-2 ml-8 space-y-1.5 text-xs text-blue-900 list-disc">
+              <li><strong>Personal item</strong> — a small bag that fits under the seat (small backpack/handbag), not just your pockets. The cheapest fares only include this.</li>
+              <li><strong>Cabin bag / carry-on</strong> — the bigger wheelie bag in the overhead locker. BA &amp; easyJet often include it; Ryanair/Wizz charge extra.</li>
+              <li><strong>Hold luggage</strong> — the big suitcase checked in at the desk and stored in the plane&apos;s hold — always extra on budget airlines.</li>
+              <li className="text-blue-700">We show the rock-bottom personal-item fare + a per-airline cabin-bag <em>estimate</em>. Exact bag fees vary by airline/route (a future precision add).</li>
+            </ul>
+          )}
         </div>
 
         {/* Run button */}
@@ -432,6 +461,8 @@ export default function FlightsPage() {
                 budgetGbp={room.budget_gbp}
                 choosingDest={choosingDest}
                 handleChooseDestination={handleChooseDestination}
+                myName={myName}
+                myPostcode={myPostcode}
               />
             ) : (
               /* No fully-viable destinations — contingency panel */
@@ -499,6 +530,8 @@ export default function FlightsPage() {
                               budgetGbp={room.budget_gbp}
                               choosingDest={choosingDest}
                               handleChooseDestination={handleChooseDestination}
+                myName={myName}
+                myPostcode={myPostcode}
                             />
                           </>
                         ) : (
@@ -541,6 +574,8 @@ export default function FlightsPage() {
                       budgetGbp={room.budget_gbp}
                       choosingDest={choosingDest}
                       handleChooseDestination={handleChooseDestination}
+                myName={myName}
+                myPostcode={myPostcode}
                     />
                   </div>
                 )}
@@ -606,6 +641,8 @@ interface ResultsListProps {
   budgetGbp?: number | null;
   choosingDest: string | null;
   handleChooseDestination: (iata: string) => void;
+  myName?: string | null;
+  myPostcode?: string | null;
 }
 
 function ResultsList({
@@ -619,6 +656,8 @@ function ResultsList({
   budgetGbp,
   choosingDest,
   handleChooseDestination,
+  myName,
+  myPostcode,
 }: ResultsListProps) {
   return (
     <div className="space-y-3">
@@ -755,29 +794,42 @@ function ResultsList({
                             </span>
                           )}
                         </div>
-                        <div className="mt-1 flex gap-4 flex-wrap">
-                          {p.booking_link && (
-                            <a
-                              href={p.booking_link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline"
-                            >
-                              ✈️ Book return on Aviasales →
-                            </a>
-                          )}
-                          {p.chosen_airport && p.ground_cost_gbp > 0 && (
-                            <a
-                              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent((AIRPORT_DISPLAY[p.chosen_airport] ?? p.chosen_airport) + " Airport")}&travelmode=transit`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline"
-                              title="Open public-transport directions to the airport in Google Maps"
-                            >
-                              🚆 Plan route to airport →
-                            </a>
-                          )}
-                        </div>
+                        {(() => {
+                          // Only YOUR OWN row's links are clickable — others are
+                          // greyed to stop you booking/planning someone else's trip.
+                          const isMe = !!myName && p.person_name === myName;
+                          const routeOrigin = isMe && myPostcode ? myPostcode : null;
+                          const routeUrl = p.chosen_airport
+                            ? `https://www.google.com/maps/dir/?api=1${routeOrigin ? `&origin=${encodeURIComponent(routeOrigin)}` : ""}&destination=${encodeURIComponent((AIRPORT_DISPLAY[p.chosen_airport] ?? p.chosen_airport) + " Airport")}&travelmode=transit`
+                            : null;
+                          if (!isMe) {
+                            return (
+                              <div className="mt-1 text-xs text-gray-300" title="Only your own row is clickable — to avoid booking someone else's trip">
+                                ✈️ Book / 🚆 plan route — (only on your own row)
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="mt-1 flex gap-4 flex-wrap">
+                              {p.booking_link && (
+                                <a href={p.booking_link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                  ✈️ Book return on Aviasales →
+                                </a>
+                              )}
+                              {routeUrl && p.ground_cost_gbp > 0 && (
+                                <a
+                                  href={routeUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline"
+                                  title={routeOrigin ? `Transit directions from your postcode (${routeOrigin}) to the airport` : "Transit directions to the airport"}
+                                >
+                                  🚆 Plan route to airport →
+                                </a>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                     {p.note && <p className="text-xs text-gray-400 mt-1">{p.note}</p>}
