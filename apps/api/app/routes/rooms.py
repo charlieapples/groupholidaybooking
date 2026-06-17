@@ -102,6 +102,28 @@ def _generate_slug(length: int = 8) -> str:
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
+def _longest_window_nights(search_windows, agreed_start, agreed_end) -> Optional[int]:
+    """Longest available travel window in nights (across multi-windows, else the
+    agreed window). Used to reject trip lengths that can't physically fit."""
+    from datetime import date as _date
+
+    def _nights(a, b):
+        try:
+            d = (_date.fromisoformat(str(b)[:10]) - _date.fromisoformat(str(a)[:10])).days
+            return d if d > 0 else None
+        except (ValueError, TypeError):
+            return None
+
+    best: Optional[int] = None
+    for w in (search_windows or []):
+        n = _nights(w.get("start_date"), w.get("end_date")) if isinstance(w, dict) else None
+        if n and (best is None or n > best):
+            best = n
+    if best is None:
+        best = _nights(agreed_start, agreed_end)
+    return best
+
+
 def _assert_member(db, room_id: str, user_id: str) -> dict:
     """Return the membership row or raise 403."""
     res = (
@@ -522,6 +544,18 @@ def update_room(
     new_max = updates.get("max_nights", room.get("max_nights"))
     if new_min is not None and new_max is not None and new_min > new_max:
         raise HTTPException(422, "min_nights cannot be greater than max_nights.")
+
+    # Guard: nights can't exceed the longest travel window the group has.
+    window_nights = _longest_window_nights(
+        updates.get("search_windows", room.get("search_windows")),
+        updates.get("agreed_start", room.get("agreed_start")),
+        updates.get("agreed_end", room.get("agreed_end")),
+    )
+    if window_nights and new_max is not None and new_max > window_nights:
+        raise HTTPException(
+            422,
+            f"max_nights ({new_max}) is longer than the {window_nights}-night travel window.",
+        )
 
     # Validate voting_style and, if it's actually CHANGING, wipe existing votes
     # and lock-ins. The destination_votes.vote_value column means different

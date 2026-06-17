@@ -87,16 +87,46 @@ export default function PreferencesPage() {
     return () => { document.title = "Group Holiday Booking — plan your trip together"; };
   }, [room?.name]);
 
-  // Min nights must be ≤ max nights (you can't have a 6–5 night trip).
-  const memberDurationInvalid =
-    !!minNights && !!maxNights && Number(minNights) > Number(maxNights);
-  const agreedDurationInvalid =
-    !!agreedMin && !!agreedMax && Number(agreedMin) > Number(agreedMax);
+  // Longest travel window the group actually has — nights can't exceed it.
+  function nightsBetween(a?: string | null, b?: string | null): number | null {
+    if (!a || !b) return null;
+    const d = Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000);
+    return d > 0 ? d : null;
+  }
+  const windowNights = (() => {
+    const wins = room?.search_windows ?? [];
+    if (wins.length) {
+      const lens = wins.map((w) => nightsBetween(w.start_date, w.end_date) ?? 0);
+      const longest = Math.max(...lens);
+      return longest > 0 ? longest : null;
+    }
+    return nightsBetween(room?.agreed_start, room?.agreed_end);
+  })();
+
+  // Validation: min ≤ max, and neither longer than the available window.
+  const memberDurationError = (() => {
+    if (minNights && maxNights && Number(minNights) > Number(maxNights))
+      return "Minimum can't be more than the maximum.";
+    if (windowNights && maxNights && Number(maxNights) > windowNights)
+      return `Max (${maxNights}) is longer than your ${windowNights}-night travel window — it can't work.`;
+    if (windowNights && minNights && Number(minNights) > windowNights)
+      return `Minimum (${minNights}) is longer than your ${windowNights}-night travel window.`;
+    return null;
+  })();
+  const memberDurationInvalid = memberDurationError !== null;
+  const agreedDurationError = (() => {
+    if (agreedMin && agreedMax && Number(agreedMin) > Number(agreedMax))
+      return "Min nights can't be more than max.";
+    if (windowNights && agreedMax && Number(agreedMax) > windowNights)
+      return `Max (${agreedMax}) is longer than the ${windowNights}-night travel window.`;
+    return null;
+  })();
+  const agreedDurationInvalid = agreedDurationError !== null;
 
   async function handleSave() {
     if (!token) return;
-    if (memberDurationInvalid) {
-      toast.error("Minimum nights can't be more than the maximum.");
+    if (memberDurationError) {
+      toast.error(memberDurationError);
       return;
     }
     setSaving(true);
@@ -123,8 +153,8 @@ export default function PreferencesPage() {
       toast.error("Please set agreed min and max nights before advancing.");
       return;
     }
-    if (agreedDurationInvalid) {
-      toast.error("Minimum nights can't be more than the maximum.");
+    if (agreedDurationError) {
+      toast.error(agreedDurationError);
       return;
     }
     setAdvancing(true);
@@ -250,10 +280,11 @@ export default function PreferencesPage() {
                 />
               </div>
             </div>
-            {memberDurationInvalid && (
-              <p className="mt-1.5 text-xs font-medium text-red-600">
-                ⚠️ Minimum can&apos;t be more than the maximum — set it lowest first, then highest.
-              </p>
+            {memberDurationError && (
+              <p className="mt-1.5 text-xs font-medium text-red-600">⚠️ {memberDurationError}</p>
+            )}
+            {windowNights && (
+              <p className="mt-1 text-xs text-gray-400">Your travel window is {windowNights} nights long.</p>
             )}
           </div>
 
@@ -455,10 +486,8 @@ export default function PreferencesPage() {
                 />
               </div>
             </div>
-            {agreedDurationInvalid && (
-              <p className="mt-2 text-xs font-medium text-red-600">
-                ⚠️ Min nights can&apos;t be more than max — enter the smaller number on the left.
-              </p>
+            {agreedDurationError && (
+              <p className="mt-2 text-xs font-medium text-red-600">⚠️ {agreedDurationError}</p>
             )}
             {(suggestedMin || suggestedMax) && (
               <button
