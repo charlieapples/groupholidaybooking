@@ -124,6 +124,30 @@ def get_live_price(
     )
 
 
+@router.get("/live-search-test")
+def live_search_test(
+    origin: str,
+    destination: str,
+    depart: str,
+    return_date: str,
+    user: UserInfo = Depends(current_user),
+):
+    """Diagnostic: run the LIVE Travelpayouts Flight Search for one route so we
+    can verify the signature + polling work against the real token before wiring
+    live fares into the optimiser. Returns the cheapest live fare or a clear note.
+    """
+    from ..core.live_search import live_cheapest_return
+    try:
+        d_out = date.fromisoformat(depart)
+        d_back = date.fromisoformat(return_date)
+    except ValueError:
+        raise HTTPException(422, "depart and return_date must be YYYY-MM-DD dates.")
+    result = live_cheapest_return(origin.upper(), destination.upper(), d_out, d_back)
+    if result is None:
+        return {"ok": False, "note": "No live fare returned (token missing, no results, or signature/polling needs a tweak)."}
+    return {"ok": True, **result}
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 

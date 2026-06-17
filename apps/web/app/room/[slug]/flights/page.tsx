@@ -711,16 +711,29 @@ function ResultsList({
                             </span>
                           )}
                         </div>
-                        {p.booking_link && (
-                          <a
-                            href={p.booking_link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block mt-1 text-blue-600 hover:underline"
-                          >
-                            Book return on Aviasales →
-                          </a>
-                        )}
+                        <div className="mt-1 flex gap-4 flex-wrap">
+                          {p.booking_link && (
+                            <a
+                              href={p.booking_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                            >
+                              ✈️ Book return on Aviasales →
+                            </a>
+                          )}
+                          {p.chosen_airport && p.ground_cost_gbp > 0 && (
+                            <a
+                              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent((AIRPORT_DISPLAY[p.chosen_airport] ?? p.chosen_airport) + " Airport")}&travelmode=transit`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                              title="Open public-transport directions to the airport in Google Maps"
+                            >
+                              🚆 Plan route to airport →
+                            </a>
+                          )}
+                        </div>
                       </div>
                     )}
                     {p.note && <p className="text-xs text-gray-400 mt-1">{p.note}</p>}
