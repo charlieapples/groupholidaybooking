@@ -232,8 +232,9 @@ def cost_estimate(iata: Optional[str]) -> Optional[CostEstimate]:
     if daily is None:
         return None
 
-    daily_low = round(daily * 0.8)
-    daily_high = round(daily * 1.3)
+    # Tighter band than before (±~15%) to reduce the uncertainty spread.
+    daily_low = round(daily * 0.85)
+    daily_high = round(daily * 1.15)
 
     fl, fh = _REGION_FLIGHT_BANDS[region]
     return CostEstimate(

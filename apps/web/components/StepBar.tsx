@@ -6,6 +6,7 @@
  * click, instead of bouncing back to the dashboard.
  */
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 const STEPS = [
@@ -28,6 +29,28 @@ export default function StepBar({
 }) {
   const router = useRouter();
   const currentIdx = STEPS.findIndex((s) => s.key === currentStep);
+
+  // Left/Right arrow keys move between stages (Availability ⇄ Booking). Ignored
+  // while typing in a field, or with modifier keys, so normal input still works.
+  useEffect(() => {
+    // Unique page routes in order (duration+budget are the same page).
+    const routes = [...new Set(STEPS.map((s) => s.route))];
+    const idx = routes.indexOf(activeRoute ?? "");
+    if (idx < 0) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement;
+      const tag = el?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || (el as HTMLElement)?.isContentEditable) return;
+      const next = e.key === "ArrowRight" ? idx + 1 : idx - 1;
+      if (next < 0 || next >= routes.length) return;
+      e.preventDefault();
+      router.push(`/room/${slug}/${routes[next]}`);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [slug, activeRoute, router]);
 
   return (
     <div className="border-b bg-white">
