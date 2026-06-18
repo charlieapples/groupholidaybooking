@@ -518,6 +518,7 @@ export default function BookingPage() {
                               destination={destIata}
                               depart={p.outbound_date}
                               returnDate={p.inbound_date}
+                              predicted={p.outbound_cost_gbp + p.inbound_cost_gbp}
                             />
                           )}
                           <p className="text-[10px] text-gray-400">
@@ -697,6 +698,7 @@ function LivePriceCheck({
   destination,
   depart,
   returnDate,
+  predicted,
 }: {
   token: string;
   slug: string;
@@ -704,6 +706,7 @@ function LivePriceCheck({
   destination: string;
   depart: string;
   returnDate: string;
+  predicted?: number;   // the optimiser's predicted flight cost, to compare against
 }) {
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [price, setPrice] = useState<number | null>(null);
@@ -740,6 +743,16 @@ function LivePriceCheck({
           ) : (
             <span className="font-semibold text-green-700">£{Math.round(price).toLocaleString()}</span>
           )}
+          {predicted != null && (() => {
+            const diff = Math.round(price) - Math.round(predicted);
+            const pct = predicted > 0 ? Math.round((diff / predicted) * 100) : 0;
+            return (
+              <span className="text-gray-400" title="How close our prediction was to the live fare">
+                {" "}· predicted £{Math.round(predicted).toLocaleString()}
+                {diff === 0 ? " (spot on ✓)" : ` (${diff > 0 ? "+" : ""}£${diff}, ${pct > 0 ? "+" : ""}${pct}%)`}
+              </span>
+            );
+          })()}
           <span className="text-gray-400"> · checked just now</span>
         </span>
       )}
