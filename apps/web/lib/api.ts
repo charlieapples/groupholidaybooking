@@ -569,6 +569,29 @@ export function getLivePrice(
   return apiFetch<LivePrice>(`/rooms/${slug}/flights/live-price?${qs}`, token);
 }
 
+/** Log a predicted-vs-actual fare (best-effort, for accuracy tracking). */
+export function logPriceCheck(
+  token: string,
+  slug: string,
+  body: { destination: string; origin: string; predicted_gbp: number; actual_gbp: number }
+) {
+  return apiFetch<void>(`/rooms/${slug}/flights/price-check-log`, token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export interface PriceAccuracy {
+  count: number;
+  avg_abs_pct_error?: number | null;
+  avg_signed_pct_error?: number | null;
+}
+
+/** App-wide accuracy of our flight predictions vs live fares. */
+export function getPriceAccuracy(token: string, slug: string) {
+  return apiFetch<PriceAccuracy>(`/rooms/${slug}/flights/price-accuracy`, token);
+}
+
 /** Diagnostic: run the LIVE Travelpayouts Search API for one route to verify it. */
 export function testLiveSearch(
   token: string,

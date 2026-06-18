@@ -124,6 +124,75 @@ def get_live_price(
     )
 
 
+class PriceCheckLog(BaseModel):
+    destination: str
+    origin: str
+    predicted_gbp: float
+    actual_gbp: float
+
+
+@router.post("/price-check-log", status_code=204)
+def log_price_check(
+    slug: str,
+    body: PriceCheckLog,
+    user: UserInfo = Depends(current_user),
+):
+    """Record a predicted-vs-actual fare so we can measure (and later calibrate)
+    how accurate the estimate is. Best-effort — never blocks the user."""
+    try:
+        db = get_client()
+        room = _get_room_by_slug(db, slug)
+        _assert_member(db, room["id"], user.id)
+        db.table("price_checks").insert({
+            "room_id": room["id"],
+            "destination_iata": body.destination.upper(),
+            "origin": body.origin.upper(),
+            "predicted_gbp": round(body.predicted_gbp, 2),
+            "actual_gbp": round(body.actual_gbp, 2),
+        }).execute()
+    except Exception:
+        log.warning("price-check-log failed (continuing)")
+    return None
+
+
+class PriceAccuracy(BaseModel):
+    count: int
+    avg_abs_pct_error: Optional[float] = None    # mean |actual-predicted|/predicted
+    avg_signed_pct_error: Optional[float] = None # mean (actual-predicted)/predicted (sign = bias)
+
+
+@router.get("/price-accuracy", response_model=PriceAccuracy)
+def price_accuracy(slug: str, user: UserInfo = Depends(current_user)):
+    """App-wide accuracy of our flight predictions vs live fares (last 1000)."""
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+    try:
+        rows = (
+            db.table("price_checks")
+            .select("predicted_gbp, actual_gbp")
+            .order("checked_at", desc=True)
+            .limit(1000)
+            .execute()
+        ).data or []
+    except Exception:
+        return PriceAccuracy(count=0)
+    abs_errs, signed_errs = [], []
+    for r in rows:
+        p, a = r.get("predicted_gbp"), r.get("actual_gbp")
+        if p and a and float(p) > 0:
+            p, a = float(p), float(a)
+            signed_errs.append((a - p) / p)
+            abs_errs.append(abs(a - p) / p)
+    if not abs_errs:
+        return PriceAccuracy(count=0)
+    return PriceAccuracy(
+        count=len(abs_errs),
+        avg_abs_pct_error=round(100 * sum(abs_errs) / len(abs_errs), 1),
+        avg_signed_pct_error=round(100 * sum(signed_errs) / len(signed_errs), 1),
+    )
+
+
 @router.get("/live-search-test")
 def live_search_test(
     origin: str,

@@ -8,6 +8,8 @@ import {
   advanceStep,
   getLivePrice,
   getMyProfile,
+  logPriceCheck,
+  getPriceAccuracy,
   type Room,
   type FlightResult,
   type Member,
@@ -149,6 +151,7 @@ export default function BookingPage() {
   const [token, setToken] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [myCurrency, setMyCurrency] = useState("GBP");
+  const [accuracy, setAccuracy] = useState<{ count: number; avg_abs_pct_error?: number | null; avg_signed_pct_error?: number | null } | null>(null);
   const [results, setResults] = useState<FlightResult[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -196,6 +199,7 @@ export default function BookingPage() {
         setMembers(m);
         if (res) setResults(res);
         getMyProfile(t).then((p) => setMyCurrency(p.currency || "GBP")).catch(() => {});
+        getPriceAccuracy(t, slug).then(setAccuracy).catch(() => {});
       } catch {
         router.replace("/dashboard");
       }
@@ -322,6 +326,17 @@ export default function BookingPage() {
         {!destIata && (
           <div className="rounded-xl border bg-amber-50 p-6 text-amber-800">
             No destination chosen yet. Go back to the flights step and pick one.
+          </div>
+        )}
+
+        {/* How accurate our predictions have been (builds up as people check live prices). */}
+        {accuracy && accuracy.count >= 3 && accuracy.avg_abs_pct_error != null && (
+          <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-xs text-blue-800">
+            📊 Across {accuracy.count} price checks, our flight predictions have been on average{" "}
+            <strong>{accuracy.avg_abs_pct_error}% off</strong> the live fare
+            {accuracy.avg_signed_pct_error != null && Math.abs(accuracy.avg_signed_pct_error) >= 1
+              ? ` (live tends to be ${accuracy.avg_signed_pct_error > 0 ? "higher" : "lower"} than predicted)`
+              : ""}. Fares change minute-to-minute — always confirm before booking.
           </div>
         )}
 
@@ -734,6 +749,10 @@ function LivePriceCheck({
       setPrice(lp.price_gbp);
       setLink(lp.deep_link);
       setState("done");
+      // Log predicted-vs-actual so the app can track its own accuracy.
+      if (predicted != null) {
+        logPriceCheck(token, slug, { destination, origin, predicted_gbp: predicted, actual_gbp: lp.price_gbp }).catch(() => {});
+      }
     } catch {
       setState("error");
     }
