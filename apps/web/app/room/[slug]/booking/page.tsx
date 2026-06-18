@@ -534,7 +534,7 @@ export default function BookingPage() {
                               </a>
                             )}
                             <button
-                              onClick={() => copyLink(p.booking_link!, p.person_name)}
+                              onClick={() => copyLink(withCurrency(p.booking_link)!, p.person_name)}
                               className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
                             >
                               {copied === p.person_name ? "Copied!" : "Copy link"}
