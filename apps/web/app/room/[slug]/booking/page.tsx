@@ -7,6 +7,7 @@ import {
   listMembers,
   advanceStep,
   getLivePrice,
+  getMyProfile,
   type Room,
   type FlightResult,
   type Member,
@@ -147,6 +148,7 @@ export default function BookingPage() {
 
   const [token, setToken] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
+  const [myCurrency, setMyCurrency] = useState("GBP");
   const [results, setResults] = useState<FlightResult[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -193,6 +195,7 @@ export default function BookingPage() {
         setRoom(r);
         setMembers(m);
         if (res) setResults(res);
+        getMyProfile(t).then((p) => setMyCurrency(p.currency || "GBP")).catch(() => {});
       } catch {
         router.replace("/dashboard");
       }
@@ -246,6 +249,14 @@ export default function BookingPage() {
   // Prefer the SPECIFIC flight dates picked by the optimiser — those are when
   // the group will actually be there. Fall back to the room's wide agreed_start
   // window only if no flight result has narrowed it down yet.
+  // Rewrite an Aviasales link to open in the viewer's preferred currency.
+  function withCurrency(link: string | null | undefined): string | undefined {
+    if (!link) return undefined;
+    const cur = (myCurrency || "GBP").toLowerCase();
+    if (/[?&]currency=/.test(link)) return link.replace(/([?&]currency=)[a-zA-Z]+/, `$1${cur}`);
+    return link + (link.includes("?") ? "&" : "?") + "currency=" + cur;
+  }
+
   const checkIn = destResult?.shared_out_date ?? room.agreed_start ?? "";
   const checkOut = destResult?.shared_return_date ?? room.agreed_end ?? "";
   const tripNights = (checkIn && checkOut)
@@ -489,12 +500,13 @@ export default function BookingPage() {
                         <div className="space-y-1.5">
                           <div className="flex gap-2 flex-wrap">
                             <a
-                              href={p.booking_link}
+                              href={withCurrency(p.booking_link)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                              title={`Opens in ${myCurrency}`}
                             >
-                              Book return on Aviasales
+                              Book return on Aviasales{myCurrency !== "GBP" ? ` (${myCurrency})` : ""}
                             </a>
                             {p.chosen_airport && destIata && p.outbound_date && p.inbound_date && (
                               <a

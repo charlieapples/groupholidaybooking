@@ -39,6 +39,7 @@ export interface Profile {
   display_name: string | null;
   avatar_url: string | null;
   default_home_postcode: string | null;
+  currency?: string;
 }
 
 export function getMyProfile(token: string) {
@@ -47,7 +48,7 @@ export function getMyProfile(token: string) {
 
 export function updateMyProfile(
   token: string,
-  body: { default_home_postcode?: string; display_name?: string }
+  body: { default_home_postcode?: string; display_name?: string; currency?: string }
 ) {
   return apiFetch<Profile>("/profile", token, {
     method: "PATCH",

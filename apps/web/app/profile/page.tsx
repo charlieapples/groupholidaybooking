@@ -8,6 +8,35 @@ import { useToast, errorMessage } from "@/components/Toast";
 import { normalisePostcode } from "@/lib/postcode";
 import FeedbackButton from "@/components/FeedbackButton";
 
+// Common booking currencies (label shown in the dropdown).
+const CURRENCIES: [string, string][] = [
+  ["GBP", "£ GBP — British Pound"],
+  ["EUR", "€ EUR — Euro"],
+  ["USD", "$ USD — US Dollar"],
+  ["CAD", "$ CAD — Canadian Dollar"],
+  ["AUD", "$ AUD — Australian Dollar"],
+  ["CHF", "CHF — Swiss Franc"],
+  ["SEK", "SEK — Swedish Krona"],
+  ["NOK", "NOK — Norwegian Krone"],
+  ["DKK", "DKK — Danish Krone"],
+  ["PLN", "PLN — Polish Zloty"],
+  ["JPY", "¥ JPY — Japanese Yen"],
+  ["INR", "₹ INR — Indian Rupee"],
+  ["AED", "AED — UAE Dirham"],
+];
+
+// Best-effort: map the browser locale region to a currency.
+function guessCurrencyFromLocale(): string | null {
+  if (typeof navigator === "undefined") return null;
+  const region = (navigator.language.split("-")[1] || "").toUpperCase();
+  const map: Record<string, string> = {
+    GB: "GBP", US: "USD", CA: "CAD", AU: "AUD", CH: "CHF", SE: "SEK", NO: "NOK",
+    DK: "DKK", PL: "PLN", JP: "JPY", IN: "INR", AE: "AED",
+    IE: "EUR", FR: "EUR", DE: "EUR", ES: "EUR", IT: "EUR", NL: "EUR", PT: "EUR", BE: "EUR", AT: "EUR", GR: "EUR",
+  };
+  return map[region] || null;
+}
+
 export default function ProfilePage() {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -20,6 +49,7 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState("");
   const [postcode, setPostcode] = useState("");
   const [email, setEmail] = useState("");
+  const [currency, setCurrency] = useState("GBP");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -32,6 +62,8 @@ export default function ProfilePage() {
         setEmail(p.email ?? "");
         setDisplayName(p.display_name ?? "");
         setPostcode(p.default_home_postcode ?? "");
+        // Default the currency from the browser locale if none saved yet.
+        setCurrency(p.currency || guessCurrencyFromLocale() || "GBP");
       } catch {
         router.replace("/dashboard");
       }
@@ -66,6 +98,7 @@ export default function ProfilePage() {
       await updateMyProfile(token, {
         display_name: displayName.trim() || undefined,
         default_home_postcode: normPostcode || undefined,
+        currency: currency || undefined,
       });
       setSaved(true);
       setPostcode(normPostcode);
@@ -136,6 +169,23 @@ export default function ProfilePage() {
             <p className="mt-1 text-xs text-gray-500">
               Used to find your nearest airport and calculate ground travel cost.
               Updating here automatically updates all your Holiday groups too.
+            </p>
+          </div>
+
+          {/* Preferred currency */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Preferred currency</label>
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+            >
+              {CURRENCIES.map(([code, label]) => (
+                <option key={code} value={code}>{label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              Your booking links open in this currency. (We guessed it from your device — change it if it&apos;s wrong.)
             </p>
           </div>
 

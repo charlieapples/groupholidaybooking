@@ -24,11 +24,13 @@ class ProfileResponse(BaseModel):
     display_name: Optional[str] = None
     avatar_url: Optional[str] = None
     default_home_postcode: Optional[str] = None
+    currency: str = "GBP"          # ISO 4217 code — which currency this person books in
 
 
 class ProfileUpdateRequest(BaseModel):
     default_home_postcode: Optional[str] = None
     display_name: Optional[str] = None
+    currency: Optional[str] = None
 
 
 def _ensure_profile(db, user: UserInfo) -> dict:
@@ -66,6 +68,7 @@ def get_profile(user: UserInfo = Depends(current_user)):
         display_name=p.get("display_name"),
         avatar_url=p.get("avatar_url"),
         default_home_postcode=p.get("default_home_postcode"),
+        currency=(p.get("currency") or "GBP"),
     )
 
 
@@ -100,4 +103,5 @@ def update_profile(
         display_name=p.get("display_name"),
         avatar_url=p.get("avatar_url"),
         default_home_postcode=p.get("default_home_postcode"),
+        currency=(p.get("currency") or "GBP"),
     )
