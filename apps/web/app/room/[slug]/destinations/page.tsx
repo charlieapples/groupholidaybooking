@@ -83,6 +83,9 @@ export default function DestinationsPage() {
   const [groupRec, setGroupRec] = useState<import("@/lib/api").GroupRecommendation | null>(null);
   const [loadingRec, setLoadingRec] = useState(false);
   const [showCostMethod, setShowCostMethod] = useState(false);
+  const [overriding, setOverriding] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideSearch, setOverrideSearch] = useState("");
   const [rankOrder, setRankOrder] = useState<string[]>([]);
   const [submittingRank, setSubmittingRank] = useState(false);
   const [changingMode, setChangingMode] = useState(false);
@@ -444,6 +447,27 @@ export default function DestinationsPage() {
     }
   }
 
+  // Admin override: the destination is already decided, so skip the vote.
+  async function handleSetDestinationDirectly(iata: string, name: string) {
+    if (!token || !room?.is_admin) return;
+    if (!window.confirm(`Skip voting and lock in ${name} as the destination? You can still change it on the Flights step.`)) return;
+    setOverriding(true);
+    try {
+      await updateRoom(token, slug, { destination_iata: iata.toUpperCase() });
+      // Move the group to the flights step (destination is decided).
+      let r = await advanceStep(token, slug).catch(() => null);
+      while (r && r.current_step !== "flights" && ["destination", "duration", "budget", "availability"].includes(r.current_step)) {
+        r = await advanceStep(token, slug).catch(() => null);
+      }
+      toast.success(`${name} locked in. Continue to Flights.`);
+      router.push(`/room/${slug}/flights`);
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Couldn't set the destination"));
+    } finally {
+      setOverriding(false);
+    }
+  }
+
   async function handlePropose(iata: string) {
     if (!token) return;
     setProposing(true);
@@ -611,6 +635,52 @@ export default function DestinationsPage() {
               </span>
             )}
           </div>
+
+          {/* Admin override: skip the vote if it's already decided. */}
+          {room.is_admin && (
+            <div className="mt-3 border-t pt-3">
+              {!overrideOpen ? (
+                <button onClick={() => setOverrideOpen(true)} className="text-xs text-gray-500 hover:text-gray-800 underline">
+                  ✍️ Already decided? Skip voting & set the destination manually
+                </button>
+              ) : (
+                <div className="relative">
+                  <p className="text-xs text-gray-500 mb-1">Type a city or airport code to lock it in (skips voting):</p>
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="e.g. Corfu or CFU"
+                    value={overrideSearch}
+                    onChange={(e) => setOverrideSearch(e.target.value)}
+                    className="w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-gray-900 focus:border-amber-500 focus:outline-none"
+                  />
+                  {overrideSearch.length >= 2 && (
+                    <div className="absolute z-10 mt-1 w-full rounded-lg border bg-white shadow-lg max-h-56 overflow-y-auto">
+                      {Object.entries(DEST_NAMES)
+                        .filter(([iata, name]) =>
+                          name.toLowerCase().includes(overrideSearch.toLowerCase()) ||
+                          iata.toLowerCase().includes(overrideSearch.toLowerCase()) ||
+                          countryFor(iata).toLowerCase().includes(overrideSearch.toLowerCase())
+                        )
+                        .slice(0, 8)
+                        .map(([iata, name]) => (
+                          <button
+                            key={iata}
+                            onClick={() => handleSetDestinationDirectly(iata, name)}
+                            disabled={overriding}
+                            className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-amber-50 disabled:opacity-50"
+                          >
+                            <span className="font-medium text-gray-900">{flagFor(iata)} {name}</span>
+                            <span className="font-mono text-xs text-gray-400">{iata}</span>
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                  <button onClick={() => { setOverrideOpen(false); setOverrideSearch(""); }} className="mt-1 text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Questionnaire */}
