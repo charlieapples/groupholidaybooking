@@ -28,6 +28,7 @@ import { parseIcal, parseRoughWindow, getMonthsInRange } from "@/lib/ical";
 import FeedbackButton from "@/components/FeedbackButton";
 import AccountBadge from "@/components/AccountBadge";
 import StepBar from "@/components/StepBar";
+import Script from "next/script";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
@@ -177,6 +178,8 @@ function ImportPanel({
   const [gcalError, setGcalError] = useState("");
   // The user's Google calendars, so they can choose which ones to include.
   const [googleCals, setGoogleCals] = useState<{ id: string; summary: string; selected: boolean }[]>([]);
+  // One-off Google token (from the GIS popup) for importing a DIFFERENT account.
+  const [gisToken, setGisToken] = useState<string | null>(null);
   const [outlookStatus, setOutlookStatus] = useState<"idle" | "syncing" | "done" | "needs_grant" | "error">("idle");
   const [outlookError, setOutlookError] = useState("");
   const [icsError, setIcsError] = useState("");
@@ -243,9 +246,47 @@ function ImportPanel({
   }
 
 
+  // The token used for Google Calendar calls: a one-off GIS token (any account)
+  // takes priority over the Supabase provider token (the signed-in account).
+  const googleToken = gisToken || providerToken;
+
+  // One-off import from ANY Google account via Google Identity Services — a
+  // token popup that does NOT change your Supabase login, so it works even when
+  // that Google account already has its own GHB account.
+  function importFromAnotherGoogle() {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      setGcalError("One-off Google import isn't switched on yet (needs NEXT_PUBLIC_GOOGLE_CLIENT_ID).");
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const g = (window as unknown as { google?: any }).google;
+    if (!g?.accounts?.oauth2) {
+      setGcalError("Google script still loading — try again in a second.");
+      return;
+    }
+    const client = g.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: "https://www.googleapis.com/auth/calendar.readonly",
+      prompt: "select_account consent",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      callback: (resp: any) => {
+        if (resp?.access_token) {
+          setGisToken(resp.access_token);
+          setGoogleCals([]);
+          loadGoogleCalendars(resp.access_token);   // load now with the fresh token
+        } else {
+          setGcalError("Couldn't get Google permission for that account.");
+        }
+      },
+    });
+    client.requestAccessToken();
+  }
+
   // Step 1: fetch the user's calendar list so they can pick which to include.
-  async function loadGoogleCalendars() {
-    if (!providerToken) {
+  async function loadGoogleCalendars(tokenOverride?: string) {
+    const tok = tokenOverride || googleToken;
+    if (!tok) {
       setGcalStatus("needs_grant");
       return;
     }
@@ -254,7 +295,7 @@ function ImportPanel({
     try {
       const listResp = await fetch(
         "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
-        { headers: { Authorization: `Bearer ${providerToken}` } },
+        { headers: { Authorization: `Bearer ${tok}` } },
       );
       if (listResp.status === 403 || listResp.status === 401) {
         setGcalStatus("needs_grant");
@@ -283,7 +324,7 @@ function ImportPanel({
 
   // Step 2: sync events from the calendars the user ticked.
   async function syncGoogleSelected() {
-    if (!providerToken) {
+    if (!googleToken) {
       setGcalStatus("needs_grant");
       return;
     }
@@ -306,7 +347,7 @@ function ImportPanel({
           url.searchParams.set("singleEvents", "true");
           url.searchParams.set("maxResults", "2500");
           const r = await fetch(url.toString(), {
-            headers: { Authorization: `Bearer ${providerToken}` },
+            headers: { Authorization: `Bearer ${googleToken}` },
           });
           if (!r.ok) return;
           const d = await r.json();
@@ -418,6 +459,8 @@ function ImportPanel({
 
   return (
     <div className="rounded-xl border bg-white shadow-sm">
+      {/* Google Identity Services — for one-off import from any Google account. */}
+      <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center justify-between px-6 py-4 text-left"
@@ -481,7 +524,7 @@ function ImportPanel({
                 </div>
               ) : googleCals.length === 0 ? (
                 <button
-                  onClick={loadGoogleCalendars}
+                  onClick={() => loadGoogleCalendars()}
                   disabled={gcalStatus === "syncing"}
                   className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                 >
@@ -527,13 +570,22 @@ function ImportPanel({
                   </div>
                 </div>
               )}
-              {/* Connect an additional Google account — its busy days are summed in. */}
-              <button
-                onClick={() => connectCalendar("google", true)}
-                className="text-xs text-blue-600 hover:underline"
-              >
-                ➕ Connect another Google account
-              </button>
+              {/* One-off import from ANY other Google account (even one that already
+                  has its own GHB login) — uses a token popup, doesn't change your login. */}
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={importFromAnotherGoogle}
+                  className="text-xs text-blue-600 hover:underline text-left"
+                >
+                  ➕ Import from another Google account (one-off — its busy days add on top)
+                </button>
+                <span className="text-[11px] text-gray-400">
+                  Works for any account, including ones that already have a Group Holiday login. Nothing is permanently linked.
+                </span>
+              </div>
+              {gisToken && (
+                <p className="text-[11px] text-emerald-600">✓ Using another Google account for this import.</p>
+              )}
               {gcalError && (
                 <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{gcalError}</div>
               )}
