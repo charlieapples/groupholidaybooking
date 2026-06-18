@@ -108,13 +108,23 @@ def list_all_feedback(user: UserInfo = Depends(current_user)):
     db = get_client()
     res = (
         db.table("feedback")
-        .select("id, rating, comment, page, room_slug, created_at, triage_category, triage_status, profiles(email)")
+        .select("id, user_id, rating, comment, page, room_slug, created_at, triage_category, triage_status")
         .order("created_at", desc=True)
         .limit(500)
         .execute()
     )
+    rows = res.data or []
+    # feedback.user_id → auth.users (NOT profiles), so look emails up separately.
+    user_ids = list({r["user_id"] for r in rows if r.get("user_id")})
+    email_by_id: dict[str, str] = {}
+    if user_ids:
+        try:
+            profs = db.table("profiles").select("id, email").in_("id", user_ids).execute()
+            email_by_id = {p["id"]: p.get("email") for p in (profs.data or [])}
+        except Exception:
+            pass
     out: list[FeedbackItem] = []
-    for r in (res.data or []):
+    for r in rows:
         out.append(FeedbackItem(
             id=str(r["id"]),
             rating=r.get("rating"),
@@ -124,7 +134,7 @@ def list_all_feedback(user: UserInfo = Depends(current_user)):
             created_at=str(r.get("created_at") or ""),
             triage_category=r.get("triage_category"),
             triage_status=r.get("triage_status") or "new",
-            user_email=(r.get("profiles") or {}).get("email"),
+            user_email=email_by_id.get(r.get("user_id")),
         ))
     return out
 
