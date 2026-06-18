@@ -159,6 +159,11 @@ class PriceAccuracy(BaseModel):
     count: int
     avg_abs_pct_error: Optional[float] = None    # mean |actual-predicted|/predicted
     avg_signed_pct_error: Optional[float] = None # mean (actual-predicted)/predicted (sign = bias)
+    # Self-calibration: once enough checks accumulate we nudge estimates to remove
+    # the systematic bias. `calibration_active` is False (and adjust_pct null) until
+    # there's enough data to trust — see core/calibration.py.
+    calibration_active: bool = False
+    calibration_adjust_pct: Optional[float] = None
 
 
 @router.get("/price-accuracy", response_model=PriceAccuracy)
@@ -177,19 +182,19 @@ def price_accuracy(slug: str, user: UserInfo = Depends(current_user)):
         ).data or []
     except Exception:
         return PriceAccuracy(count=0)
-    abs_errs, signed_errs = [], []
-    for r in rows:
-        p, a = r.get("predicted_gbp"), r.get("actual_gbp")
-        if p and a and float(p) > 0:
-            p, a = float(p), float(a)
-            signed_errs.append((a - p) / p)
-            abs_errs.append(abs(a - p) / p)
-    if not abs_errs:
+    from ..core.calibration import signed_errors, calibration_summary
+
+    signed_errs = signed_errors(rows)
+    if not signed_errs:
         return PriceAccuracy(count=0)
+    abs_errs = [abs(e) for e in signed_errs]
+    summary = calibration_summary(signed_errs)
     return PriceAccuracy(
         count=len(abs_errs),
         avg_abs_pct_error=round(100 * sum(abs_errs) / len(abs_errs), 1),
         avg_signed_pct_error=round(100 * sum(signed_errs) / len(signed_errs), 1),
+        calibration_active=bool(summary["active"]),
+        calibration_adjust_pct=summary["adjust_pct"],
     )
 
 

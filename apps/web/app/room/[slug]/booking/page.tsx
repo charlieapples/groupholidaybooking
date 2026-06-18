@@ -151,7 +151,7 @@ export default function BookingPage() {
   const [token, setToken] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [myCurrency, setMyCurrency] = useState("GBP");
-  const [accuracy, setAccuracy] = useState<{ count: number; avg_abs_pct_error?: number | null; avg_signed_pct_error?: number | null } | null>(null);
+  const [accuracy, setAccuracy] = useState<{ count: number; avg_abs_pct_error?: number | null; avg_signed_pct_error?: number | null; calibration_active?: boolean; calibration_adjust_pct?: number | null } | null>(null);
   const [results, setResults] = useState<FlightResult[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -337,6 +337,12 @@ export default function BookingPage() {
             {accuracy.avg_signed_pct_error != null && Math.abs(accuracy.avg_signed_pct_error) >= 1
               ? ` (live tends to be ${accuracy.avg_signed_pct_error > 0 ? "higher" : "lower"} than predicted)`
               : ""}. Fares change minute-to-minute — always confirm before booking.
+            {accuracy.calibration_active && accuracy.calibration_adjust_pct != null && Math.abs(accuracy.calibration_adjust_pct) >= 1 && (
+              <span className="block mt-1 text-blue-700">
+                ✅ We&apos;ve learned from this and now auto-adjust new estimates by{" "}
+                <strong>{accuracy.calibration_adjust_pct > 0 ? "+" : ""}{accuracy.calibration_adjust_pct}%</strong> to match.
+              </span>
+            )}
           </div>
         )}
 

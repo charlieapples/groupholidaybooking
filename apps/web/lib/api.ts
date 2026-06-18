@@ -585,6 +585,8 @@ export interface PriceAccuracy {
   count: number;
   avg_abs_pct_error?: number | null;
   avg_signed_pct_error?: number | null;
+  calibration_active?: boolean;
+  calibration_adjust_pct?: number | null;
 }
 
 /** App-wide accuracy of our flight predictions vs live fares. */
