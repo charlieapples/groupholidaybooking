@@ -592,3 +592,32 @@ export function submitFeedback(
     body: JSON.stringify(body),
   });
 }
+
+export interface FeedbackItem {
+  id: string;
+  rating?: number | null;
+  comment?: string | null;
+  page?: string | null;
+  room_slug?: string | null;
+  created_at?: string | null;
+  triage_category?: string | null;
+  triage_status: string;
+  user_email?: string | null;
+}
+
+/** App owner only: list all feedback (403 if not an owner). */
+export function listAllFeedback(token: string) {
+  return apiFetch<FeedbackItem[]>("/feedback/all", token);
+}
+
+/** App owner only: update a feedback item's triage. */
+export function updateFeedbackTriage(
+  token: string,
+  id: string,
+  body: { triage_status?: string; triage_category?: string; triage_notes?: string }
+) {
+  return apiFetch<void>(`/feedback/${id}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}

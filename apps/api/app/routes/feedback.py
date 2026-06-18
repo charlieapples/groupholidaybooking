@@ -1,6 +1,13 @@
-"""Feedback endpoint — stores star ratings + comments from users."""
+"""Feedback endpoint — stores ratings + comments, with a triage scaffold.
+
+Triage pipeline (AI not wired yet — `classify_feedback` is a rule-based stub):
+each piece of feedback is auto-categorised on submit so the app owner can sort
+bugs from feature requests from praise. The owner views everything via the
+admin endpoints below. Swap the stub for Claude/Gemini later — same interface.
+"""
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,16 +26,50 @@ class FeedbackIn(BaseModel):
     room_slug: Optional[str] = None
 
 
-@router.post("", status_code=204)
-def submit_feedback(
-    body: FeedbackIn,
-    user: UserInfo = Depends(current_user),
-):
-    """Store a piece of user feedback. Returns 204 No Content.
+# ── Triage (rule-based stub — swap for AI later) ──────────────────────────────
 
-    Either a star rating or a comment (or both) is required — but a rating is
-    no longer mandatory, so text-only feedback is accepted.
+_BUG_KW = ["bug", "error", "broken", "doesn't work", "does not work", "doesnt work",
+           "crash", "fail", "wrong", "glitch", "can't", "cannot", "404", "not found",
+           "stuck", "freeze", "froze", "isn't working", "not working"]
+_FEATURE_KW = ["could you", "please add", "it would be", "i wish", "feature", "would like",
+               "suggestion", "suggest", "prefer", "instead", "can you make", "add a", "allow"]
+_PRAISE_KW = ["love", "great", "awesome", "amazing", "thank", "nice", "good job", "brilliant", "perfect"]
+
+
+def classify_feedback(comment: Optional[str], rating: Optional[int]) -> str:
+    """Best-effort category: 'bug' | 'feature_request' | 'praise' | 'other'.
+
+    PLACEHOLDER — deliberately simple keyword rules. Replace the body with a
+    Claude/Gemini call when ready; callers only depend on the return value.
     """
+    text = (comment or "").lower()
+    if any(k in text for k in _BUG_KW):
+        return "bug"
+    if rating is not None and rating <= 2:
+        return "bug"
+    if any(k in text for k in _FEATURE_KW):
+        return "feature_request"
+    if any(k in text for k in _PRAISE_KW):
+        return "praise"
+    if rating is not None and rating >= 4:
+        return "praise"
+    return "other"
+
+
+def _is_owner(user: UserInfo) -> bool:
+    """True if this user is an app owner (can see all feedback).
+
+    Configure ADMIN_EMAILS (comma-separated) in the API env. Defaults to the
+    project owner so it works out of the box.
+    """
+    allow = os.getenv("ADMIN_EMAILS", "appleyardcharles@gmail.com")
+    allowed = {e.strip().lower() for e in allow.split(",") if e.strip()}
+    return bool(user.email and user.email.lower() in allowed)
+
+
+@router.post("", status_code=204)
+def submit_feedback(body: FeedbackIn, user: UserInfo = Depends(current_user)):
+    """Store a piece of user feedback (rating and/or comment) + auto-triage it."""
     if body.rating is None and not (body.comment or "").strip():
         raise HTTPException(422, "Please include a comment or a rating.")
     db = get_client()
@@ -38,5 +79,70 @@ def submit_feedback(
         "comment": (body.comment or "").strip() or None,
         "page": body.page or None,
         "room_slug": body.room_slug or None,
+        "triage_category": classify_feedback(body.comment, body.rating),
+        "triage_status": "new",
     }).execute()
+    return None
+
+
+# ── Owner-only triage views ───────────────────────────────────────────────────
+
+
+class FeedbackItem(BaseModel):
+    id: str
+    rating: Optional[int] = None
+    comment: Optional[str] = None
+    page: Optional[str] = None
+    room_slug: Optional[str] = None
+    created_at: Optional[str] = None
+    triage_category: Optional[str] = None
+    triage_status: str = "new"
+    user_email: Optional[str] = None
+
+
+@router.get("/all", response_model=list[FeedbackItem])
+def list_all_feedback(user: UserInfo = Depends(current_user)):
+    """App owner only: every piece of feedback, newest first, with category."""
+    if not _is_owner(user):
+        raise HTTPException(403, "Owner only.")
+    db = get_client()
+    res = (
+        db.table("feedback")
+        .select("id, rating, comment, page, room_slug, created_at, triage_category, triage_status, profiles(email)")
+        .order("created_at", desc=True)
+        .limit(500)
+        .execute()
+    )
+    out: list[FeedbackItem] = []
+    for r in (res.data or []):
+        out.append(FeedbackItem(
+            id=str(r["id"]),
+            rating=r.get("rating"),
+            comment=r.get("comment"),
+            page=r.get("page"),
+            room_slug=r.get("room_slug"),
+            created_at=str(r.get("created_at") or ""),
+            triage_category=r.get("triage_category"),
+            triage_status=r.get("triage_status") or "new",
+            user_email=(r.get("profiles") or {}).get("email"),
+        ))
+    return out
+
+
+class TriageUpdate(BaseModel):
+    triage_status: Optional[str] = None       # new | in_progress | resolved | wontfix
+    triage_category: Optional[str] = None
+    triage_notes: Optional[str] = None
+
+
+@router.patch("/{feedback_id}", status_code=204)
+def update_triage(feedback_id: str, body: TriageUpdate, user: UserInfo = Depends(current_user)):
+    """App owner only: update a feedback item's triage status/category/notes."""
+    if not _is_owner(user):
+        raise HTTPException(403, "Owner only.")
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not updates:
+        return None
+    db = get_client()
+    db.table("feedback").update(updates).eq("id", feedback_id).execute()
     return None
