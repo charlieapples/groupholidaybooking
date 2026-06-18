@@ -248,6 +248,9 @@ export default function BookingPage() {
   // window only if no flight result has narrowed it down yet.
   const checkIn = destResult?.shared_out_date ?? room.agreed_start ?? "";
   const checkOut = destResult?.shared_return_date ?? room.agreed_end ?? "";
+  const tripNights = (checkIn && checkOut)
+    ? Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86_400_000)
+    : 0;
   const guestCount = Math.max(members.length, 1);
   const providers = destIata
     ? [
@@ -317,7 +320,7 @@ export default function BookingPage() {
             <h2 className="text-lg font-bold text-gray-900 mb-3">🏨 Accommodation</h2>
             <p className="text-sm text-gray-600 mb-4">
               Searches are pre-filled for <strong>{cityFor(destIata)}</strong>,{" "}
-              {checkIn} → {checkOut}, {guestCount} guest{guestCount !== 1 ? "s" : ""}.
+              {checkIn} → {checkOut}{tripNights > 0 ? ` (${tripNights} nights)` : ""}, {guestCount} guest{guestCount !== 1 ? "s" : ""}.
               Compare a few — prices vary a lot between platforms.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
