@@ -38,3 +38,5 @@ build/
 .vscode/
 *.swp
 Thumbs.db
+
+.vercel

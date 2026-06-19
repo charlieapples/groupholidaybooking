@@ -23,6 +23,7 @@ CALENDAR_TOKEN_KEY + the provider OAuth secrets — absent those it reports
 """
 from __future__ import annotations
 
+import logging
 import os
 from datetime import date
 from typing import Optional
@@ -37,6 +38,7 @@ from ..core import crypto, calendar_sync
 from ..db.supabase import get_client
 from ..deps.auth import UserInfo, current_user
 
+log = logging.getLogger("calendars")
 router = APIRouter()
 
 
@@ -199,8 +201,11 @@ def _handle_callback(provider: str, code: Optional[str], state: Optional[str], e
         return_to = st.get("rt") or return_to
         uid = st["uid"]
     except Exception:
+        log.warning("%s callback: bad/forged state", provider)
         return RedirectResponse(f"{_web_base()}/dashboard?calendar_error=state")
     if error or not code:
+        # Provider sent us back an error (e.g. access_denied) or no code.
+        log.warning("%s callback: provider error=%r (no code=%s)", provider, error, not code)
         return RedirectResponse(f"{return_to}?calendar_error={error or 'cancelled'}")
     try:
         if provider == "google":
@@ -209,10 +214,13 @@ def _handle_callback(provider: str, code: Optional[str], state: Optional[str], e
             email, refresh_token, scopes = _exchange_microsoft(code)
         if not refresh_token:
             # No refresh token (e.g. user previously consented) — can't link permanently.
+            log.warning("%s callback: token exchange returned no refresh_token (email=%r)", provider, email)
             return RedirectResponse(f"{return_to}?calendar_error=no_refresh_token")
         _store_account(uid, provider, email, refresh_token, scopes)
+        log.info("%s calendar linked for user %s (%s)", provider, uid, email)
         return RedirectResponse(f"{return_to}?calendar_linked={provider}")
     except Exception:
+        log.exception("%s callback: exchange/store failed", provider)
         return RedirectResponse(f"{return_to}?calendar_error=exchange_failed")
 
 
@@ -225,7 +233,9 @@ def _exchange_google(code: str) -> tuple[Optional[str], Optional[str], str]:
             "grant_type": "authorization_code",
             "redirect_uri": _redirect_uri("google"),
         })
-        tok.raise_for_status()
+        if not tok.is_success:
+            log.warning("google token exchange HTTP %s: %s", tok.status_code, tok.text[:400])
+            tok.raise_for_status()
         data = tok.json()
         access_token = data.get("access_token")
         email = None
@@ -249,7 +259,9 @@ def _exchange_microsoft(code: str) -> tuple[Optional[str], Optional[str], str]:
             "redirect_uri": _redirect_uri("microsoft"),
             "scope": "offline_access Calendars.Read User.Read",
         })
-        tok.raise_for_status()
+        if not tok.is_success:
+            log.warning("microsoft token exchange HTTP %s: %s", tok.status_code, tok.text[:400])
+            tok.raise_for_status()
         data = tok.json()
         access_token = data.get("access_token")
         email = None
