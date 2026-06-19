@@ -56,6 +56,57 @@ export function updateMyProfile(
   });
 }
 
+// ── Linked calendars (permanent — link once, reuse every Holiday) ─────────────
+
+export interface CalendarStatus {
+  configured: boolean;
+  google: boolean;
+  microsoft: boolean;
+}
+
+export interface LinkedAccount {
+  id: string;
+  provider: "google" | "microsoft";
+  account_email: string | null;
+  created_at: string | null;
+  last_used_at: string | null;
+}
+
+export interface LinkedBusy {
+  busy: string[];
+  accounts: { email: string | null; provider: string; ok: boolean }[];
+}
+
+/** Whether permanent calendar linking is switched on (per provider). */
+export function getCalendarStatus(token: string) {
+  return apiFetch<CalendarStatus>("/calendars/status", token);
+}
+
+/** The user's permanently linked calendar accounts (no tokens). */
+export function getLinkedAccounts(token: string) {
+  return apiFetch<LinkedAccount[]>("/calendars/accounts", token);
+}
+
+/** Get the provider authorize URL to redirect the user to, to link an account. */
+export function startCalendarLink(
+  token: string,
+  provider: "google" | "microsoft",
+  returnTo: string
+) {
+  const q = `?return_to=${encodeURIComponent(returnTo)}`;
+  return apiFetch<{ url: string }>(`/calendars/${provider}/start${q}`, token);
+}
+
+/** Unlink a permanently-linked calendar account. */
+export function unlinkCalendarAccount(token: string, accountId: string) {
+  return apiFetch<void>(`/calendars/accounts/${accountId}`, token, { method: "DELETE" });
+}
+
+/** Merged busy days across all of the user's linked accounts, for a window. */
+export function getLinkedBusy(token: string, start: string, end: string) {
+  return apiFetch<LinkedBusy>(`/calendars/busy?start=${start}&end=${end}`, token);
+}
+
 // ── Rooms ─────────────────────────────────────────────────────────────────────
 
 export interface Room {

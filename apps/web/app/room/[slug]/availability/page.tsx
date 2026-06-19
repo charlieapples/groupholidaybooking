@@ -20,6 +20,9 @@ import {
   updateRoom,
   advanceStep,
   remindPendingMembers,
+  getCalendarStatus,
+  getLinkedAccounts,
+  getLinkedBusy,
   type Room,
   type SubmissionStatus,
   type FreeWindow,
@@ -185,6 +188,10 @@ function ImportPanel({
   const [outlookStatus, setOutlookStatus] = useState<"idle" | "syncing" | "done" | "needs_grant" | "error">("idle");
   const [outlookError, setOutlookError] = useState("");
   const [icsError, setIcsError] = useState("");
+  // Permanently-linked calendars: count + one-click pull state.
+  const [linkedCount, setLinkedCount] = useState(0);
+  const [linkedStatus, setLinkedStatus] = useState<"idle" | "syncing" | "done" | "error">("idle");
+  const [linkedError, setLinkedError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   // The token used for Outlook/Graph calls: a one-off MSAL token (any account)
   // takes priority over the Supabase provider token (the signed-in account).
@@ -208,6 +215,52 @@ function ImportPanel({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSyncProvider, providerToken]);
+
+  // How many calendars has this user permanently linked? (Shows the one-click pull.)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: s } = await supabase.auth.getSession();
+        const tok = s.session?.access_token;
+        if (!tok) return;
+        const st = await getCalendarStatus(tok);
+        if (!st.configured || cancelled) return;
+        const accts = await getLinkedAccounts(tok);
+        if (!cancelled) setLinkedCount(accts.length);
+      } catch {
+        /* feature off — leave count at 0 so the button stays hidden */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [supabase]);
+
+  function fmtDay(d: Date) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  // One click: pull busy days from every permanently-linked account, no re-grant.
+  async function pullFromLinked() {
+    setLinkedStatus("syncing");
+    setLinkedError("");
+    try {
+      const { data: s } = await supabase.auth.getSession();
+      const tok = s.session?.access_token;
+      if (!tok) throw new Error("Not signed in");
+      const res = await getLinkedBusy(tok, fmtDay(windowStart), fmtDay(windowEnd));
+      onImport(res.busy);
+      const failed = res.accounts.filter((a) => !a.ok);
+      if (failed.length) {
+        setLinkedError(
+          `Couldn't reach ${failed.length} linked account${failed.length > 1 ? "s" : ""} — you may need to re-link ${failed.length > 1 ? "them" : "it"} in your profile.`,
+        );
+      }
+      setLinkedStatus("done");
+    } catch {
+      setLinkedStatus("error");
+      setLinkedError("Couldn't pull from your linked calendars. Try again.");
+    }
+  }
 
   // Connect a calendar.
   //   • PRIMARY (the account you're logged in with): re-auth that SAME account
@@ -535,6 +588,37 @@ function ImportPanel({
             🔁 Syncing <strong>adds to</strong> the busy days you&apos;ve already marked — it never erases them.
             Import from as many calendars/accounts as you like and they all stack up.
           </div>
+
+          {/* One-click pull from permanently-linked calendars (no re-granting). */}
+          {linkedCount > 0 && (
+            <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-2">
+              <p className="text-sm text-blue-900">
+                <strong>⚡ You&apos;ve linked {linkedCount} calendar{linkedCount > 1 ? "s" : ""}.</strong>{" "}
+                Fill in your busy days instantly — no permission screen.
+              </p>
+              <button
+                onClick={pullFromLinked}
+                disabled={linkedStatus === "syncing"}
+                className={[
+                  "rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors",
+                  linkedStatus === "done"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60",
+                ].join(" ")}
+              >
+                {linkedStatus === "syncing"
+                  ? "Pulling…"
+                  : linkedStatus === "done"
+                  ? "✓ Pulled — pull again"
+                  : `↻ Fill from my linked calendar${linkedCount > 1 ? "s" : ""}`}
+              </button>
+              {linkedError && <p className="text-xs text-amber-700">{linkedError}</p>}
+              <p className="text-[11px] text-blue-700">
+                Manage linked accounts in your <a href="/profile" className="underline">profile</a>.
+              </p>
+            </div>
+          )}
+
           {/* Tab row */}
           <div className="mt-4 flex gap-2 border-b">
             {(["google", "outlook", "apple"] as const).map((tab) => (

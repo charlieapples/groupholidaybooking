@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
 import { normalisePostcode } from "@/lib/postcode";
 import FeedbackButton from "@/components/FeedbackButton";
+import LinkedCalendars from "@/components/LinkedCalendars";
 
 // Common booking currencies (label shown in the dropdown).
 const CURRENCIES: [string, string][] = [
@@ -197,6 +198,8 @@ export default function ProfilePage() {
             {saving ? "Saving…" : saved ? "✓ Saved!" : "Save profile"}
           </button>
         </div>
+
+        <LinkedCalendars token={token} />
 
         <p className="text-center text-xs text-gray-400">
           Your postcode is only used to calculate travel distances and is never shared publicly.
