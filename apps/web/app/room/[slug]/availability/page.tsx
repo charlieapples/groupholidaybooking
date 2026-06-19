@@ -180,12 +180,18 @@ function ImportPanel({
   const [googleCals, setGoogleCals] = useState<{ id: string; summary: string; selected: boolean }[]>([]);
   // One-off Google token (from the GIS popup) for importing a DIFFERENT account.
   const [gisToken, setGisToken] = useState<string | null>(null);
+  // One-off Microsoft Graph token (from the MSAL popup) for importing a DIFFERENT account.
+  const [msToken, setMsToken] = useState<string | null>(null);
   const [outlookStatus, setOutlookStatus] = useState<"idle" | "syncing" | "done" | "needs_grant" | "error">("idle");
   const [outlookError, setOutlookError] = useState("");
   const [icsError, setIcsError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
-  // provider_token is a Microsoft Graph token only when the user signed in with Microsoft
-  const hasOutlookToken = authProvider === "azure" && !!providerToken;
+  // The token used for Outlook/Graph calls: a one-off MSAL token (any account)
+  // takes priority over the Supabase provider token (the signed-in account).
+  const outlookToken = msToken || providerToken;
+  // We can read Outlook either via a one-off MSAL token (any account) or a
+  // Microsoft Graph provider_token (only when the user signed in with Microsoft).
+  const hasOutlookToken = !!msToken || (authProvider === "azure" && !!providerToken);
 
   // Auto-trigger the matching sync when returning from a calendar connect.
   useEffect(() => {
@@ -281,6 +287,51 @@ function ImportPanel({
       },
     });
     client.requestAccessToken();
+  }
+
+  // One-off import from ANY Microsoft account via MSAL — a popup that does NOT
+  // change your Supabase login, so it works even when that Microsoft account
+  // already has its own GHB account (the "azure app ID" flow).
+  async function importFromAnotherOutlook() {
+    const clientId = process.env.NEXT_PUBLIC_MS_CLIENT_ID;
+    if (!clientId) {
+      setOutlookError("One-off Microsoft import isn't switched on yet (needs NEXT_PUBLIC_MS_CLIENT_ID).");
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const m = (window as unknown as { msal?: any }).msal;
+    if (!m?.PublicClientApplication) {
+      setOutlookError("Microsoft script still loading — try again in a second.");
+      return;
+    }
+    try {
+      const pca = new m.PublicClientApplication({
+        auth: {
+          clientId,
+          // "common" lets both personal and work/school accounts sign in.
+          authority: "https://login.microsoftonline.com/common",
+          redirectUri: window.location.origin,
+        },
+        cache: { cacheLocation: "sessionStorage" },
+      });
+      if (typeof pca.initialize === "function") await pca.initialize();
+      const scopes = ["Calendars.Read"];
+      const resp = await pca.loginPopup({ scopes, prompt: "select_account" });
+      let accessToken: string | undefined = resp?.accessToken;
+      if (!accessToken && resp?.account) {
+        const t = await pca.acquireTokenSilent({ scopes, account: resp.account });
+        accessToken = t?.accessToken;
+      }
+      if (accessToken) {
+        setMsToken(accessToken);
+        setOutlookError("");
+        setOutlookStatus("idle");
+      } else {
+        setOutlookError("Couldn't get Microsoft permission for that account.");
+      }
+    } catch {
+      setOutlookError("Microsoft sign-in was cancelled or failed. Try again.");
+    }
   }
 
   // Step 1: fetch the user's calendar list so they can pick which to include.
@@ -405,7 +456,7 @@ function ImportPanel({
 
       const r = await fetch(url.toString(), {
         headers: {
-          Authorization: `Bearer ${providerToken}`,
+          Authorization: `Bearer ${outlookToken}`,
           Prefer: 'outlook.timezone="UTC"',
         },
       });
@@ -461,6 +512,8 @@ function ImportPanel({
     <div className="rounded-xl border bg-white shadow-sm">
       {/* Google Identity Services — for one-off import from any Google account. */}
       <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
+      {/* MSAL — for one-off import from any Microsoft account. */}
+      <Script src="https://alcdn.msauth.net/browser/2.38.4/js/msal-browser.min.js" strategy="afterInteractive" />
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-center justify-between px-6 py-4 text-left"
@@ -646,13 +699,22 @@ function ImportPanel({
                     : "Sync Outlook Calendar"}
                 </button>
               )}
-              {/* Connect an additional Microsoft account — its busy days are summed in. */}
-              <button
-                onClick={() => connectCalendar("azure", true)}
-                className="block text-xs text-blue-600 hover:underline"
-              >
-                ➕ Connect another Microsoft account
-              </button>
+              {/* One-off import from ANY other Microsoft account (even one that already
+                  has its own GHB login) — uses a popup, doesn't change your login. */}
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={importFromAnotherOutlook}
+                  className="text-xs text-blue-600 hover:underline text-left"
+                >
+                  ➕ Import from another Microsoft account (one-off — its busy days add on top)
+                </button>
+                <span className="text-[11px] text-gray-400">
+                  Works for any account, including ones that already have a Group Holiday login. Nothing is permanently linked.
+                </span>
+              </div>
+              {msToken && (
+                <p className="text-[11px] text-emerald-600">✓ Using another Microsoft account for this import.</p>
+              )}
               {outlookError && (
                 <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{outlookError}</div>
               )}
