@@ -987,6 +987,29 @@ export default function AvailabilityPage() {
     return () => { supabase.removeChannel(channel); };
   }, [room?.id, supabase, slug]);
 
+  // Reliable fallback poll: Supabase realtime is silent unless the table is in
+  // the realtime publication, so don't depend on it. Poll the submission status
+  // every few seconds and stop once everyone's in — no manual refresh needed.
+  useEffect(() => {
+    if (!room?.id) return;
+    let stopped = false;
+    const iv = setInterval(async () => {
+      const t = tokenRef.current;
+      if (!t || stopped) return;
+      try {
+        const s = await getSubmissionStatus(t, slug);
+        setStatus(s);
+        if (s.all_submitted) {
+          const w = await getFreeWindows(t, slug).catch(() => null);
+          setWindows(w);
+          stopped = true;
+          clearInterval(iv);
+        }
+      } catch { /* transient — try again next tick */ }
+    }, 5000);
+    return () => { stopped = true; clearInterval(iv); };
+  }, [room?.id, slug]);
+
   // Derive the month range from the room's rough_window
   const { windowStart, windowEnd, months } = useMemo(() => {
     const { start, end } = parseRoughWindow(room?.rough_window ?? null);
