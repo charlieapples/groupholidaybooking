@@ -6,10 +6,7 @@ import {
   getFlightResults,
   listMembers,
   advanceStep,
-  getLivePrice,
   getMyProfile,
-  logPriceCheck,
-  getPriceAccuracy,
   type Room,
   type FlightResult,
   type Member,
@@ -150,7 +147,6 @@ export default function BookingPage() {
   const [token, setToken] = useState<string | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [myCurrency, setMyCurrency] = useState("GBP");
-  const [accuracy, setAccuracy] = useState<{ count: number; avg_abs_pct_error?: number | null; avg_signed_pct_error?: number | null; calibration_active?: boolean; calibration_adjust_pct?: number | null } | null>(null);
   const [results, setResults] = useState<FlightResult[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -198,7 +194,6 @@ export default function BookingPage() {
         setMembers(m);
         if (res) setResults(res);
         getMyProfile(t).then((p) => setMyCurrency(p.currency || "GBP")).catch(() => {});
-        getPriceAccuracy(t, slug).then(setAccuracy).catch(() => {});
       } catch {
         router.replace("/dashboard");
       }
@@ -325,22 +320,6 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* How accurate our predictions have been (builds up as people check live prices). */}
-        {accuracy && accuracy.count >= 3 && accuracy.avg_abs_pct_error != null && (
-          <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-xs text-blue-800">
-            📊 Across {accuracy.count} price checks, our flight predictions have been on average{" "}
-            <strong>{accuracy.avg_abs_pct_error}% off</strong> the live fare
-            {accuracy.avg_signed_pct_error != null && Math.abs(accuracy.avg_signed_pct_error) >= 1
-              ? ` (live tends to be ${accuracy.avg_signed_pct_error > 0 ? "higher" : "lower"} than predicted)`
-              : ""}. Fares change minute-to-minute — always confirm before booking.
-            {accuracy.calibration_active && accuracy.calibration_adjust_pct != null && Math.abs(accuracy.calibration_adjust_pct) >= 1 && (
-              <span className="block mt-1 text-blue-700">
-                ✅ We&apos;ve learned from this and now auto-adjust new estimates by{" "}
-                <strong>{accuracy.calibration_adjust_pct > 0 ? "+" : ""}{accuracy.calibration_adjust_pct}%</strong> to match.
-              </span>
-            )}
-          </div>
-        )}
 
         {/* Accommodation */}
         {providers.length > 0 && destIata && (
@@ -548,22 +527,10 @@ export default function BookingPage() {
                               {copied === p.person_name ? "Copied!" : "Copy link"}
                             </button>
                           </div>
-                          {token && p.chosen_airport && destIata && p.outbound_date && p.inbound_date && (
-                            <LivePriceCheck
-                              token={token}
-                              slug={slug}
-                              origin={p.chosen_airport}
-                              destination={destIata}
-                              depart={p.outbound_date}
-                              returnDate={p.inbound_date}
-                              predicted={p.outbound_cost_gbp + p.inbound_cost_gbp}
-                            />
-                          )}
                           <p className="text-[10px] text-gray-400">
                             Flight prices change by the minute, so the figure here is indicative and may
-                            vary slightly — tap &ldquo;Check latest price&rdquo; or open Aviasales for the
-                            live fare before booking. Cabin bag estimate only — hold luggage is priced
-                            separately by the airline at checkout.
+                            vary slightly — open Aviasales for the live fare before booking. Cabin bag
+                            estimate only — hold luggage is priced separately by the airline at checkout.
                           </p>
                         </div>
                       ) : (
@@ -725,82 +692,3 @@ function CopyGroupPlanButton({
   );
 }
 
-// ── Live price check ───────────────────────────────────────────────────────────
-// On-demand fresh price for one person's exact route + dates. Far fresher than
-// the bulk optimiser cache; final fare still confirmed on Aviasales at click.
-
-function LivePriceCheck({
-  token,
-  slug,
-  origin,
-  destination,
-  depart,
-  returnDate,
-  predicted,
-}: {
-  token: string;
-  slug: string;
-  origin: string;
-  destination: string;
-  depart: string;
-  returnDate: string;
-  predicted?: number;   // the optimiser's predicted flight cost, to compare against
-}) {
-  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [price, setPrice] = useState<number | null>(null);
-  const [link, setLink] = useState<string | null>(null);
-
-  async function check() {
-    setState("loading");
-    try {
-      const lp = await getLivePrice(token, slug, { origin, destination, depart, return_date: returnDate });
-      setPrice(lp.price_gbp);
-      setLink(lp.deep_link);
-      setState("done");
-      // Log predicted-vs-actual so the app can track its own accuracy.
-      if (predicted != null) {
-        logPriceCheck(token, slug, { destination, origin, predicted_gbp: predicted, actual_gbp: lp.price_gbp }).catch(() => {});
-      }
-    } catch {
-      setState("error");
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-2 flex-wrap text-xs">
-      <button
-        onClick={check}
-        disabled={state === "loading"}
-        className="rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 font-medium text-green-800 hover:bg-green-100 disabled:opacity-60"
-      >
-        {state === "loading" ? "Checking…" : "🔄 Check latest price"}
-      </button>
-      {state === "done" && price !== null && (
-        <span className="text-gray-700">
-          Latest fare:{" "}
-          {link ? (
-            <a href={link} target="_blank" rel="noopener noreferrer" className="font-semibold text-green-700 hover:underline">
-              £{Math.round(price).toLocaleString()} →
-            </a>
-          ) : (
-            <span className="font-semibold text-green-700">£{Math.round(price).toLocaleString()}</span>
-          )}
-          {predicted != null && (() => {
-            const diff = Math.round(price) - Math.round(predicted);
-            const pct = predicted > 0 ? Math.round((diff / predicted) * 100) : 0;
-            return (
-              <span className="text-gray-400" title="How close our prediction was to the live fare">
-                {" "}· predicted £{Math.round(predicted).toLocaleString()}
-                {diff === 0 ? " (spot on ✓)" : ` (${diff > 0 ? "+" : ""}£${diff}, ${pct > 0 ? "+" : ""}${pct}%)`}
-              </span>
-            );
-          })()}
-          <span className="text-gray-400"> · checked just now</span>
-        </span>
-      )}
-      {state === "error" && (
-        <span className="text-gray-400">No live fare right now — use the Aviasales link.</span>
-      )}
-    </div>
-  );
-}
