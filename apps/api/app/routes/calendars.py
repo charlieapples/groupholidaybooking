@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -317,10 +317,14 @@ def busy(
             all_busy.update(days)
             ok = at is not None
             if ok:
-                db.table("linked_calendar_accounts").update(
-                    {"last_used_at": "now()"}
-                ).eq("id", r["id"]).execute()
+                try:
+                    db.table("linked_calendar_accounts").update(
+                        {"last_used_at": datetime.now(timezone.utc).isoformat()}
+                    ).eq("id", r["id"]).execute()
+                except Exception:
+                    log.warning("failed to update last_used_at for %s", r["id"])
         except Exception:
+            log.exception("busy fetch failed for account %s", r.get("id"))
             ok = False
         accounts.append({"email": r.get("account_email"), "provider": r["provider"], "ok": ok})
     return BusyResponse(busy=sorted(all_busy), accounts=accounts)
