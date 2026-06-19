@@ -179,12 +179,14 @@ function ImportPanel({
   const [activeTab, setActiveTab] = useState<"google" | "outlook" | "apple">("google");
   const [gcalStatus, setGcalStatus] = useState<"idle" | "syncing" | "done" | "needs_grant" | "error">("idle");
   const [gcalError, setGcalError] = useState("");
-  // The user's Google calendars, so they can choose which ones to include.
-  const [googleCals, setGoogleCals] = useState<{ id: string; summary: string; selected: boolean }[]>([]);
-  // One-off Google token (from the GIS popup) for importing a DIFFERENT account.
-  const [gisToken, setGisToken] = useState<string | null>(null);
-  // One-off Microsoft Graph token (from the MSAL popup) for importing a DIFFERENT account.
-  const [msToken, setMsToken] = useState<string | null>(null);
+  // Google calendars to pick from. Each carries the account + that account's
+  // access token, so MULTIPLE Google accounts can be connected and stacked
+  // (no replacing). `account` is the email the calendar belongs to.
+  const [googleCals, setGoogleCals] = useState<
+    { id: string; summary: string; selected: boolean; account: string; token: string }[]
+  >([]);
+  // Connected Microsoft accounts (each an MSAL token) — stacked, not replaced.
+  const [msAccounts, setMsAccounts] = useState<{ account: string; token: string }[]>([]);
   const [outlookStatus, setOutlookStatus] = useState<"idle" | "syncing" | "done" | "needs_grant" | "error">("idle");
   const [outlookError, setOutlookError] = useState("");
   const [icsError, setIcsError] = useState("");
@@ -193,28 +195,18 @@ function ImportPanel({
   const [linkedStatus, setLinkedStatus] = useState<"idle" | "syncing" | "done" | "error">("idle");
   const [linkedError, setLinkedError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
-  // The token used for Outlook/Graph calls: a one-off MSAL token (any account)
-  // takes priority over the Supabase provider token (the signed-in account).
-  const outlookToken = msToken || providerToken;
-  // We can read Outlook either via a one-off MSAL token (any account) or a
-  // Microsoft Graph provider_token (only when the user signed in with Microsoft).
-  const hasOutlookToken = !!msToken || (authProvider === "azure" && !!providerToken);
 
-  // Auto-trigger the matching sync when returning from a calendar connect.
+  // Legacy: we used to bounce through a Supabase OAuth redirect to grant calendar
+  // scope. That flow was unreliable (it could flash a sign-in error and silently
+  // re-auth). We now use in-page token popups (Google GIS / Microsoft MSAL) for
+  // everything, so just open the panel on the right tab if we came back from one.
   useEffect(() => {
-    if (!autoSyncProvider || !providerToken) return;
+    if (!autoSyncProvider) return;
     setOpen(true);
-    if (autoSyncProvider === "google" && gcalStatus === "idle" && googleCals.length === 0) {
-      setActiveTab("google");
-      loadGoogleCalendars(); // load the list so the user can choose calendars
-      onAutoSyncDone();
-    } else if (autoSyncProvider === "outlook" && outlookStatus === "idle") {
-      setActiveTab("outlook");
-      syncOutlook();
-      onAutoSyncDone();
-    }
+    setActiveTab(autoSyncProvider === "outlook" ? "outlook" : "google");
+    onAutoSyncDone();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSyncProvider, providerToken]);
+  }, [autoSyncProvider]);
 
   // How many calendars has this user permanently linked? (Shows the one-click pull.)
   useEffect(() => {
@@ -262,81 +254,43 @@ function ImportPanel({
     }
   }
 
-  // Connect a calendar.
-  //   • PRIMARY (the account you're logged in with): re-auth that SAME account
-  //     with calendar scope — no account picker, so you can't accidentally
-  //     switch logins (which previously bounced people to the home page).
-  //   • ADDITIONAL (forceAdditional, or a different provider than your login):
-  //     linkIdentity attaches an extra Google/Microsoft account WITHOUT logging
-  //     you out, so several calendars sum together. Shows the account picker.
-  async function connectCalendar(provider: "google" | "azure", forceAdditional = false) {
-    localStorage.setItem(`busy_${slug}`, JSON.stringify([...busyDates]));
-    const flag = provider === "google" ? "google" : "outlook";
-    const returnPath = `/room/${slug}/availability?connect=${flag}`;
-    const scopes =
-      provider === "google"
-        ? "openid profile email https://www.googleapis.com/auth/calendar.readonly"
-        : "openid profile email offline_access Calendars.Read";
-    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnPath)}`;
-
-    const isPrimary = !forceAdditional && authProvider === provider;
-
-    if (isPrimary) {
-      // Re-auth the current account (prompt=consent, NO select_account picker).
-      const queryParams: Record<string, string> =
-        provider === "google" ? { prompt: "consent", access_type: "offline" } : {};
-      await supabase.auth.signInWithOAuth({ provider, options: { scopes, redirectTo, queryParams } });
-      return;
-    }
-
-    // Additional account → link it (picker on). Fall back to re-auth if linking
-    // is unavailable.
-    const queryParams: Record<string, string> =
-      provider === "google"
-        ? { prompt: "select_account consent", access_type: "offline" }
-        : { prompt: "select_account" };
-    const { error } = await supabase.auth.linkIdentity({
-      provider,
-      options: { scopes, redirectTo, queryParams },
-    });
-    if (error) {
-      await supabase.auth.signInWithOAuth({ provider, options: { scopes, redirectTo, queryParams } });
-    }
-  }
-
-
-  // The token used for Google Calendar calls: a one-off GIS token (any account)
-  // takes priority over the Supabase provider token (the signed-in account).
-  const googleToken = gisToken || providerToken;
-
-  // One-off import from ANY Google account via Google Identity Services — a
-  // token popup that does NOT change your Supabase login, so it works even when
-  // that Google account already has its own GHB account.
-  function importFromAnotherGoogle() {
+  // Add a Google account via Google Identity Services — an in-page token popup
+  // that does NOT touch your Supabase login (so it works for any account, even
+  // one that already has its own GHB login). Connect as MANY accounts as you
+  // like; their calendars STACK (we never replace the previous account).
+  function addGoogleAccount() {
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!clientId) {
-      setGcalError("One-off Google import isn't switched on yet (needs NEXT_PUBLIC_GOOGLE_CLIENT_ID).");
+      setGcalError("Google calendar import isn't switched on yet (needs NEXT_PUBLIC_GOOGLE_CLIENT_ID).");
       return;
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const g = (window as unknown as { google?: any }).google;
     if (!g?.accounts?.oauth2) {
-      setGcalError("Google script still loading — try again in a second.");
+      setGcalError("Google sign-in is still loading — give it a second and try again.");
       return;
     }
+    setGcalError("");
     const client = g.accounts.oauth2.initTokenClient({
       client_id: clientId,
-      scope: "https://www.googleapis.com/auth/calendar.readonly",
+      // email scope too, so we can label which account each calendar belongs to.
+      scope: "https://www.googleapis.com/auth/calendar.readonly email",
       prompt: "select_account consent",
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      callback: (resp: any) => {
-        if (resp?.access_token) {
-          setGisToken(resp.access_token);
-          setGoogleCals([]);
-          loadGoogleCalendars(resp.access_token);   // load now with the fresh token
-        } else {
-          setGcalError("Couldn't get Google permission for that account.");
+      callback: async (resp: any) => {
+        if (!resp?.access_token) {
+          setGcalError("Couldn't get Google permission for that account. Please try again.");
+          return;
         }
+        // Find out which account this token belongs to (for the label + dedupe).
+        let email = "Google account";
+        try {
+          const ui = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+            headers: { Authorization: `Bearer ${resp.access_token}` },
+          });
+          if (ui.ok) email = (await ui.json()).email || email;
+        } catch { /* keep the generic label */ }
+        loadGoogleCalendars(resp.access_token, email);
       },
     });
     client.requestAccessToken();
@@ -345,19 +299,45 @@ function ImportPanel({
   // One-off import from ANY Microsoft account via MSAL — a popup that does NOT
   // change your Supabase login, so it works even when that Microsoft account
   // already has its own GHB account (the "azure app ID" flow).
-  async function importFromAnotherOutlook() {
+  // Ensure the MSAL browser library is loaded before we use it. The <Script> tag
+  // loads it lazily, so a quick click can race it — this loads on demand and
+  // waits, instead of erroring with "script still loading".
+  function ensureMsal(): Promise<any> {  // eslint-disable-line @typescript-eslint/no-explicit-any
+    return new Promise((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const w = window as unknown as { msal?: any };
+      if (w.msal?.PublicClientApplication) return resolve(w.msal);
+      const SRC = "https://alcdn.msauth.net/browser/2.38.4/js/msal-browser.min.js";
+      let el = document.querySelector(`script[src="${SRC}"]`) as HTMLScriptElement | null;
+      const start = Date.now();
+      const poll = () => {
+        if (w.msal?.PublicClientApplication) return resolve(w.msal);
+        if (Date.now() - start > 10000) return reject(new Error("MSAL failed to load"));
+        setTimeout(poll, 150);
+      };
+      if (!el) {
+        el = document.createElement("script");
+        el.src = SRC;
+        el.async = true;
+        el.onerror = () => reject(new Error("MSAL failed to load"));
+        document.head.appendChild(el);
+      }
+      poll();
+    });
+  }
+
+  // Add a Microsoft account via MSAL — an in-page popup that does NOT touch your
+  // Supabase login. Connect as many accounts as you like; they STACK.
+  async function addOutlookAccount() {
     const clientId = process.env.NEXT_PUBLIC_MS_CLIENT_ID;
     if (!clientId) {
-      setOutlookError("One-off Microsoft import isn't switched on yet (needs NEXT_PUBLIC_MS_CLIENT_ID).");
+      setOutlookError("Microsoft calendar import isn't switched on yet (needs NEXT_PUBLIC_MS_CLIENT_ID).");
       return;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const m = (window as unknown as { msal?: any }).msal;
-    if (!m?.PublicClientApplication) {
-      setOutlookError("Microsoft script still loading — try again in a second.");
-      return;
-    }
+    setOutlookError("");
+    setOutlookStatus("syncing");
     try {
+      const m = await ensureMsal();
       const pca = new m.PublicClientApplication({
         auth: {
           clientId,
@@ -375,34 +355,38 @@ function ImportPanel({
         const t = await pca.acquireTokenSilent({ scopes, account: resp.account });
         accessToken = t?.accessToken;
       }
-      if (accessToken) {
-        setMsToken(accessToken);
-        setOutlookError("");
+      if (!accessToken) {
         setOutlookStatus("idle");
-      } else {
         setOutlookError("Couldn't get Microsoft permission for that account.");
+        return;
       }
-    } catch {
-      setOutlookError("Microsoft sign-in was cancelled or failed. Try again.");
+      const account = resp?.account?.username || "Microsoft account";
+      // Stack accounts (replace token if the same account is re-added).
+      setMsAccounts((prev) => [...prev.filter((a) => a.account !== account), { account, token: accessToken! }]);
+      setOutlookStatus("idle");
+    } catch (e) {
+      setOutlookStatus("idle");
+      setOutlookError(
+        e instanceof Error && e.message.includes("MSAL")
+          ? "Microsoft sign-in library couldn't load — check your connection and try again."
+          : "Microsoft sign-in was cancelled or failed. Please try again.",
+      );
     }
   }
 
-  // Step 1: fetch the user's calendar list so they can pick which to include.
-  async function loadGoogleCalendars(tokenOverride?: string) {
-    const tok = tokenOverride || googleToken;
-    if (!tok) {
-      setGcalStatus("needs_grant");
-      return;
-    }
+  // Fetch one account's calendar list and MERGE it into the picker (stacking
+  // multiple accounts; re-adding the same account refreshes its entries).
+  async function loadGoogleCalendars(token: string, account: string) {
     setGcalStatus("syncing");
     setGcalError("");
     try {
       const listResp = await fetch(
         "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader",
-        { headers: { Authorization: `Bearer ${tok}` } },
+        { headers: { Authorization: `Bearer ${token}` } },
       );
       if (listResp.status === 403 || listResp.status === 401) {
-        setGcalStatus("needs_grant");
+        setGcalStatus("idle");
+        setGcalError("Google didn't grant calendar access for that account. Try again and tick every box.");
         return;
       }
       const listData = await listResp.json();
@@ -415,10 +399,13 @@ function ImportPanel({
         .map((c: { id: string; summary?: string; summaryOverride?: string; selected?: boolean }) => ({
           id: c.id,
           summary: c.summaryOverride || c.summary || c.id,
+          account,
+          token,
           // Default-tick visible, non-noise calendars.
           selected: c.selected !== false && !isNoiseCalendar(c.id),
         }));
-      setGoogleCals(cals);
+      // MERGE: drop any previous entries for this account, then add the fresh set.
+      setGoogleCals((prev) => [...prev.filter((c) => c.account !== account), ...cals]);
       setGcalStatus("idle"); // show the picker
     } catch {
       setGcalStatus("error");
@@ -426,14 +413,10 @@ function ImportPanel({
     }
   }
 
-  // Step 2: sync events from the calendars the user ticked.
+  // Sync events from the ticked calendars — each fetched with ITS OWN account token.
   async function syncGoogleSelected() {
-    if (!googleToken) {
-      setGcalStatus("needs_grant");
-      return;
-    }
-    const calendarIds = googleCals.filter((c) => c.selected).map((c) => c.id);
-    if (calendarIds.length === 0) {
+    const selected = googleCals.filter((c) => c.selected);
+    if (selected.length === 0) {
       setGcalError("Pick at least one calendar to include.");
       return;
     }
@@ -442,16 +425,16 @@ function ImportPanel({
     try {
       const allBusy = new Set<string>();
       const results = await Promise.allSettled(
-        calendarIds.map(async (id) => {
+        selected.map(async (cal) => {
           const url = new URL(
-            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(id)}/events`,
+            `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events`,
           );
           url.searchParams.set("timeMin", windowStart.toISOString());
           url.searchParams.set("timeMax", windowEnd.toISOString());
           url.searchParams.set("singleEvents", "true");
           url.searchParams.set("maxResults", "2500");
           const r = await fetch(url.toString(), {
-            headers: { Authorization: `Bearer ${googleToken}` },
+            headers: { Authorization: `Bearer ${cal.token}` },
           });
           if (!r.ok) return;
           const d = await r.json();
@@ -493,48 +476,50 @@ function ImportPanel({
   }
 
   async function syncOutlook() {
-    if (!hasOutlookToken) {
-      setOutlookStatus("needs_grant");
+    if (msAccounts.length === 0) {
+      setOutlookError("Connect a Microsoft account first.");
       return;
     }
     setOutlookStatus("syncing");
     setOutlookError("");
     try {
-      // Microsoft Graph calendarView expands recurring events across the window.
-      const url = new URL("https://graph.microsoft.com/v1.0/me/calendarView");
-      url.searchParams.set("startDateTime", windowStart.toISOString());
-      url.searchParams.set("endDateTime", windowEnd.toISOString());
-      url.searchParams.set("$select", "start,end,showAs,isCancelled,isAllDay");
-      url.searchParams.set("$top", "1000");
-
-      const r = await fetch(url.toString(), {
-        headers: {
-          Authorization: `Bearer ${outlookToken}`,
-          Prefer: 'outlook.timezone="UTC"',
-        },
-      });
-      if (!r.ok) throw new Error(`Graph ${r.status}`);
-      const data = await r.json();
-
       const allBusy = new Set<string>();
-      for (const ev of data.value ?? []) {
-        if (ev.isCancelled) continue;
-        // showAs: free | tentative | busy | oof | workingElsewhere — skip "free"
-        if (ev.showAs === "free") continue;
-        const startStr: string = ev.start?.dateTime?.slice(0, 10);
-        const endStr: string = ev.end?.dateTime?.slice(0, 10);
-        if (!startStr || !endStr) continue;
-        // All-day events have an exclusive end; timed events end on an inclusive day.
-        const isTimed = !ev.isAllDay;
-        const cur = new Date(startStr);
-        const stop = new Date(endStr);
-        if (isTimed) stop.setDate(stop.getDate() + 1);
-        while (cur < stop) {
-          allBusy.add(cur.toISOString().slice(0, 10));
-          cur.setDate(cur.getDate() + 1);
-        }
+      // Pull each connected Microsoft account's calendar and merge.
+      const results = await Promise.allSettled(
+        msAccounts.map(async ({ token }) => {
+          // Microsoft Graph calendarView expands recurring events across the window.
+          const url = new URL("https://graph.microsoft.com/v1.0/me/calendarView");
+          url.searchParams.set("startDateTime", windowStart.toISOString());
+          url.searchParams.set("endDateTime", windowEnd.toISOString());
+          url.searchParams.set("$select", "start,end,showAs,isCancelled,isAllDay");
+          url.searchParams.set("$top", "1000");
+          const r = await fetch(url.toString(), {
+            headers: { Authorization: `Bearer ${token}`, Prefer: 'outlook.timezone="UTC"' },
+          });
+          if (!r.ok) throw new Error(`Graph ${r.status}`);
+          const data = await r.json();
+          for (const ev of data.value ?? []) {
+            if (ev.isCancelled) continue;
+            // showAs: free | tentative | busy | oof | workingElsewhere — skip "free"
+            if (ev.showAs === "free") continue;
+            const startStr: string = ev.start?.dateTime?.slice(0, 10);
+            const endStr: string = ev.end?.dateTime?.slice(0, 10);
+            if (!startStr || !endStr) continue;
+            // All-day events have an exclusive end; timed events end on an inclusive day.
+            const isTimed = !ev.isAllDay;
+            const cur = new Date(startStr);
+            const stop = new Date(endStr);
+            if (isTimed) stop.setDate(stop.getDate() + 1);
+            while (cur < stop) {
+              allBusy.add(cur.toISOString().slice(0, 10));
+              cur.setDate(cur.getDate() + 1);
+            }
+          }
+        }),
+      );
+      if (results.every((r) => r.status === "rejected")) {
+        throw new Error("All Outlook fetches failed");
       }
-
       onImport(Array.from(allBusy));
       setOutlookStatus("done");
     } catch {
@@ -641,87 +626,70 @@ function ImportPanel({
           {activeTab === "google" && (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-gray-600">
-                Pick which Google calendars to include, then sync — anything scheduled in the
-                holiday window is marked busy. Holiday/birthday calendars are off by default.
+                Connect one or more Google accounts, tick the calendars to include, then sync —
+                anything scheduled in the holiday window is marked busy. Holiday/birthday
+                calendars are off by default.
               </p>
 
-              {gcalStatus === "needs_grant" ? (
-                <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 space-y-3">
-                  <p className="text-sm text-amber-800">
-                    <strong>One-time permission needed.</strong> Click below to let this app read
-                    your Google Calendar. You'll see a Google permissions screen — just click{" "}
-                    <em>Allow</em>. You stay logged in, no sign-out required.
-                  </p>
-                  <button
-                    onClick={() => connectCalendar("google")}
-                    className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-                  >
-                    🗓 Grant calendar access →
-                  </button>
-                </div>
-              ) : googleCals.length === 0 ? (
-                <button
-                  onClick={() => loadGoogleCalendars()}
-                  disabled={gcalStatus === "syncing"}
-                  className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {gcalStatus === "syncing" ? "Loading…" : "Choose calendars to sync"}
-                </button>
-              ) : (
+              {/* One button. Click it again to add more accounts — they stack. */}
+              <button
+                onClick={addGoogleAccount}
+                disabled={gcalStatus === "syncing"}
+                className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {gcalStatus === "syncing"
+                  ? "Loading…"
+                  : googleCals.length === 0
+                  ? "🗓 Connect a Google calendar"
+                  : "➕ Add another Google account"}
+              </button>
+              <p className="text-[11px] text-gray-400">
+                Works for any Google account (even ones with their own Group Holiday login). Add as
+                many as you like — they all stack. Nothing is permanently linked.
+              </p>
+
+              {googleCals.length > 0 && (
                 <div className="space-y-3">
-                  {/* Calendar pick-list */}
-                  <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
-                    {googleCals.map((c) => (
-                      <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-gray-50">
-                        <input
-                          type="checkbox"
-                          checked={c.selected}
-                          onChange={() =>
-                            setGoogleCals((prev) =>
-                              prev.map((x) => (x.id === c.id ? { ...x, selected: !x.selected } : x))
-                            )
-                          }
-                          className="h-4 w-4 accent-blue-600"
-                        />
-                        <span className="truncate text-gray-800">{c.summary}</span>
-                      </label>
+                  {/* Calendar pick-list, grouped by account so you can choose across several. */}
+                  <div className="max-h-56 space-y-2 overflow-y-auto rounded-lg border border-gray-200 p-2">
+                    {Array.from(new Set(googleCals.map((c) => c.account))).map((acct) => (
+                      <div key={acct}>
+                        <p className="px-2 pt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{acct}</p>
+                        {googleCals.filter((c) => c.account === acct).map((c) => (
+                          <label key={`${acct}:${c.id}`} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-gray-50">
+                            <input
+                              type="checkbox"
+                              checked={c.selected}
+                              onChange={() =>
+                                setGoogleCals((prev) =>
+                                  prev.map((x) => (x.id === c.id && x.account === acct ? { ...x, selected: !x.selected } : x))
+                                )
+                              }
+                              className="h-4 w-4 accent-blue-600"
+                            />
+                            <span className="truncate text-gray-800">{c.summary}</span>
+                          </label>
+                        ))}
+                      </div>
                     ))}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={syncGoogleSelected}
-                      disabled={gcalStatus === "syncing"}
-                      className={[
-                        "rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors",
-                        gcalStatus === "done"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60",
-                      ].join(" ")}
-                    >
-                      {gcalStatus === "syncing"
-                        ? "Syncing…"
-                        : gcalStatus === "done"
-                        ? "✓ Synced! — sync again"
-                        : `Sync ${googleCals.filter((c) => c.selected).length} selected calendar${googleCals.filter((c) => c.selected).length !== 1 ? "s" : ""}`}
-                    </button>
-                  </div>
+                  <button
+                    onClick={syncGoogleSelected}
+                    disabled={gcalStatus === "syncing"}
+                    className={[
+                      "rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors",
+                      gcalStatus === "done"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60",
+                    ].join(" ")}
+                  >
+                    {gcalStatus === "syncing"
+                      ? "Syncing…"
+                      : gcalStatus === "done"
+                      ? "✓ Synced! — sync again"
+                      : `Sync ${googleCals.filter((c) => c.selected).length} selected calendar${googleCals.filter((c) => c.selected).length !== 1 ? "s" : ""}`}
+                  </button>
                 </div>
-              )}
-              {/* One-off import from ANY other Google account (even one that already
-                  has its own GHB login) — uses a token popup, doesn't change your login. */}
-              <div className="flex flex-col gap-1">
-                <button
-                  onClick={importFromAnotherGoogle}
-                  className="text-xs text-blue-600 hover:underline text-left"
-                >
-                  ➕ Import from another Google account (one-off — its busy days add on top)
-                </button>
-                <span className="text-[11px] text-gray-400">
-                  Works for any account, including ones that already have a Group Holiday login. Nothing is permanently linked.
-                </span>
-              </div>
-              {gisToken && (
-                <p className="text-[11px] text-emerald-600">✓ Using another Google account for this import.</p>
               )}
               {gcalError && (
                 <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{gcalError}</div>
@@ -748,56 +716,59 @@ function ImportPanel({
           {activeTab === "outlook" && (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-gray-600">
-                One-click sync of your Outlook/Microsoft 365 calendar — marks anything scheduled
-                in the holiday window as busy.
+                Connect one or more Microsoft accounts, then sync — anything scheduled in the
+                holiday window is marked busy. Add as many accounts as you like; they stack.
               </p>
 
-              {outlookStatus === "needs_grant" || !hasOutlookToken ? (
-                <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 space-y-3">
-                  <p className="text-sm text-blue-800">
-                    <strong>Connect your Microsoft account</strong> to sync live. You&apos;ll see a
-                    Microsoft permissions screen — just click <em>Accept</em>. You stay logged in.
-                  </p>
+              {/* One button. Click it again to add more accounts. */}
+              <button
+                onClick={addOutlookAccount}
+                disabled={outlookStatus === "syncing"}
+                className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {outlookStatus === "syncing"
+                  ? "Loading…"
+                  : msAccounts.length === 0
+                  ? "📘 Connect a Microsoft calendar"
+                  : "➕ Add another Microsoft account"}
+              </button>
+              <p className="text-[11px] text-gray-400">
+                Works for any Microsoft account (even ones with their own Group Holiday login).
+                Nothing is permanently linked.
+              </p>
+
+              {msAccounts.length > 0 && (
+                <div className="space-y-2">
+                  <ul className="rounded-lg border border-gray-200 divide-y text-sm">
+                    {msAccounts.map((a) => (
+                      <li key={a.account} className="flex items-center justify-between px-3 py-2">
+                        <span className="truncate text-gray-800">📘 {a.account}</span>
+                        <button
+                          onClick={() => setMsAccounts((prev) => prev.filter((x) => x.account !== a.account))}
+                          className="text-xs text-red-600 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                   <button
-                    onClick={() => connectCalendar("azure")}
-                    className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+                    onClick={syncOutlook}
+                    disabled={outlookStatus === "syncing"}
+                    className={[
+                      "rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors",
+                      outlookStatus === "done"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60",
+                    ].join(" ")}
                   >
-                    📘 Connect Outlook Calendar →
+                    {outlookStatus === "syncing"
+                      ? "Syncing…"
+                      : outlookStatus === "done"
+                      ? "✓ Synced! — sync again"
+                      : `Sync ${msAccounts.length} Microsoft account${msAccounts.length !== 1 ? "s" : ""}`}
                   </button>
                 </div>
-              ) : (
-                <button
-                  onClick={syncOutlook}
-                  disabled={outlookStatus === "syncing" || outlookStatus === "done"}
-                  className={[
-                    "rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors",
-                    outlookStatus === "done"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60",
-                  ].join(" ")}
-                >
-                  {outlookStatus === "syncing"
-                    ? "Syncing…"
-                    : outlookStatus === "done"
-                    ? "✓ Synced!"
-                    : "Sync Outlook Calendar"}
-                </button>
-              )}
-              {/* One-off import from ANY other Microsoft account (even one that already
-                  has its own GHB login) — uses a popup, doesn't change your login. */}
-              <div className="flex flex-col gap-1">
-                <button
-                  onClick={importFromAnotherOutlook}
-                  className="text-xs text-blue-600 hover:underline text-left"
-                >
-                  ➕ Import from another Microsoft account (one-off — its busy days add on top)
-                </button>
-                <span className="text-[11px] text-gray-400">
-                  Works for any account, including ones that already have a Group Holiday login. Nothing is permanently linked.
-                </span>
-              </div>
-              {msToken && (
-                <p className="text-[11px] text-emerald-600">✓ Using another Microsoft account for this import.</p>
               )}
               {outlookError && (
                 <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{outlookError}</div>
