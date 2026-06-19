@@ -52,6 +52,7 @@ function bookingComLink(iata: string, checkIn: string, checkOut: string, guests:
     checkin: checkIn,
     checkout: checkOut,
     group_adults: String(guests),
+    group_children: "0",
     no_rooms: "1",
     order: "price",
     ...(BOOKING_COM_AID ? { aid: BOOKING_COM_AID } : {}),
@@ -88,10 +89,8 @@ function vrboLink(iata: string, checkIn: string, checkOut: string, guests: numbe
   });
   return `https://www.vrbo.com/search?${params}`;
 }
-
-function skyscannerHotelsLink(iata: string, checkIn: string, checkOut: string, guests: number) {
-  return `https://www.skyscanner.net/hotels/search?entity_name=${encodeURIComponent(cityFor(iata))}&checkin=${checkIn}&checkout=${checkOut}&adults=${guests}`;
-}
+// (Skyscanner hotels removed — its deep-links need internal entity IDs, not a
+// city name, so the city-name URL 404s.)
 
 // ── Train / Eurostar ──────────────────────────────────────────────────────────
 // Destinations reachable by train from London (via Eurostar or direct rail).
@@ -273,7 +272,6 @@ export default function BookingPage() {
         { name: "Airbnb", url: airbnbLink(destIata, checkIn, checkOut, guestCount), emoji: "🏠" },
         { name: "Hotels.com", url: hotelsComLink(destIata, checkIn, checkOut, guestCount), emoji: "🛏️" },
         { name: "Vrbo", url: vrboLink(destIata, checkIn, checkOut, guestCount), emoji: "🏡" },
-        { name: "Skyscanner", url: skyscannerHotelsLink(destIata, checkIn, checkOut, guestCount), emoji: "🧭" },
       ]
     : [];
 
@@ -314,8 +312,6 @@ export default function BookingPage() {
                     {destResult.shared_out_date} to {destResult.shared_return_date}
                     {" · "}
                     {members.length} people
-                    {" · "}
-                    ~£{Math.round(destResult.avg_individual_cost).toLocaleString()} avg pp
                   </p>
                 )}
               </div>
@@ -442,7 +438,13 @@ export default function BookingPage() {
         {destResult && destIata && checkIn && checkOut && (
           (() => {
             const nights = Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86_400_000);
-            const avgFlight = Math.round(destResult.avg_individual_cost);
+            // Flight-only average (out + in), NOT the all-in total — the all-in
+            // figure (avg_individual_cost) also folds in cabin bag + ground travel,
+            // which made the "flight" number look ~2x too high.
+            const ppl = destResult.people ?? [];
+            const avgFlight = ppl.length
+              ? Math.round(ppl.reduce((s, p) => s + p.outbound_cost_gbp + p.inbound_cost_gbp, 0) / ppl.length)
+              : Math.round(destResult.avg_individual_cost);
             const est = totalTripEstimate(destIata, avgFlight, nights, Math.max(members.length, 1));
             if (!est || nights <= 0) return null;
             const accomEst = accomEstimate(destIata);

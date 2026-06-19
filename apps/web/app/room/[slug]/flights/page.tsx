@@ -702,26 +702,38 @@ function ResultsList({
             <div className="flex items-center gap-3 shrink-0">
               <div className="text-right">
                 {(() => {
-                  // Overall trip cost is the headline — flights + daily living × nights.
-                  const flights = Math.round(r.avg_individual_cost);
+                  // Overall trip cost is the headline. The all-in per-person cost
+                  // (avg_individual_cost) folds in cabin bag + ground transfers, so
+                  // show the FLIGHT-only figure separately from those extras —
+                  // otherwise "£X flights" reads ~2x the real fare.
+                  const ppl = r.people ?? [];
+                  const flightsOnly = ppl.length
+                    ? Math.round(ppl.reduce((s, p) => s + p.outbound_cost_gbp + p.inbound_cost_gbp, 0) / ppl.length)
+                    : Math.round(r.avg_individual_cost);
+                  const allIn = Math.round(r.avg_individual_cost);
+                  const extras = Math.max(0, allIn - flightsOnly);   // cabin bag + ground
                   const dLow = r.est_daily_living_low_gbp ?? r.est_daily_living_gbp ?? null;
                   const dHigh = r.est_daily_living_high_gbp ?? r.est_daily_living_gbp ?? null;
                   if (nights && nights > 0 && dLow != null && dHigh != null) {
-                    const lo = flights + dLow * nights;
-                    const hi = flights + dHigh * nights;
+                    const lo = allIn + dLow * nights;
+                    const hi = allIn + dHigh * nights;
                     return (
                       <>
-                        <p className="text-2xl font-bold text-gray-900" title={`Flights + ~£${r.est_daily_living_gbp}/day bare-minimum living (bed + food + local transport) over ${nights} nights. No activities.`}>
+                        <p className="text-2xl font-bold text-gray-900" title={`Flights + bag/transfers + ~£${r.est_daily_living_gbp}/day bare-minimum living (bed + food + local transport) over ${nights} nights. No activities.`}>
                           ~£{lo.toLocaleString()}–£{hi.toLocaleString()}
                         </p>
                         <p className="text-[11px] text-gray-500">est. total pp · {nights} nights</p>
-                        <p className="text-[11px] text-gray-400">✈️ £{flights.toLocaleString()} flights · 🛏️🍽️ ~£{r.est_daily_living_gbp}/day</p>
+                        <p className="text-[11px] text-gray-400">
+                          ✈️ £{flightsOnly.toLocaleString()} flights
+                          {extras > 0 && <> · 🧳🚌 £{extras.toLocaleString()} bag &amp; transfers</>}
+                          {" · "}🛏️🍽️ ~£{r.est_daily_living_gbp}/day
+                        </p>
                       </>
                     );
                   }
                   return (
                     <>
-                      <p className="text-xl font-bold text-gray-900">~£{flights.toLocaleString()}</p>
+                      <p className="text-xl font-bold text-gray-900">~£{flightsOnly.toLocaleString()}</p>
                       <p className="text-xs text-gray-500">flights avg/person</p>
                     </>
                   );
