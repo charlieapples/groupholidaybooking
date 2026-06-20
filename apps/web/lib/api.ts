@@ -232,8 +232,18 @@ export interface Member {
   user_id: string;
   display_name: string | null;
   home_postcode: string | null;
+  trip_origin_postcode?: string | null;
   is_admin: boolean;
   joined_at: string;
+}
+
+/** Set (or clear with "") the caller's per-trip departure postcode for this room. */
+export function setTripOrigin(token: string, slug: string, trip_origin_postcode: string) {
+  return apiFetch<{ ok: boolean; trip_origin_postcode: string | null }>(
+    `/rooms/${slug}/trip-origin?trip_origin_postcode=${encodeURIComponent(trip_origin_postcode)}`,
+    token,
+    { method: "PATCH" }
+  );
 }
 
 // ── Availability ──────────────────────────────────────────────────────────────

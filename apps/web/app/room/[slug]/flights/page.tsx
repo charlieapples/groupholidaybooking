@@ -9,10 +9,13 @@ import {
   updateRoom,
   testLiveSearch,
   getMyProfile,
+  listMembers,
+  setTripOrigin,
   type Room,
   type FlightResult,
 } from "@/lib/api";
 import { destName, AIRPORT_DISPLAY } from "@/lib/destinations";
+import { normalisePostcode } from "@/lib/postcode";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -340,6 +343,9 @@ export default function FlightsPage() {
               </button>
             </div>
 
+            {/* Tucked-away: travelling-from override for THIS trip (defaults to home). */}
+            {token && <TripOriginExpander token={token} slug={slug} />}
+
             {/* Pre-flight checklist */}
             {!running && (
               <div className="mb-4 grid gap-1.5">
@@ -643,6 +649,90 @@ interface ResultsListProps {
   handleChooseDestination: (iata: string) => void;
   myName?: string | null;
   myPostcode?: string | null;
+}
+
+// Tucked-away control: for this trip only, depart from somewhere other than home.
+// Defaults to the member's home postcode; deliberately collapsed and low-key.
+function TripOriginExpander({ token, slug }: { token: string; slug: string }) {
+  const { toast } = useToast();
+  const supabase = useMemo(() => createClient(), []);
+  const [value, setValue] = useState("");
+  const [home, setHome] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: s } = await supabase.auth.getSession();
+        const uid = s.session?.user?.id;
+        const members = await listMembers(token, slug);
+        const me = members.find((m) => m.user_id === uid);
+        if (me) {
+          setHome(me.home_postcode ?? null);
+          if (me.trip_origin_postcode) setValue(me.trip_origin_postcode);
+        }
+      } catch { /* non-fatal */ }
+    })();
+  }, [token, slug, supabase]);
+
+  async function save(clear = false) {
+    const raw = clear ? "" : value.trim();
+    let pc = "";
+    if (raw) {
+      const n = normalisePostcode(raw);
+      if (!n) { toast.error("That doesn't look like a valid UK postcode (e.g. EH1 1RE)."); return; }
+      pc = n;
+    }
+    setSaving(true);
+    try {
+      await setTripOrigin(token, slug, pc);
+      if (clear) setValue("");
+      else if (pc) setValue(pc);
+      toast.success(clear ? "Reverted to your home postcode." : "Saved — re-run the search to use it.");
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Couldn't save that postcode"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <details className="mt-2 text-xs">
+      <summary className="cursor-pointer text-gray-500 hover:text-gray-700">
+        ✈️ Travelling from somewhere other than home for this trip?
+      </summary>
+      <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+        <p className="text-gray-500">
+          By default we use your home postcode{home ? ` (${home})` : ""}. If you&apos;ll set off from a
+          different place for this holiday, put that postcode here — it only affects this trip, not your profile.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={value}
+            onChange={(e) => setValue(e.target.value.toUpperCase())}
+            placeholder="e.g. EH1 1RE"
+            className="w-40 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
+          />
+          <button
+            onClick={() => save(false)}
+            disabled={saving}
+            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+          {value && (
+            <button
+              onClick={() => save(true)}
+              disabled={saving}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100"
+            >
+              Use home instead
+            </button>
+          )}
+        </div>
+      </div>
+    </details>
+  );
 }
 
 function ResultsList({

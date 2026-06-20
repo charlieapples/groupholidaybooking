@@ -367,18 +367,29 @@ def run_optimiser(slug: str, user: UserInfo = Depends(current_user)):
     # Load members and postcodes
     # Join profiles so we can fall back to default_home_postcode if the
     # per-room postcode was never set (e.g. user updated profile after joining).
-    members_res = (
-        db.table("room_members")
-        .select("user_id, home_postcode, profiles(display_name, default_home_postcode)")
-        .eq("room_id", room["id"])
-        .execute()
-    )
+    # Try to read the per-trip origin override; if migration 019 hasn't been run
+    # yet (column missing), fall back gracefully so the optimiser still works.
+    try:
+        members_res = (
+            db.table("room_members")
+            .select("user_id, home_postcode, trip_origin_postcode, profiles(display_name, default_home_postcode)")
+            .eq("room_id", room["id"])
+            .execute()
+        )
+    except Exception:
+        members_res = (
+            db.table("room_members")
+            .select("user_id, home_postcode, profiles(display_name, default_home_postcode)")
+            .eq("room_id", room["id"])
+            .execute()
+        )
     people: list[Person] = []
     for m in members_res.data:
         profile = m.get("profiles") or {}
         name = profile.get("display_name", "Unknown")
-        # Prefer per-room postcode; fall back to profile default
-        postcode = m.get("home_postcode") or profile.get("default_home_postcode")
+        # Prefer a per-trip origin override (member said "for this trip I'm
+        # travelling from X"), else per-room postcode, else profile default.
+        postcode = m.get("trip_origin_postcode") or m.get("home_postcode") or profile.get("default_home_postcode")
         if not postcode:
             raise HTTPException(
                 422,

@@ -90,6 +90,7 @@ class MemberResponse(BaseModel):
     user_id: str
     display_name: Optional[str]
     home_postcode: Optional[str]
+    trip_origin_postcode: Optional[str] = None
     is_admin: bool
     joined_at: str
 
@@ -494,6 +495,28 @@ def update_postcode(
     return {"ok": True}
 
 
+@router.patch("/{slug}/trip-origin")
+def set_trip_origin(
+    slug: str,
+    trip_origin_postcode: str = "",
+    user: UserInfo = Depends(current_user),
+):
+    """Set (or clear) the caller's per-TRIP departure postcode for this room.
+
+    For when a member will be travelling from somewhere other than home for this
+    holiday. Trip-specific only — does NOT touch their home postcode or profile.
+    Pass an empty string to clear it and revert to their home postcode.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
+    value = (trip_origin_postcode or "").strip() or None
+    db.table("room_members").update({"trip_origin_postcode": value}).eq(
+        "room_id", room["id"]
+    ).eq("user_id", user.id).execute()
+    return {"ok": True, "trip_origin_postcode": value}
+
+
 @router.get("/{slug}/members", response_model=list[MemberResponse])
 def list_members(slug: str, user: UserInfo = Depends(current_user)):
     """List room members and their home postcodes. Members only."""
@@ -513,6 +536,7 @@ def list_members(slug: str, user: UserInfo = Depends(current_user)):
             user_id=m["user_id"],
             display_name=(m.get("profiles") or {}).get("display_name"),
             home_postcode=m.get("home_postcode"),
+            trip_origin_postcode=m.get("trip_origin_postcode"),
             is_admin=m["is_admin"],
             joined_at=m["joined_at"],
         )
