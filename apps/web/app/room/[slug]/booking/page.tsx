@@ -28,6 +28,14 @@ function cityFor(iata: string): string {
   return cityName(iata);
 }
 
+// How long to allow at the airport before departure. 2h is the standard
+// airline advice for European/short-haul (≈95th-percentile of bag-drop +
+// security + walk + gate-close); 3h for long-haul. We default to 2h.
+const AIRPORT_BUFFER_H = 2;
+function fmtH(h: number): string {
+  return h < 1 ? `${Math.round(h * 60)}m` : `${Math.round(h * 10) / 10}h`;
+}
+
 // ── Affiliate IDs (baked in at build time via NEXT_PUBLIC_ env vars) ──────────
 // Set these in Vercel → Project Settings → Environment Variables when approved.
 //
@@ -498,6 +506,14 @@ export default function BookingPage() {
                           </span>
                         )}
                       </div>
+                      {/* Airport-buffer guidance: be at the airport ~2h before; with the
+                          known ground-travel time, when to actually leave home. */}
+                      <p className="text-[11px] text-gray-500">
+                        🕑 Be at the airport ~{AIRPORT_BUFFER_H}h before departure
+                        {p.ground_hours > 0
+                          ? ` — with your ~${fmtH(p.ground_hours)} trip to ${p.chosen_airport ?? "the airport"}, leave home about ${fmtH(p.ground_hours + AIRPORT_BUFFER_H)} before your flight.`
+                          : "."}
+                      </p>
                       {p.booking_link ? (
                         <div className="space-y-1.5">
                           <div className="flex gap-2 flex-wrap">

@@ -22,6 +22,7 @@ import {
   remindPendingMembers,
   getCalendarStatus,
   getLinkedAccounts,
+  startCalendarLink,
   getLinkedBusy,
   type Room,
   type SubmissionStatus,
@@ -192,6 +193,10 @@ function ImportPanel({
   const [icsError, setIcsError] = useState("");
   // Permanently-linked calendars: count + one-click pull state.
   const [linkedCount, setLinkedCount] = useState(0);
+  // Whether permanent linking is switched on server-side, + the user's choice to
+  // remember a calendar permanently (vs one-off) at the moment they connect.
+  const [permanentConfigured, setPermanentConfigured] = useState(false);
+  const [rememberPermanent, setRememberPermanent] = useState(false);
   const [linkedStatus, setLinkedStatus] = useState<"idle" | "syncing" | "done" | "error">("idle");
   const [linkedError, setLinkedError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -217,7 +222,9 @@ function ImportPanel({
         const tok = s.session?.access_token;
         if (!tok) return;
         const st = await getCalendarStatus(tok);
-        if (!st.configured || cancelled) return;
+        if (cancelled) return;
+        setPermanentConfigured(st.configured);
+        if (!st.configured) return;
         const accts = await getLinkedAccounts(tok);
         if (!cancelled) setLinkedCount(accts.length);
       } catch {
@@ -254,11 +261,28 @@ function ImportPanel({
     }
   }
 
+  // Permanently link a calendar (server-side OAuth, stores an encrypted refresh
+  // token) so the user never has to re-grant on future trips. Redirects away and
+  // back. Used when "remember permanently" is ticked at connect time.
+  async function startPermanentLink(provider: "google" | "microsoft") {
+    const setErr = provider === "google" ? setGcalError : setOutlookError;
+    try {
+      const { data: s } = await supabase.auth.getSession();
+      const tok = s.session?.access_token;
+      if (!tok) { setErr("Please sign in again."); return; }
+      const { url } = await startCalendarLink(tok, provider, window.location.href);
+      window.location.href = url;
+    } catch {
+      setErr("Couldn't start permanent linking — try the one-off import instead.");
+    }
+  }
+
   // Add a Google account via Google Identity Services — an in-page token popup
   // that does NOT touch your Supabase login (so it works for any account, even
   // one that already has its own GHB login). Connect as MANY accounts as you
   // like; their calendars STACK (we never replace the previous account).
   function addGoogleAccount() {
+    if (rememberPermanent && permanentConfigured) { startPermanentLink("google"); return; }
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!clientId) {
       setGcalError("Google calendar import isn't switched on yet (needs NEXT_PUBLIC_GOOGLE_CLIENT_ID).");
@@ -329,6 +353,7 @@ function ImportPanel({
   // Add a Microsoft account via MSAL — an in-page popup that does NOT touch your
   // Supabase login. Connect as many accounts as you like; they STACK.
   async function addOutlookAccount() {
+    if (rememberPermanent && permanentConfigured) { startPermanentLink("microsoft"); return; }
     const clientId = process.env.NEXT_PUBLIC_MS_CLIENT_ID;
     if (!clientId) {
       setOutlookError("Microsoft calendar import isn't switched on yet (needs NEXT_PUBLIC_MS_CLIENT_ID).");
@@ -645,8 +670,20 @@ function ImportPanel({
               </button>
               <p className="text-[11px] text-gray-400">
                 Works for any Google account (even ones with their own Group Holiday login). Add as
-                many as you like — they all stack. Nothing is permanently linked.
+                many as you like — they all stack.
+                {!rememberPermanent && " One-off — nothing is permanently linked."}
               </p>
+              {permanentConfigured && (
+                <label className="flex items-start gap-2 text-[11px] text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={rememberPermanent}
+                    onChange={(e) => setRememberPermanent(e.target.checked)}
+                    className="mt-0.5 h-3.5 w-3.5 accent-blue-600"
+                  />
+                  <span>🔒 <strong>Remember permanently</strong> — link it to your account so you never have to grant access again on future trips (you can unlink anytime in your profile).</span>
+                </label>
+              )}
 
               {googleCals.length > 0 && (
                 <div className="space-y-3">
@@ -734,8 +771,19 @@ function ImportPanel({
               </button>
               <p className="text-[11px] text-gray-400">
                 Works for any Microsoft account (even ones with their own Group Holiday login).
-                Nothing is permanently linked.
+                {!rememberPermanent && " One-off — nothing is permanently linked."}
               </p>
+              {permanentConfigured && (
+                <label className="flex items-start gap-2 text-[11px] text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={rememberPermanent}
+                    onChange={(e) => setRememberPermanent(e.target.checked)}
+                    className="mt-0.5 h-3.5 w-3.5 accent-blue-600"
+                  />
+                  <span>🔒 <strong>Remember permanently</strong> — link it to your account so you never have to grant access again on future trips (you can unlink anytime in your profile).</span>
+                </label>
+              )}
 
               {msAccounts.length > 0 && (
                 <div className="space-y-2">
