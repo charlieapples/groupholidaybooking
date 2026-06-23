@@ -34,6 +34,7 @@ import { parseIcal, parseRoughWindow, getMonthsInRange } from "@/lib/ical";
 import FeedbackButton from "@/components/FeedbackButton";
 import AccountBadge from "@/components/AccountBadge";
 import StepBar from "@/components/StepBar";
+import ProviderIcon from "@/components/ProviderIcon";
 import Script from "next/script";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -628,12 +629,19 @@ function ImportPanel({
                 <strong>⚡ You&apos;ve linked {linkedCount} account{linkedCount > 1 ? "s" : ""}.</strong>{" "}
                 Tick the calendars to include, then fill in your busy days — no permission screen.
               </p>
-              {/* Per-calendar pick-list, grouped by account, so you can exclude e.g. a family calendar. */}
+              {/* Per-calendar pick-list, grouped by account, so you can exclude e.g. a family
+                  calendar. No inner scroll — show them all at once (page scrolls if needed). */}
               {linkedCals.length > 0 && (
-                <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-blue-200 bg-white p-2">
-                  {Array.from(new Set(linkedCals.map((c) => c.account_email || c.account_id))).map((acct) => (
+                <div className="space-y-2 rounded-lg border border-blue-200 bg-white p-2">
+                  {Array.from(new Set(linkedCals.map((c) => c.account_email || c.account_id))).map((acct) => {
+                    const provider = linkedCals.find((c) => (c.account_email || c.account_id) === acct)?.provider || "google";
+                    return (
                     <div key={acct}>
-                      <p className="px-2 pt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{acct}</p>
+                      <p className="flex items-center gap-1.5 px-2 pt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                        <ProviderIcon provider={provider} className="h-3 w-3" />
+                        {acct}
+                        <span className="font-normal normal-case text-emerald-600">· 🔒 linked</span>
+                      </p>
                       {linkedCals.filter((c) => (c.account_email || c.account_id) === acct).map((c) => {
                         const key = `${c.account_id}:${c.id}`;
                         return (
@@ -653,7 +661,8 @@ function ImportPanel({
                         );
                       })}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               <button
