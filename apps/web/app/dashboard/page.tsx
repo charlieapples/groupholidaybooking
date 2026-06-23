@@ -16,6 +16,7 @@ import { DashboardSkeleton } from "@/components/Skeleton";
 import { normalisePostcode } from "@/lib/postcode";
 import { destName, flagFor } from "@/lib/destinations";
 import FeedbackButton from "@/components/FeedbackButton";
+import CalendarOnboardingPrompt from "@/components/CalendarOnboardingPrompt";
 import dynamic from "next/dynamic";
 
 const ChatWidget = dynamic(() => import("@/components/ChatWidget"), { ssr: false });
@@ -274,6 +275,8 @@ export default function Dashboard() {
       </nav>
 
       <div className="mx-auto max-w-5xl px-6 py-10 space-y-10">
+        {/* One-time nudge to link a calendar for auto-filled availability. */}
+        <CalendarOnboardingPrompt token={token} />
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900">Your Holidays</h1>
