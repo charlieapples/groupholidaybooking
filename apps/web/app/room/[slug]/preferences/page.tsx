@@ -31,6 +31,7 @@ export default function PreferencesPage() {
   // My inputs
   const [minNights, setMinNights] = useState("");
   const [maxNights, setMaxNights] = useState("");
+  const [anyDuration, setAnyDuration] = useState(false);   // "don't mind the length"
   const [budget, setBudget] = useState("");
   // "cheapest" = no cap (just rank cheapest first); "cap" = a specific £ limit.
   const [budgetMode, setBudgetMode] = useState<"cheapest" | "cap">("cheapest");
@@ -66,6 +67,8 @@ export default function PreferencesPage() {
         // Pre-fill my personal preferences from saved answers
         const mine = d.responses.find((row) => row.user_id === uid);
         if (mine) {
+          // No saved nights = they don't mind the length.
+          setAnyDuration(!(mine.min_nights || mine.max_nights));
           if (mine.min_nights) setMinNights(String(mine.min_nights));
           if (mine.max_nights) setMaxNights(String(mine.max_nights));
           if (mine.budget_gbp) { setBudget(String(mine.budget_gbp)); setBudgetMode("cap"); }
@@ -249,6 +252,19 @@ export default function PreferencesPage() {
 
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Trip length (nights)</label>
+            <label className="mb-2 flex items-center gap-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={anyDuration}
+                onChange={(e) => {
+                  setAnyDuration(e.target.checked);
+                  if (e.target.checked) { setMinNights(""); setMaxNights(""); }
+                }}
+                className="h-4 w-4 accent-blue-600"
+              />
+              🤷 I don&apos;t mind — any length works
+            </label>
+            {!anyDuration && (<>
             <div className="flex items-center gap-3">
               <div className="flex-1">
                 <p className="text-xs text-gray-500 mb-1">Minimum</p>
@@ -285,6 +301,8 @@ export default function PreferencesPage() {
             )}
             {windowNights && (
               <p className="mt-1 text-xs text-gray-400">Your travel window is {windowNights} nights long.</p>
+            )}
+            </>
             )}
           </div>
 
