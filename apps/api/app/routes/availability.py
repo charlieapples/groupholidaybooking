@@ -124,6 +124,14 @@ def _compute_free_windows(
     top_n: int,
 ) -> list[FreeWindow]:
     """Find contiguous stretches where NO member is busy."""
+    # Never count days in the past — you can't book a holiday that's already
+    # started, so the free window begins today at the earliest.
+    today = date.today()
+    if search_start < today:
+        search_start = today
+    if search_end < search_start:
+        return []   # the whole window is in the past
+
     windows: list[FreeWindow] = []
     window_start: Optional[date] = None
 

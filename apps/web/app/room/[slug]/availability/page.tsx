@@ -204,7 +204,6 @@ function ImportPanel({
   // Whether permanent linking is switched on server-side, + the user's choice to
   // remember a calendar permanently (vs one-off) at the moment they connect.
   const [permanentConfigured, setPermanentConfigured] = useState(false);
-  const [rememberPermanent, setRememberPermanent] = useState(false);
   const [linkedStatus, setLinkedStatus] = useState<"idle" | "syncing" | "done" | "error">("idle");
   const [linkedError, setLinkedError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -305,7 +304,6 @@ function ImportPanel({
   // one that already has its own GHB login). Connect as MANY accounts as you
   // like; their calendars STACK (we never replace the previous account).
   function addGoogleAccount() {
-    if (rememberPermanent && permanentConfigured) { startPermanentLink("google"); return; }
     const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!clientId) {
       setGcalError("Google calendar import isn't switched on yet (needs NEXT_PUBLIC_GOOGLE_CLIENT_ID).");
@@ -376,7 +374,6 @@ function ImportPanel({
   // Add a Microsoft account via MSAL — an in-page popup that does NOT touch your
   // Supabase login. Connect as many accounts as you like; they STACK.
   async function addOutlookAccount() {
-    if (rememberPermanent && permanentConfigured) { startPermanentLink("microsoft"); return; }
     const clientId = process.env.NEXT_PUBLIC_MS_CLIENT_ID;
     if (!clientId) {
       setOutlookError("Microsoft calendar import isn't switched on yet (needs NEXT_PUBLIC_MS_CLIENT_ID).");
@@ -731,19 +728,15 @@ function ImportPanel({
               </button>
               <p className="text-[11px] text-gray-400">
                 Works for any Google account (even ones with their own Group Holiday login). Add as
-                many as you like — they all stack.
-                {!rememberPermanent && " One-off — nothing is permanently linked."}
+                many as you like — they all stack. One-off — nothing is permanently linked.
               </p>
               {permanentConfigured && (
-                <label className="flex items-start gap-2 text-[11px] text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={rememberPermanent}
-                    onChange={(e) => setRememberPermanent(e.target.checked)}
-                    className="mt-0.5 h-3.5 w-3.5 accent-blue-600"
-                  />
-                  <span>🔒 <strong>Remember permanently</strong> — link it to your account so you never have to grant access again on future trips (you can unlink anytime in your profile).</span>
-                </label>
+                <button
+                  onClick={() => startPermanentLink("google")}
+                  className="flex items-start gap-2 text-left text-[11px] text-blue-700 hover:underline"
+                >
+                  <span>🔒 <strong>Link a Google account permanently instead</strong> → a quick one-time sign-in, then it&apos;s saved to your account and auto-fills every future trip (unlink anytime in your profile).</span>
+                </button>
               )}
 
               {googleCals.length > 0 && (
@@ -832,18 +825,15 @@ function ImportPanel({
               </button>
               <p className="text-[11px] text-gray-400">
                 Works for any Microsoft account (even ones with their own Group Holiday login).
-                {!rememberPermanent && " One-off — nothing is permanently linked."}
+                One-off — nothing is permanently linked.
               </p>
               {permanentConfigured && (
-                <label className="flex items-start gap-2 text-[11px] text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={rememberPermanent}
-                    onChange={(e) => setRememberPermanent(e.target.checked)}
-                    className="mt-0.5 h-3.5 w-3.5 accent-blue-600"
-                  />
-                  <span>🔒 <strong>Remember permanently</strong> — link it to your account so you never have to grant access again on future trips (you can unlink anytime in your profile).</span>
-                </label>
+                <button
+                  onClick={() => startPermanentLink("microsoft")}
+                  className="flex items-start gap-2 text-left text-[11px] text-blue-700 hover:underline"
+                >
+                  <span>🔒 <strong>Link a Microsoft account permanently instead</strong> → a quick one-time sign-in, then it&apos;s saved to your account and auto-fills every future trip (unlink anytime in your profile).</span>
+                </button>
               )}
 
               {msAccounts.length > 0 && (
