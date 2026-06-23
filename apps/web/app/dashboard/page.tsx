@@ -51,8 +51,16 @@ export default function Dashboard() {
       }
       return new Date(v).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
     };
-    if (fromVal && toVal) return `${fmt(fromVal)} – ${fmt(toVal)}`;
+    // Same from/to (e.g. a single month) → store the single value, not "X – X".
+    if (fromVal && toVal) return fromVal === toVal ? fmt(fromVal) : `${fmt(fromVal)} – ${fmt(toVal)}`;
     return fmt(fromVal) || fmt(toVal);
+  }
+
+  // Friendlier display: a single "Month YYYY" reads as "Anytime in June 2026"
+  // rather than the confusing "June 2026 – June 2026".
+  function prettyWindow(s: string | null | undefined): string {
+    if (!s) return "";
+    return /^[A-Za-z]+\s+\d{4}$/.test(s.trim()) ? `Anytime in ${s.trim()}` : s;
   }
 
   // Parse a month ("YYYY-MM") or date ("YYYY-MM-DD") value, then flag a window
@@ -372,7 +380,7 @@ export default function Dashboard() {
                     <div className="min-w-0">
                       <h2 className="font-semibold text-gray-900 truncate">{room.name}</h2>
                       {room.rough_window && (
-                        <p className="text-sm text-gray-500 truncate">{room.rough_window}</p>
+                        <p className="text-sm text-gray-500 truncate">{prettyWindow(room.rough_window)}</p>
                       )}
                     </div>
                     <span className="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
@@ -524,7 +532,7 @@ export default function Dashboard() {
                 {createWindowError ? (
                   <p className="mt-1.5 text-xs font-medium text-red-600">⚠️ {createWindowError}</p>
                 ) : buildWindow() && (
-                  <p className="mt-1.5 text-xs text-blue-600">📅 {buildWindow()}</p>
+                  <p className="mt-1.5 text-xs text-blue-600">📅 {prettyWindow(buildWindow())}</p>
                 )}
               </div>
               <div>
