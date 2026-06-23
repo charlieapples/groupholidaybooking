@@ -44,3 +44,6 @@ Thumbs.db
 # Supabase CLI local state
 supabase/.temp/
 supabase/.branches/
+
+# Local secrets for tooling (DB password, tokens) — never commit
+.secrets/

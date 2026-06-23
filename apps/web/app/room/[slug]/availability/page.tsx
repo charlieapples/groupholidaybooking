@@ -135,10 +135,12 @@ function MonthGrid({
               }
               className={[
                 "aspect-square rounded-lg text-sm font-medium transition-colors",
-                isBusy
-                  ? "bg-red-500 text-white hover:bg-red-600"
-                  : isPast || outOfWindow
+                // Past / out-of-window ALWAYS greyed — even if a calendar event
+                // fell on that day — since you can't book it anyway.
+                isPast || outOfWindow
                   ? "text-gray-300 cursor-not-allowed"
+                  : isBusy
+                  ? "bg-red-500 text-white hover:bg-red-600"
                   // Free, in-window, clickable: bold green so it's obvious at a glance
                   : "bg-green-300 text-green-900 hover:bg-red-200 hover:text-red-800",
               ].join(" ")}
@@ -1115,9 +1117,12 @@ export default function AvailabilityPage() {
   }, []);
 
   function handleImport(dates: string[]) {
+    // Ignore past dates — you can't book a holiday in the past, so a calendar
+    // event back then shouldn't mark the day busy (it stays greyed out).
+    const today = new Date().toISOString().slice(0, 10);
     setBusyDates((prev) => {
       const next = new Set(prev);
-      dates.forEach((d) => next.add(d));
+      dates.forEach((d) => { if (d >= today) next.add(d); });
       return next;
     });
   }
