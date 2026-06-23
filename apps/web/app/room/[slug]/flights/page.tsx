@@ -7,7 +7,6 @@ import {
   runFlightOptimiser,
   advanceStep,
   updateRoom,
-  testLiveSearch,
   getMyProfile,
   listMembers,
   setTripOrigin,
@@ -132,27 +131,6 @@ export default function FlightsPage() {
     }
   }
 
-  const [testingLive, setTestingLive] = useState(false);
-  async function handleTestLiveSearch() {
-    if (!token) return;
-    setTestingLive(true);
-    try {
-      const dest = room?.destination_iata || results[0]?.destination || "MAD";
-      const depart = room?.agreed_start || "2026-08-09";
-      const ret = room?.agreed_end || "2026-08-16";
-      const res = await testLiveSearch(token, slug, { origin: "LON", destination: dest, depart, return_date: ret });
-      if (res.ok) {
-        toast.success(`✅ Live API works! LON→${dest}: £${Math.round(res.price ?? 0)} (${res.airline}).`);
-      } else {
-        toast.error(`Live API returned nothing: ${res.note ?? "no result"}`);
-      }
-    } catch (e: unknown) {
-      toast.error(errorMessage(e, "Live search test failed"));
-    } finally {
-      setTestingLive(false);
-    }
-  }
-
   async function handleSetSameAirport(value: boolean) {
     if (!token || !room?.is_admin || !!room.same_airport === value) return;
     setSavingAirport(true);
@@ -264,7 +242,11 @@ export default function FlightsPage() {
             {room.min_nights && (
               <div>
                 <p className="text-gray-500">Duration</p>
-                <p className="font-semibold text-gray-900">{room.min_nights}–{room.max_nights} nights</p>
+                <p className="font-semibold text-gray-900">
+                  {room.min_nights === room.max_nights
+                    ? `${room.min_nights} nights`
+                    : `${room.min_nights}–${room.max_nights} nights`}
+                </p>
               </div>
             )}
             {room.budget_gbp && (
@@ -332,15 +314,6 @@ export default function FlightsPage() {
                   ? "The whole group departs the same airport (travel together). Often pricier, but simpler."
                   : "Each member flies from their own nearest/cheapest airport — usually the cheapest overall. Re-run the search after changing this."}
               </p>
-              {/* Diagnostic: verify the live Travelpayouts Search API works. */}
-              <button
-                onClick={handleTestLiveSearch}
-                disabled={testingLive}
-                className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-                title="Runs one live flight search to confirm the live-fares API is working with your token"
-              >
-                {testingLive ? "Testing live API…" : "🧪 Test live-fare API"}
-              </button>
             </div>
 
             {/* Tucked-away: travelling-from override for THIS trip (defaults to home). */}
@@ -453,6 +426,18 @@ export default function FlightsPage() {
                 })()}
               </div>
             </div>
+
+            {/* Duration disclaimer: the cached fare data is sparse, so when no trip
+                of the requested length had fares in this window, we show the nearest
+                available length rather than nothing. Flag it so it's not a surprise. */}
+            {room.min_nights && room.max_nights && tripNights != null &&
+             (tripNights < room.min_nights || tripNights > room.max_nights) && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+                ⓘ You asked for {room.min_nights === room.max_nights ? `${room.min_nights} nights` : `${room.min_nights}–${room.max_nights} nights`},
+                but no trip of exactly that length had fares in this window — so these results are the
+                closest available (<strong>{tripNights} nights</strong>). Widen the window or duration for more options.
+              </div>
+            )}
 
             {/* Fully viable destinations */}
             {fullyViable.length > 0 ? (
