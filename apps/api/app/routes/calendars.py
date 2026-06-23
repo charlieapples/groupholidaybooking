@@ -289,6 +289,48 @@ def _exchange_microsoft(code: str) -> tuple[Optional[str], Optional[str], str]:
 # ── Aggregate busy days ───────────────────────────────────────────────────────
 
 
+class LinkedCalendar(BaseModel):
+    account_id: str        # the linked_calendar_accounts.id this belongs to
+    account_email: Optional[str] = None
+    provider: str
+    id: str                # the calendar id (provider-specific)
+    summary: str
+
+
+@router.get("/list-calendars", response_model=list[LinkedCalendar])
+def list_calendars(user: UserInfo = Depends(current_user)):
+    """List the individual calendars inside every linked account, so the user can
+    tick exactly which to include (e.g. exclude a family calendar)."""
+    db = get_client()
+    rows = (
+        db.table("linked_calendar_accounts")
+        .select("id, provider, account_email, refresh_token_enc")
+        .eq("user_id", user.id)
+        .execute()
+    ).data or []
+    out: list[LinkedCalendar] = []
+    for r in rows:
+        try:
+            refresh = crypto.decrypt(r["refresh_token_enc"])
+            if r["provider"] == "google":
+                at = calendar_sync.google_refresh_access_token(refresh)
+                for cal in (calendar_sync.google_list_calendars(at) if at else []):
+                    out.append(LinkedCalendar(
+                        account_id=str(r["id"]), account_email=r.get("account_email"),
+                        provider="google", id=cal["id"], summary=cal["summary"],
+                    ))
+            else:
+                # Microsoft is pulled as one (whole calendar) for now.
+                out.append(LinkedCalendar(
+                    account_id=str(r["id"]), account_email=r.get("account_email"),
+                    provider="microsoft", id="__all__",
+                    summary=(r.get("account_email") or "Microsoft") + " (whole calendar)",
+                ))
+        except Exception:
+            log.exception("list-calendars failed for account %s", r.get("id"))
+    return out
+
+
 class BusyResponse(BaseModel):
     busy: list[str]
     accounts: list[dict]    # [{email, provider, ok}]
@@ -298,13 +340,21 @@ class BusyResponse(BaseModel):
 def busy(
     start: str = Query(...),
     end: str = Query(...),
+    calendar_ids: Optional[str] = Query(default=None),  # comma-separated; None = all
     user: UserInfo = Depends(current_user),
 ):
-    """Merged busy days across every linked account, for [start, end]."""
+    """Merged busy days across linked accounts for [start, end].
+
+    If `calendar_ids` is given, only those individual calendars are included
+    (Google filters per-calendar; Microsoft is all-or-nothing via the "__all__" id).
+    """
     try:
         ws, we = date.fromisoformat(start), date.fromisoformat(end)
     except ValueError:
         raise HTTPException(422, "start and end must be YYYY-MM-DD")
+    selected: Optional[set[str]] = (
+        {c.strip() for c in calendar_ids.split(",") if c.strip()} if calendar_ids is not None else None
+    )
     db = get_client()
     rows = (
         db.table("linked_calendar_accounts")
@@ -320,9 +370,11 @@ def busy(
             refresh = crypto.decrypt(r["refresh_token_enc"])
             if r["provider"] == "google":
                 at = calendar_sync.google_refresh_access_token(refresh)
-                days = calendar_sync.google_busy_days(at, ws, we) if at else []
+                days = calendar_sync.google_busy_days(at, ws, we, only_ids=selected) if at else []
             else:
-                at = calendar_sync.ms_refresh_access_token(refresh)
+                # Microsoft: skip unless its "__all__" id is selected (or no filter).
+                include_ms = selected is None or "__all__" in selected
+                at = calendar_sync.ms_refresh_access_token(refresh) if include_ms else None
                 days = calendar_sync.ms_busy_days(at, ws, we) if at else []
             all_busy.update(days)
             ok = at is not None

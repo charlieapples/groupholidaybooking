@@ -22,7 +22,9 @@ import {
   remindPendingMembers,
   getCalendarStatus,
   getLinkedAccounts,
+  listLinkedCalendars,
   startCalendarLink,
+  type LinkedCalendar,
   getLinkedBusy,
   type Room,
   type SubmissionStatus,
@@ -195,6 +197,9 @@ function ImportPanel({
   const [icsError, setIcsError] = useState("");
   // Permanently-linked calendars: count + one-click pull state.
   const [linkedCount, setLinkedCount] = useState(0);
+  // The individual calendars inside the linked accounts + which are ticked.
+  const [linkedCals, setLinkedCals] = useState<LinkedCalendar[]>([]);
+  const [linkedCalSel, setLinkedCalSel] = useState<Set<string>>(new Set());
   // Whether permanent linking is switched on server-side, + the user's choice to
   // remember a calendar permanently (vs one-off) at the moment they connect.
   const [permanentConfigured, setPermanentConfigured] = useState(false);
@@ -228,7 +233,15 @@ function ImportPanel({
         setPermanentConfigured(st.configured);
         if (!st.configured) return;
         const accts = await getLinkedAccounts(tok);
-        if (!cancelled) setLinkedCount(accts.length);
+        if (cancelled) return;
+        setLinkedCount(accts.length);
+        if (accts.length > 0) {
+          // Load the individual calendars so the user can tick which to include.
+          const cals = await listLinkedCalendars(tok).catch(() => []);
+          if (cancelled) return;
+          setLinkedCals(cals);
+          setLinkedCalSel(new Set(cals.map((c) => `${c.account_id}:${c.id}`)));  // default all
+        }
       } catch {
         /* feature off — leave count at 0 so the button stays hidden */
       }
@@ -240,15 +253,22 @@ function ImportPanel({
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
 
-  // One click: pull busy days from every permanently-linked account, no re-grant.
+  // Pull busy days from the TICKED linked calendars (no re-grant needed).
   async function pullFromLinked() {
+    // Map the selected "account:id" keys back to the raw calendar ids the API wants.
+    const ids = linkedCals.filter((c) => linkedCalSel.has(`${c.account_id}:${c.id}`)).map((c) => c.id);
+    if (linkedCals.length > 0 && ids.length === 0) {
+      setLinkedError("Tick at least one calendar to include.");
+      return;
+    }
     setLinkedStatus("syncing");
     setLinkedError("");
     try {
       const { data: s } = await supabase.auth.getSession();
       const tok = s.session?.access_token;
       if (!tok) throw new Error("Not signed in");
-      const res = await getLinkedBusy(tok, fmtDay(windowStart), fmtDay(windowEnd));
+      // If we couldn't load the calendar list, fall back to pulling everything.
+      const res = await getLinkedBusy(tok, fmtDay(windowStart), fmtDay(windowEnd), linkedCals.length ? ids : undefined);
       onImport(res.busy);
       const failed = res.accounts.filter((a) => !a.ok);
       if (failed.length) {
@@ -605,9 +625,37 @@ function ImportPanel({
           {linkedCount > 0 && (
             <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-2">
               <p className="text-sm text-blue-900">
-                <strong>⚡ You&apos;ve linked {linkedCount} calendar{linkedCount > 1 ? "s" : ""}.</strong>{" "}
-                Fill in your busy days instantly — no permission screen.
+                <strong>⚡ You&apos;ve linked {linkedCount} account{linkedCount > 1 ? "s" : ""}.</strong>{" "}
+                Tick the calendars to include, then fill in your busy days — no permission screen.
               </p>
+              {/* Per-calendar pick-list, grouped by account, so you can exclude e.g. a family calendar. */}
+              {linkedCals.length > 0 && (
+                <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-blue-200 bg-white p-2">
+                  {Array.from(new Set(linkedCals.map((c) => c.account_email || c.account_id))).map((acct) => (
+                    <div key={acct}>
+                      <p className="px-2 pt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{acct}</p>
+                      {linkedCals.filter((c) => (c.account_email || c.account_id) === acct).map((c) => {
+                        const key = `${c.account_id}:${c.id}`;
+                        return (
+                          <label key={key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-blue-50">
+                            <input
+                              type="checkbox"
+                              checked={linkedCalSel.has(key)}
+                              onChange={() => setLinkedCalSel((prev) => {
+                                const n = new Set(prev);
+                                if (n.has(key)) n.delete(key); else n.add(key);
+                                return n;
+                              })}
+                              className="h-4 w-4 accent-blue-600"
+                            />
+                            <span className="truncate text-gray-800">{c.summary}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
               <button
                 onClick={pullFromLinked}
                 disabled={linkedStatus === "syncing"}
@@ -622,7 +670,9 @@ function ImportPanel({
                   ? "Pulling…"
                   : linkedStatus === "done"
                   ? "✓ Pulled — pull again"
-                  : `↻ Fill from my linked calendar${linkedCount > 1 ? "s" : ""}`}
+                  : linkedCals.length > 0
+                  ? `↻ Fill from ${linkedCalSel.size} selected calendar${linkedCalSel.size !== 1 ? "s" : ""}`
+                  : "↻ Fill from my linked calendars"}
               </button>
               {linkedError && <p className="text-xs text-amber-700">{linkedError}</p>}
               <p className="text-[11px] text-blue-700">

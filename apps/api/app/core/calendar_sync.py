@@ -81,8 +81,29 @@ def google_refresh_access_token(refresh_token: str) -> Optional[str]:
         return None
 
 
-def google_busy_days(access_token: str, start: date, end: date) -> list[str]:
-    """Busy days across all of the account's readable calendars."""
+def google_list_calendars(access_token: str) -> list[dict]:
+    """List the account's calendars: [{id, summary}] (noise calendars dropped)."""
+    hdr = {"Authorization": f"Bearer {access_token}"}
+    out: list[dict] = []
+    try:
+        with httpx.Client(timeout=20) as c:
+            r = c.get(
+                "https://www.googleapis.com/calendar/v3/users/me/calendarList",
+                headers=hdr, params={"minAccessRole": "reader"},
+            )
+            r.raise_for_status()
+            for cal in r.json().get("items", []):
+                cid = cal.get("id")
+                if not cid or _is_noise_calendar(cid):
+                    continue
+                out.append({"id": cid, "summary": cal.get("summaryOverride") or cal.get("summary") or cid})
+    except Exception as exc:  # noqa: BLE001
+        log.warning("google calendar list failed: %s", exc)
+    return out
+
+
+def google_busy_days(access_token: str, start: date, end: date, only_ids: Optional[set[str]] = None) -> list[str]:
+    """Busy days across the account's calendars (or just `only_ids` if given)."""
     hdr = {"Authorization": f"Bearer {access_token}"}
     time_min = datetime(start.year, start.month, start.day).isoformat() + "Z"
     time_max = (datetime(end.year, end.month, end.day) + timedelta(days=1)).isoformat() + "Z"
@@ -97,6 +118,8 @@ def google_busy_days(access_token: str, start: date, end: date) -> list[str]:
             for cal in cal_list.json().get("items", []):
                 cid = cal.get("id")
                 if not cid or _is_noise_calendar(cid):
+                    continue
+                if only_ids is not None and cid not in only_ids:
                     continue
                 r = c.get(
                     f"https://www.googleapis.com/calendar/v3/calendars/{cid}/events",

@@ -102,9 +102,26 @@ export function unlinkCalendarAccount(token: string, accountId: string) {
   return apiFetch<void>(`/calendars/accounts/${accountId}`, token, { method: "DELETE" });
 }
 
-/** Merged busy days across all of the user's linked accounts, for a window. */
-export function getLinkedBusy(token: string, start: string, end: string) {
-  return apiFetch<LinkedBusy>(`/calendars/busy?start=${start}&end=${end}`, token);
+export interface LinkedCalendar {
+  account_id: string;
+  account_email: string | null;
+  provider: "google" | "microsoft";
+  id: string;
+  summary: string;
+}
+
+/** List the individual calendars inside every linked account (to pick from). */
+export function listLinkedCalendars(token: string) {
+  return apiFetch<LinkedCalendar[]>("/calendars/list-calendars", token);
+}
+
+/** Merged busy days across linked accounts for a window. Optionally restrict to
+ *  specific calendar ids (comma-joined); omit for ALL. */
+export function getLinkedBusy(token: string, start: string, end: string, calendarIds?: string[]) {
+  const q = calendarIds && calendarIds.length
+    ? `&calendar_ids=${encodeURIComponent(calendarIds.join(","))}`
+    : "";
+  return apiFetch<LinkedBusy>(`/calendars/busy?start=${start}&end=${end}${q}`, token);
 }
 
 // ── Rooms ─────────────────────────────────────────────────────────────────────
