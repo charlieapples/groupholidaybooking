@@ -27,7 +27,7 @@ import logging
 import os
 from datetime import date, datetime, timezone
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -65,11 +65,21 @@ def _provider_configured(provider: str) -> bool:
 
 
 def _safe_return_to(return_to: Optional[str]) -> str:
-    """Only allow redirects back to our own app (avoid open-redirect)."""
-    web = _web_base()
-    if return_to and (return_to.startswith(web) or return_to.startswith("http://localhost:3000")):
-        return return_to
-    return f"{web}/dashboard"
+    """Only allow redirects back to our own app (avoid open-redirect).
+
+    Accepts BOTH the apex and any subdomain (www.) of groupholidaybooking.com,
+    plus localhost — so a user on www.groupholidaybooking.com is sent back to the
+    page they came from, not bounced to the home page.
+    """
+    if return_to:
+        try:
+            host = (urlparse(return_to).hostname or "").lower()
+        except Exception:
+            host = ""
+        apex = (urlparse(_web_base()).hostname or "groupholidaybooking.com").lower()
+        if host == apex or host.endswith("." + apex) or host in ("localhost", "127.0.0.1"):
+            return return_to
+    return f"{_web_base()}/dashboard"
 
 
 # ── Status & account management ───────────────────────────────────────────────
