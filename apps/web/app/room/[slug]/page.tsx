@@ -626,7 +626,7 @@ export default function RoomPage() {
                 <div className="space-y-4">
                   <p className="text-gray-600">
                     Everyone submits their preferred trip length. The admin will agree on final min/max nights.
-                    {room.min_nights && ` (Current: ${room.min_nights}–${room.max_nights} nights)`}
+                    {room.min_nights && ` (Current: ${room.min_nights === room.max_nights ? `${room.min_nights} nights` : `${room.min_nights}–${room.max_nights} nights`})`}
                   </p>
                   <button
                     onClick={() => router.push(`/room/${slug}/preferences`)}
@@ -877,7 +877,11 @@ export default function RoomPage() {
                 <div className="rounded-xl border bg-white p-4 shadow-sm">
                   <h3 className="text-xs font-medium text-gray-500 mb-1">Trip details</h3>
                   {room.min_nights && (
-                    <p className="text-sm font-semibold text-gray-900">{room.min_nights}–{room.max_nights} nights</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {room.min_nights === room.max_nights
+                        ? `${room.min_nights} nights`
+                        : `${room.min_nights}–${room.max_nights} nights`}
+                    </p>
                   )}
                   {room.budget_gbp && (
                     <p className="text-sm text-gray-600">£{room.budget_gbp.toLocaleString()} budget pp</p>

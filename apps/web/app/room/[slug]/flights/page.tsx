@@ -736,7 +736,13 @@ function ResultsList({
 }: ResultsListProps) {
   return (
     <div className="space-y-3">
-      {results.map((r) => (
+      {results.map((r) => {
+        // Nights for THIS destination (its own chosen dates) — destinations can
+        // pick different date windows, so don't use one global value for all.
+        const resNights = r.shared_out_date && r.shared_return_date
+          ? Math.round((new Date(r.shared_return_date).getTime() - new Date(r.shared_out_date).getTime()) / 86_400_000)
+          : nights;
+        return (
         <div
           key={r.destination}
           className={`rounded-xl border bg-white shadow-sm overflow-hidden ${
@@ -769,7 +775,7 @@ function ResultsList({
                 {r.shared_out_date && (
                   <p className="text-xs text-gray-500 mt-0.5">
                     {r.shared_out_date} → {r.shared_return_date}
-                    {nights && nights > 0 ? ` · ${nights} nights` : ""}
+                    {resNights && resNights > 0 ? ` · ${resNights} nights` : ""}
                   </p>
                 )}
               </div>
@@ -789,18 +795,22 @@ function ResultsList({
                   const extras = Math.max(0, allIn - flightsOnly);   // cabin bag + ground
                   const dLow = r.est_daily_living_low_gbp ?? r.est_daily_living_gbp ?? null;
                   const dHigh = r.est_daily_living_high_gbp ?? r.est_daily_living_gbp ?? null;
-                  if (nights && nights > 0 && dLow != null && dHigh != null) {
-                    const lo = allIn + dLow * nights;
-                    const hi = allIn + dHigh * nights;
+                  if (resNights && resNights > 0 && dLow != null && dHigh != null) {
+                    const lo = allIn + dLow * resNights;
+                    const hi = allIn + dHigh * resNights;
                     return (
                       <>
-                        <p className="text-2xl font-bold text-gray-900" title={`Flights + bag/transfers + ~£${r.est_daily_living_gbp}/day bare-minimum living (bed + food + local transport) over ${nights} nights. No activities.`}>
+                        <p className="text-2xl font-bold text-gray-900" title={`Flights + bag/transfers + ~£${r.est_daily_living_gbp}/day bare-minimum living (bed + food + local transport) over ${resNights} nights. No activities.`}>
                           ~£{lo.toLocaleString()}–£{hi.toLocaleString()}
                         </p>
-                        <p className="text-[11px] text-gray-500">est. total pp · {nights} nights</p>
+                        <p className="text-[11px] text-gray-500">est. total pp · {resNights} nights</p>
                         <p className="text-[11px] text-gray-400">
                           ✈️ £{flightsOnly.toLocaleString()} flights
-                          {extras > 0 && <> · 🧳🚌 £{extras.toLocaleString()} bag &amp; transfers</>}
+                          {extras > 0 && (
+                            <span title="Cabin-bag estimate (the airline's carry-on add-on, since the cheapest fare is often 'personal item only') + ground travel to/from the airport.">
+                              {" · "}🧳🚌 £{extras.toLocaleString()} bag &amp; transfers
+                            </span>
+                          )}
                           {" · "}🛏️🍽️ ~£{r.est_daily_living_gbp}/day
                         </p>
                       </>
@@ -934,7 +944,8 @@ function ResultsList({
             </div>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
