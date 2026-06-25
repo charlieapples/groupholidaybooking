@@ -68,13 +68,21 @@ export default function PrivacyPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-gray-900">3. Google Calendar access</h2>
+          <h2 className="text-xl font-semibold text-gray-900">3. Calendar access (Google &amp; Microsoft)</h2>
           <p className="text-gray-700 leading-relaxed">
-            If you choose to sync your Google Calendar, we request read-only access to your
-            calendar events for the sole purpose of identifying your busy dates within the
-            holiday window. We do not store your calendar data on our servers — it is
-            processed in your browser in real time and discarded when the page is closed.
-            We never read, modify, or share your calendar events.
+            If you choose to sync your calendar, we request <strong>read-only</strong> access to your
+            calendar (Google Calendar or Microsoft Outlook) for the sole purpose of identifying your
+            busy dates within the holiday window. We only ever read free/busy times — we never read
+            the details of, modify, create, delete, or share your calendar events, and we never store
+            event content on our servers.
+          </p>
+          <p className="text-gray-700 leading-relaxed">
+            For a <strong>one-off import</strong>, your calendar is read in your browser in real time
+            and discarded when the page is closed. If you choose to <strong>permanently link</strong> an
+            account (so you don&apos;t have to grant access each trip), we store only an
+            <strong> encrypted access token</strong> — not your events — which lets us look up your
+            free/busy dates again on future trips. You can unlink at any time from your profile, which
+            deletes that token. We only retain the busy <em>dates</em> you submit for a given trip.
           </p>
           <p className="text-gray-700 leading-relaxed">
             Our use of Google Calendar data complies with the{" "}
