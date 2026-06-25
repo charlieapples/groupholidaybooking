@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ToastProvider } from "@/components/Toast";
+import { Analytics } from "@vercel/analytics/react";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://groupholidaybooking.com";
 
@@ -49,6 +50,7 @@ export default function RootLayout({
     <html lang="en" style={{ colorScheme: "light" }}>
       <body className="min-h-screen antialiased bg-gray-50 text-gray-900">
         <ToastProvider>{children}</ToastProvider>
+        <Analytics />
       </body>
     </html>
   );
