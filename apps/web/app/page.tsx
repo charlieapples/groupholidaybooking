@@ -26,6 +26,7 @@ function LandingPageContent() {
 
   // Email/password auth
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
@@ -116,13 +117,15 @@ function LandingPageContent() {
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+            // Use the name they chose as their display name (not the email prefix).
+            data: displayName.trim() ? { full_name: displayName.trim() } : undefined,
           },
         });
         if (error) throw error;
         if (data.session) {
           router.replace(next);          // email confirmation disabled → straight in
         } else {
-          setInfo("Almost there! Check your email for a confirmation link, then sign in.");
+          setInfo("Almost there! Check your email for a confirmation link, then sign in. (It's sent securely by our login provider, Supabase — look for the subject “Confirm your Group Holiday Booking account”.)");
           setMode("signin");
         }
       } else {
@@ -256,6 +259,16 @@ function LandingPageContent() {
 
           {/* Email + password */}
           <form onSubmit={handleEmailAuth} className="space-y-3">
+            {mode === "signup" && (
+              <input
+                type="text"
+                autoComplete="name"
+                placeholder="Your name (how the group sees you)"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
+              />
+            )}
             <input
               type="email"
               required
