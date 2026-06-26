@@ -11,6 +11,7 @@ import {
   type DurationBudgetAggregate,
 } from "@/lib/api";
 import FeedbackButton from "@/components/FeedbackButton";
+import NextStepButton from "@/components/NextStepButton";
 import AccountBadge from "@/components/AccountBadge";
 import StepBar from "@/components/StepBar";
 import { useEffect, useMemo, useState } from "react";
@@ -620,6 +621,7 @@ export default function PreferencesPage() {
           </div>
         )}
       </div>
+      <NextStepButton slug={slug} currentRoute="preferences" />
       {token && <FeedbackButton token={token} page="preferences" roomSlug={slug} />}
     </main>
   );

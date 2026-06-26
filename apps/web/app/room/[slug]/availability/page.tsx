@@ -32,6 +32,7 @@ import {
 } from "@/lib/api";
 import { parseIcal, parseRoughWindow, getMonthsInRange } from "@/lib/ical";
 import FeedbackButton from "@/components/FeedbackButton";
+import NextStepButton from "@/components/NextStepButton";
 import AccountBadge from "@/components/AccountBadge";
 import StepBar from "@/components/StepBar";
 import ProviderIcon from "@/components/ProviderIcon";
@@ -1561,6 +1562,7 @@ export default function AvailabilityPage() {
           </div>
         )}
       </div>
+      <NextStepButton slug={slug} currentRoute="availability" />
       {token && <FeedbackButton token={token} page="availability" roomSlug={slug} />}
     </main>
   );

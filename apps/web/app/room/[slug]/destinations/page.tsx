@@ -28,6 +28,7 @@ import {
 } from "@/lib/api";
 import dynamic from "next/dynamic";
 import FeedbackButton from "@/components/FeedbackButton";
+import NextStepButton from "@/components/NextStepButton";
 import AccountBadge from "@/components/AccountBadge";
 import StepBar from "@/components/StepBar";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -1320,6 +1321,7 @@ export default function DestinationsPage() {
       </div>
 
       {token && <ChatWidget token={token} roomSlug={slug} />}
+      <NextStepButton slug={slug} currentRoute="destinations" />
       {token && <FeedbackButton token={token} page="destinations" roomSlug={slug} />}
     </main>
   );

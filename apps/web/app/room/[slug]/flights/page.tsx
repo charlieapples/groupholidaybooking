@@ -20,6 +20,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useToast, errorMessage } from "@/components/Toast";
 import FeedbackButton from "@/components/FeedbackButton";
+import NextStepButton from "@/components/NextStepButton";
 import AccountBadge from "@/components/AccountBadge";
 import StepBar from "@/components/StepBar";
 
@@ -612,6 +613,7 @@ export default function FlightsPage() {
       </div>
 
       {token && <ChatWidget token={token} roomSlug={slug} />}
+      <NextStepButton slug={slug} currentRoute="flights" />
       <FeedbackButton token={token} page="flights" roomSlug={slug} />
     </main>
   );
