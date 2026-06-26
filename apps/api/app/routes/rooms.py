@@ -759,6 +759,53 @@ def kick_member(
     return None
 
 
+class AdminToggle(BaseModel):
+    is_admin: bool
+
+
+@router.patch("/{slug}/members/{member_user_id}/admin", status_code=status.HTTP_204_NO_CONTENT)
+def set_member_admin(
+    slug: str,
+    member_user_id: str,
+    body: AdminToggle,
+    user: UserInfo = Depends(current_user),
+):
+    """Admin: grant or revoke admin rights for another member.
+
+    A Holiday can have multiple admins. The last admin can't be demoted (promote
+    someone else first), so a room is never left without an admin.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    membership = _assert_member(db, room["id"], user.id)
+    if not membership.get("is_admin"):
+        raise HTTPException(403, "Only admins can change admin rights.")
+    target = (
+        db.table("room_members")
+        .select("user_id")
+        .eq("room_id", room["id"])
+        .eq("user_id", member_user_id)
+        .execute()
+    )
+    if not target.data:
+        raise HTTPException(404, "That user is not a member of this room.")
+    if not body.is_admin:
+        admins = (
+            db.table("room_members")
+            .select("user_id")
+            .eq("room_id", room["id"])
+            .eq("is_admin", True)
+            .execute()
+        )
+        admin_ids = {r["user_id"] for r in (admins.data or [])}
+        if admin_ids <= {member_user_id}:
+            raise HTTPException(400, "Can't remove the last admin — make someone else an admin first.")
+    db.table("room_members").update({"is_admin": body.is_admin}).eq(
+        "room_id", room["id"]
+    ).eq("user_id", member_user_id).execute()
+    return None
+
+
 class ResetRequest(BaseModel):
     target_step: str   # one of STEP_ORDER — reset back to this step
 

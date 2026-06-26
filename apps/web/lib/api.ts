@@ -237,6 +237,14 @@ export function kickMember(token: string, slug: string, memberUserId: string) {
   return apiFetch<void>(`/rooms/${slug}/members/${memberUserId}`, token, { method: "DELETE" });
 }
 
+/** Admin: grant or revoke admin rights for another member (multiple admins allowed). */
+export function setMemberAdmin(token: string, slug: string, memberUserId: string, isAdmin: boolean) {
+  return apiFetch<void>(`/rooms/${slug}/members/${memberUserId}/admin`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ is_admin: isAdmin }),
+  });
+}
+
 export function updateMyPostcode(token: string, slug: string, home_postcode: string) {
   return apiFetch<{ ok: boolean }>(
     `/rooms/${slug}/join?home_postcode=${encodeURIComponent(home_postcode)}`,

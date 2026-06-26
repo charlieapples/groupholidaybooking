@@ -11,6 +11,7 @@ import {
   resetRoom,
   leaveRoom,
   kickMember,
+  setMemberAdmin,
   remindPendingMembers,
   type Room,
   type Member,
@@ -210,6 +211,21 @@ export default function RoomPage() {
       setMembers(m);
     } catch (e: unknown) {
       toast.error(errorMessage(e, "Failed to remove member"));
+    }
+  }
+
+  async function handleSetAdmin(member: Member, makeAdmin: boolean) {
+    if (!token || !room) return;
+    const name = member.display_name || "this member";
+    if (!window.confirm(makeAdmin
+      ? `Make ${name} an admin? They'll be able to set agreed values and move the group through the steps.`
+      : `Remove admin rights from ${name}?`)) return;
+    try {
+      await setMemberAdmin(token, slug, member.user_id, makeAdmin);
+      toast.success(makeAdmin ? `${name} is now an admin` : `${name} is no longer an admin`);
+      setMembers(await listMembers(token, slug));
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Couldn't change admin rights"));
     }
   }
 
@@ -925,17 +941,38 @@ export default function RoomPage() {
                         : <p className="text-xs text-amber-600">⚠️ No postcode</p>
                       }
                     </div>
-                    {/* Admin kick button — hidden unless hovering, only shown for non-admin members */}
-                    {room.is_admin && !m.is_admin && m.user_id !== userId && (
-                      <button
-                        onClick={() => handleKick(m)}
-                        title={`Remove ${m.display_name || "this member"}`}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 rounded p-1 text-gray-300 hover:text-red-500 hover:bg-red-50"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                      </button>
+                    {/* Admin controls (make/remove admin, kick) — only for other members. */}
+                    {room.is_admin && m.user_id !== userId && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        {m.is_admin ? (
+                          <button
+                            onClick={() => handleSetAdmin(m, false)}
+                            title="Remove admin rights"
+                            className="rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-400 hover:bg-amber-50 hover:text-amber-700"
+                          >
+                            Remove admin
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleSetAdmin(m, true)}
+                              title="Make admin"
+                              className="rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-400 hover:bg-blue-50 hover:text-blue-700"
+                            >
+                              Make admin
+                            </button>
+                            <button
+                              onClick={() => handleKick(m)}
+                              title={`Remove ${m.display_name || "this member"}`}
+                              className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-500"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                              </svg>
+                            </button>
+                          </>
+                        )}
+                      </div>
                     )}
                   </li>
                 ))}
