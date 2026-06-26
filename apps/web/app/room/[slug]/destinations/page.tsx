@@ -72,6 +72,9 @@ export default function DestinationsPage() {
   const [freeText, setFreeText] = useState("");
   const [questSaving, setQuestSaving] = useState(false);
   const [questSaved, setQuestSaved] = useState(false);
+  // Auto-save plumbing: a signature of the current answers + the last one we saved.
+  const lastSavedSig = useRef<string | null>(null);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // AI suggest
   const [suggesting, setSuggesting] = useState(false);
@@ -139,6 +142,15 @@ export default function DestinationsPage() {
         if (prefs.avoid && prefs.avoid.length) setAvoid(prefs.avoid);
         if (prefs.free_text) setFreeText(prefs.free_text);
       }
+      // Record what's already saved so auto-save only fires on real changes.
+      lastSavedSig.current = JSON.stringify({
+        climate: prefs?.climate || "",
+        setting: prefs?.setting || "",
+        activityLevel: prefs?.activity_level || "",
+        mustHave: prefs?.must_have || [],
+        avoid: prefs?.avoid || [],
+        freeText: (prefs?.free_text || "").trim(),
+      });
       setLoading(false);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
@@ -202,7 +214,12 @@ export default function DestinationsPage() {
     }
   }
 
-  async function handleSaveQuestionnaire() {
+  // Signature of the current answers — used to detect changes for auto-save.
+  const questSig = JSON.stringify({
+    climate, setting, activityLevel, mustHave, avoid, freeText: freeText.trim(),
+  });
+
+  async function handleSaveQuestionnaire(silent = false) {
     if (!token) return;
     setQuestSaving(true);
     try {
@@ -214,14 +231,24 @@ export default function DestinationsPage() {
         avoid,
         ...(freeText.trim() ? { free_text: freeText.trim() } : {}),
       } as Parameters<typeof submitDestinationPreferences>[2]);
+      lastSavedSig.current = questSig;
       setQuestSaved(true);
-      setTimeout(() => setQuestSaved(false), 3000);
+      setTimeout(() => setQuestSaved(false), 2000);
     } catch (e: unknown) {
-      toast.error(errorMessage(e, "Failed to save questionnaire"));
+      if (!silent) toast.error(errorMessage(e, "Failed to save questionnaire"));
     } finally {
       setQuestSaving(false);
     }
   }
+
+  // Auto-save ~1s after the last change (debounced) — no need to click Save.
+  useEffect(() => {
+    if (lastSavedSig.current === null || questSig === lastSavedSig.current) return;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => handleSaveQuestionnaire(true), 1000);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questSig]);
 
   async function handlePickRandom() {
     if (!token || candidates.length === 0) return;
@@ -811,14 +838,8 @@ export default function DestinationsPage() {
             </div>
           </div>
 
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={handleSaveQuestionnaire}
-              disabled={questSaving}
-              className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
-            >
-              {questSaving ? "Saving…" : questSaved ? "✓ Saved!" : "Save my answers"}
-            </button>
+          <div className="flex items-center gap-3 pt-2 text-sm text-gray-500">
+            {questSaving ? "💾 Saving…" : questSaved ? "✓ Saved" : "✓ Your answers save automatically as you go."}
           </div>
         </div>
 
