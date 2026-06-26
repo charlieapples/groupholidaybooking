@@ -9,10 +9,11 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+// Duration + Budget live on the SAME page, so they're one tab here (no point in
+// two timeline steps that open the same screen).
 const STEPS = [
   { key: "availability", label: "Availability", icon: "📅", route: "availability" },
-  { key: "duration", label: "Duration", icon: "🗓️", route: "preferences" },
-  { key: "budget", label: "Budget", icon: "💷", route: "preferences" },
+  { key: "duration", label: "Duration & Budget", icon: "🗓️", route: "preferences" },
   { key: "destination", label: "Destination", icon: "🗺️", route: "destinations" },
   { key: "flights", label: "Flights", icon: "✈️", route: "flights" },
   { key: "booking", label: "Booking", icon: "🎫", route: "booking" },
@@ -28,7 +29,10 @@ export default function StepBar({
   activeRoute?: string;          // the route of THIS page, so it highlights correctly
 }) {
   const router = useRouter();
-  const currentIdx = STEPS.findIndex((s) => s.key === currentStep);
+  // The group's step can be "budget" (a back-end step) which now lives under the
+  // merged "Duration & Budget" tab — map it so the "you are here" dot still shows.
+  const normalizedStep = currentStep === "budget" ? "duration" : currentStep;
+  const currentIdx = STEPS.findIndex((s) => s.key === normalizedStep);
 
   // Left/Right arrow keys move between stages (Availability ⇄ Booking). Ignored
   // while typing in a field, or with modifier keys, so normal input still works.

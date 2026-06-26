@@ -686,7 +686,30 @@ export default function DestinationsPage() {
         {/* Questionnaire */}
         <div className="rounded-xl border bg-white p-6 shadow-sm space-y-5">
           <h2 className="text-lg font-bold text-gray-900">Your destination preferences</h2>
-          <p className="text-sm text-gray-500">Answer these questions and our algorithm will suggest the best matches for the group.</p>
+          <p className="text-sm text-gray-500">Tell our AI what your perfect trip looks like — it weighs everyone&apos;s answers and suggests the best destinations for the whole group.</p>
+
+          {/* ✨ The star: free-text ideal holiday — this is where the AI shines, so it
+              leads the page and the quick-pick options below are framed as optional. */}
+          <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-4 space-y-2">
+            <label className="block text-base font-bold text-blue-900">✨ Describe your ideal holiday</label>
+            <p className="text-sm text-blue-800">
+              This is the most powerful box — say it in your own words and the AI does the rest. You can
+              ask for <strong>anything</strong>: a vibe, a place you loved, the kind of food, &ldquo;near
+              water, no bugs, good markets and art galleries&rdquo; — whatever matters to you. The more you
+              write, the better the matches.
+            </p>
+            <textarea
+              rows={4}
+              value={freeText}
+              onChange={(e) => setFreeText(e.target.value)}
+              placeholder="e.g. &quot;18–25°C, near water, relaxed but able to walk and eat out, love the south of France, good markets and art galleries, no bugs.&quot;"
+              className="w-full rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none resize-none"
+            />
+          </div>
+
+          <p className="pt-2 text-sm font-medium text-gray-600">
+            Optional quick prompts <span className="font-normal text-gray-400">— the box above already covers everything, but these help nudge the AI:</span>
+          </p>
 
           {/* Climate */}
           <div>
@@ -786,23 +809,6 @@ export default function DestinationsPage() {
                 </button>
               ))}
             </div>
-          </div>
-
-          {/* Free text — anything Gemini should know */}
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Anything else? <span className="text-gray-400">(optional, in your own words)</span>
-            </label>
-            <textarea
-              rows={3}
-              value={freeText}
-              onChange={(e) => setFreeText(e.target.value)}
-              placeholder="e.g. &quot;Would love somewhere with amazing food and good nightlife, ideally not too far — under 3h flight. Happy with Barcelona or similar vibes. No beach resorts.&quot;"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none resize-none"
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              This goes straight to the AI — describe your ideal trip, places you&apos;ve loved, or anything you&apos;d like to avoid.
-            </p>
           </div>
 
           <div className="flex gap-3 pt-2">
