@@ -90,6 +90,18 @@ export default function PreferencesPage() {
     return () => { document.title = "Group Holiday Booking — plan your trip together"; };
   }, [room?.name]);
 
+  // Live-update the group responses as other members submit (poll every 5s).
+  useEffect(() => {
+    if (!token) return;
+    const iv = setInterval(async () => {
+      try {
+        const d = await getDurationBudget(token, slug);
+        setData(d);
+      } catch { /* transient — try again next tick */ }
+    }, 5000);
+    return () => clearInterval(iv);
+  }, [token, slug]);
+
   // Longest travel window the group actually has — nights can't exceed it.
   function nightsBetween(a?: string | null, b?: string | null): number | null {
     if (!a || !b) return null;
@@ -310,7 +322,7 @@ export default function PreferencesPage() {
             <label className="mb-2 block text-sm font-medium text-gray-700">Budget per person</label>
             <div className="mb-2 flex rounded-lg border border-gray-200 bg-gray-50 p-1 w-fit">
               {([
-                ["cheapest", "💸 Aim for cheapest"],
+                ["cheapest", "💸 Best value"],
                 ["cap", "🎯 Set a max budget"],
               ] as const).map(([val, label]) => (
                 <button
@@ -342,7 +354,9 @@ export default function PreferencesPage() {
               </>
             ) : (
               <p className="text-xs text-gray-500">
-                No cap — destinations will just be ranked from cheapest to most expensive for the group.
+                <strong>This isn&apos;t a &ldquo;cheap holiday&rdquo;</strong> — you still pick exactly where you go.
+                It just means we find the <strong>cheapest way to get there</strong> for the group (no spending cap;
+                every option is shown, ranked cheapest first).
               </p>
             )}
           </div>
@@ -525,7 +539,7 @@ export default function PreferencesPage() {
               <label className="mb-2 block text-sm font-medium text-blue-800">Group budget per person</label>
               <div className="mb-2 flex rounded-lg border border-blue-200 bg-white p-1 w-fit">
                 {([
-                  ["cheapest", "💸 Aim for cheapest"],
+                  ["cheapest", "💸 Best value"],
                   ["cap", "🎯 Set a max budget"],
                 ] as const).map(([val, label]) => (
                   <button

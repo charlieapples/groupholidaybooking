@@ -380,12 +380,15 @@ export default function RoomPage() {
 
   async function shareLink() {
     const url = `${window.location.origin}/room/${slug}/join`;
-    const shareText = `Join my holiday planning room "${room?.name ?? slug}" on Group Holiday Booking`;
+    const subject = `Join "${room?.name ?? slug}" on Group Holiday Booking`;
+    // Put the link INSIDE the body text too — desktop email apps (Outlook) often
+    // ignore the separate `url` field and only keep `text`, leaving no link.
+    const shareText = `Join my holiday planning room "${room?.name ?? slug}" on Group Holiday Booking — we'll find dates that work for everyone and vote on where to go.\n\nJoin here: ${url}`;
 
     // Use Web Share API on supported devices (mobile gets a native share sheet)
     if (typeof navigator.share === "function") {
       try {
-        await navigator.share({ title: "Group Holiday Booking invite", text: shareText, url });
+        await navigator.share({ title: subject, text: shareText, url });
         return;
       } catch (err) {
         // User cancelled — only fall through to clipboard if it wasn't a cancellation

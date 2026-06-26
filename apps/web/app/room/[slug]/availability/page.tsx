@@ -1427,7 +1427,7 @@ export default function AvailabilityPage() {
               onClick={() => setSubmitted(false)}
               className="mt-4 text-xs text-green-600 hover:text-green-800 underline underline-offset-2"
             >
-              Made a mistake? Edit my availability →
+              Edit my availability →
             </button>
           </div>
         )}
