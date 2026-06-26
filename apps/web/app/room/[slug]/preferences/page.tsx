@@ -402,10 +402,17 @@ export default function PreferencesPage() {
           )}
         </div>
 
-        {/* Admin: set agreed values */}
-        {room.is_admin && (
+        {/* Group results — everyone sees the analysis; only the admin edits the agreed values. */}
+        {(room.is_admin || allMin.length > 0) && (
           <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-6 space-y-5">
-            <h2 className="text-lg font-bold text-blue-900">Admin: set agreed values</h2>
+            <h2 className="text-lg font-bold text-blue-900">
+              {room.is_admin ? "Admin: set agreed values" : "Group results so far"}
+            </h2>
+            {!room.is_admin && (
+              <p className="text-xs text-blue-700">
+                Everyone can see how the group answered. The admin sets the final agreed values from here.
+              </p>
+            )}
 
             {/* Duration statistics */}
             {allMin.length > 0 && (
@@ -492,6 +499,7 @@ export default function PreferencesPage() {
               </div>
             )}
 
+            {room.is_admin && (<>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-blue-800">Min nights</label>
@@ -608,6 +616,7 @@ export default function PreferencesPage() {
             >
               {advancing ? "Saving…" : "Lock in & move to destinations →"}
             </button>
+            </>)}
           </div>
         )}
       </div>
