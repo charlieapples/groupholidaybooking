@@ -36,6 +36,11 @@ export default function PreferencesPage() {
   const [budget, setBudget] = useState("");
   // "cheapest" = no cap (just rank cheapest first); "cap" = a specific £ limit.
   const [budgetMode, setBudgetMode] = useState<"cheapest" | "cap">("cheapest");
+  // Flight-time "vote" + how much a member values travel time (£/hour).
+  const [flightAnyTime, setFlightAnyTime] = useState(true);
+  const [flightEarliest, setFlightEarliest] = useState("");
+  const [flightLatest, setFlightLatest] = useState("");
+  const [myTimeValue, setMyTimeValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -73,6 +78,10 @@ export default function PreferencesPage() {
           if (mine.min_nights) setMinNights(String(mine.min_nights));
           if (mine.max_nights) setMaxNights(String(mine.max_nights));
           if (mine.budget_gbp) { setBudget(String(mine.budget_gbp)); setBudgetMode("cap"); }
+          setFlightAnyTime(!(mine.flight_earliest || mine.flight_latest));
+          if (mine.flight_earliest) setFlightEarliest(mine.flight_earliest);
+          if (mine.flight_latest) setFlightLatest(mine.flight_latest);
+          if (mine.time_value_per_hour != null) setMyTimeValue(String(mine.time_value_per_hour));
         }
       } catch {
         router.replace("/dashboard");
@@ -147,7 +156,15 @@ export default function PreferencesPage() {
     }
     setSaving(true);
     try {
-      const body: { min_nights?: number; max_nights?: number; budget_gbp?: number } = {};
+      const body: {
+        min_nights?: number; max_nights?: number; budget_gbp?: number;
+        flight_earliest?: string | null; flight_latest?: string | null; time_value_per_hour?: number | null;
+      } = {
+        // Always send flight prefs so they save/clear together (empty = don't mind).
+        flight_earliest: flightAnyTime ? null : (flightEarliest || null),
+        flight_latest: flightAnyTime ? null : (flightLatest || null),
+        time_value_per_hour: myTimeValue ? Number(myTimeValue) : null,
+      };
       if (minNights) body.min_nights = Number(minNights);
       if (maxNights) body.max_nights = Number(maxNights);
       if (budget) body.budget_gbp = Number(budget);
@@ -362,9 +379,51 @@ export default function PreferencesPage() {
             )}
           </div>
 
+          {/* Preferred flight times (a group "vote" — not yet wired to live fares). */}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">Preferred flight times</label>
+            <label className="mb-2 flex items-center gap-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={flightAnyTime}
+                onChange={(e) => setFlightAnyTime(e.target.checked)}
+                className="h-4 w-4 accent-blue-600"
+              />
+              🤷 I don&apos;t mind what time we fly
+            </label>
+            {!flightAnyTime && (
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-1">No earlier than</p>
+                  <input type="time" value={flightEarliest} onChange={(e) => setFlightEarliest(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none" />
+                </div>
+                <span className="text-gray-400 pt-5">–</span>
+                <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-1">No later than</p>
+                  <input type="time" value={flightLatest} onChange={(e) => setFlightLatest(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none" />
+                </div>
+              </div>
+            )}
+            <p className="mt-1 text-xs text-gray-400">The group votes on flight times; the admin agrees the final window. (Not yet applied to fare search.)</p>
+          </div>
+
+          {/* What an hour of travel-to-airport time is worth to this member. */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">What&apos;s an hour of travel worth to you? <span className="text-gray-400">(optional, £/hour)</span></label>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500">£</span>
+              <input type="number" min={0} placeholder="e.g. 10" value={myTimeValue} onChange={(e) => setMyTimeValue(e.target.value)}
+                className="w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none" />
+              <span className="text-gray-500 text-sm">/ hour</span>
+            </div>
+            <p className="mt-1 text-xs text-gray-400">Higher = the group will prefer nearer airports over the very cheapest. £0 / blank = cheapest regardless of travel time.</p>
+          </div>
+
           <button
             onClick={handleSave}
-            disabled={saving || memberDurationInvalid || (!minNights && !maxNights && !budget)}
+            disabled={saving || memberDurationInvalid}
             className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? "Saving…" : saved ? "✓ Saved!" : "Save preferences"}

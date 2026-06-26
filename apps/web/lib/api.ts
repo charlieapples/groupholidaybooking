@@ -527,13 +527,19 @@ export interface DurationBudgetAggregate {
     min_nights: number | null;
     max_nights: number | null;
     budget_gbp: number | null;
+    flight_earliest?: string | null;
+    flight_latest?: string | null;
+    time_value_per_hour?: number | null;
   }[];
 }
 
 export function submitDurationBudget(
   token: string,
   slug: string,
-  body: { min_nights?: number; max_nights?: number; budget_gbp?: number }
+  body: {
+    min_nights?: number; max_nights?: number; budget_gbp?: number;
+    flight_earliest?: string | null; flight_latest?: string | null; time_value_per_hour?: number | null;
+  }
 ) {
   return apiFetch(`/rooms/${slug}/destinations/duration-budget`, token, {
     method: "POST",

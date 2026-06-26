@@ -195,10 +195,15 @@ def _gemini_suggestions(
 
 
 class DurationBudgetPreferences(BaseModel):
-    """Step 2 + 3: each member's preferred trip duration and budget."""
+    """Step 2 + 3: each member's preferred trip duration, budget, and flight prefs."""
     min_nights: Optional[int] = None
     max_nights: Optional[int] = None
     budget_gbp: Optional[float] = None
+    # Flight-time "vote": preferred earliest/latest departure ("HH:MM"); None = don't mind.
+    flight_earliest: Optional[str] = None
+    flight_latest: Optional[str] = None
+    # How much an hour of travel-to-airport time is worth to this member (£/hour).
+    time_value_per_hour: Optional[float] = None
 
 
 class DestinationPreferences(BaseModel):
@@ -465,6 +470,15 @@ def submit_duration_budget(
         update["pref_max_nights"] = body.max_nights
     if body.budget_gbp is not None:
         update["pref_budget_gbp"] = body.budget_gbp
+    # Flight-time / time-value: only touch fields the client actually sent, so a
+    # duration-only save doesn't wipe them. Empty string = "don't mind" = NULL.
+    fields_set = body.model_fields_set
+    if "flight_earliest" in fields_set:
+        update["pref_flight_earliest"] = body.flight_earliest or None
+    if "flight_latest" in fields_set:
+        update["pref_flight_latest"] = body.flight_latest or None
+    if "time_value_per_hour" in fields_set:
+        update["pref_time_value_per_hour"] = body.time_value_per_hour
 
     if update:
         update["room_id"] = room["id"]
@@ -503,7 +517,8 @@ def get_duration_budget(slug: str, user: UserInfo = Depends(current_user)):
 
     prefs = (
         db.table("trip_preferences")
-        .select("user_id, pref_min_nights, pref_max_nights, pref_budget_gbp, profiles(display_name)")
+        .select("user_id, pref_min_nights, pref_max_nights, pref_budget_gbp, "
+                "pref_flight_earliest, pref_flight_latest, pref_time_value_per_hour, profiles(display_name)")
         .eq("room_id", room["id"])
         .execute()
     )
@@ -517,13 +532,18 @@ def get_duration_budget(slug: str, user: UserInfo = Depends(current_user)):
 
     rows = []
     for r in prefs.data:
-        if r.get("pref_min_nights") or r.get("pref_max_nights") or r.get("pref_budget_gbp"):
+        if (r.get("pref_min_nights") or r.get("pref_max_nights") or r.get("pref_budget_gbp")
+                or r.get("pref_flight_earliest") or r.get("pref_flight_latest")
+                or r.get("pref_time_value_per_hour") is not None):
             rows.append({
                 "user_id": r["user_id"],
                 "display_name": (r.get("profiles") or {}).get("display_name"),
                 "min_nights": r.get("pref_min_nights"),
                 "max_nights": r.get("pref_max_nights"),
                 "budget_gbp": r.get("pref_budget_gbp"),
+                "flight_earliest": r.get("pref_flight_earliest"),
+                "flight_latest": r.get("pref_flight_latest"),
+                "time_value_per_hour": r.get("pref_time_value_per_hour"),
             })
 
     return {"members_total": members_count, "responses": rows}
