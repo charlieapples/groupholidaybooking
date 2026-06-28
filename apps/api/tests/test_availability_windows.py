@@ -75,3 +75,23 @@ def test_blind_reveal_subset_semantics():
     # Once D submits, the subset test passes
     submitted = {"A", "B", "C", "D"}
     assert members.issubset(submitted)
+
+
+def test_fallback_to_most_people_free():
+    # A is busy every single day -> no window works for EVERYONE. Should fall back
+    # to the most-people-free window (just B free) covering the whole range.
+    busy = {date(2026, 7, d): {"A"} for d in range(1, 15)}
+    windows = _compute_free_windows(START, END, busy, {"A", "B"}, min_days=4, top_n=10)
+    assert len(windows) >= 1
+    assert windows[0].members_free == 1   # only B free
+    assert windows[0].days == 14
+
+
+def test_everyone_free_preferred_over_longer_partial():
+    # Everyone free Jul 1-5; A busy Jul 6-14 (a LONGER stretch where only B is free).
+    # We must still return the (shorter) everyone-free window, not the partial one.
+    busy = {date(2026, 7, d): {"A"} for d in range(6, 15)}
+    windows = _compute_free_windows(START, END, busy, {"A", "B"}, min_days=4, top_n=10)
+    assert all(w.members_free == 2 for w in windows)        # everyone-free only
+    assert windows[0].start_date == date(2026, 7, 1)
+    assert windows[0].end_date == date(2026, 7, 5)

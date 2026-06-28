@@ -1515,7 +1515,16 @@ export default function AvailabilityPage() {
                             day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
                           })}
                         </p>
-                        <p className="text-sm text-gray-500">{w.days} days free</p>
+                        <p className="text-sm text-gray-500">
+                          {w.days} days ·{" "}
+                          {status && w.members_free < status.total ? (
+                            <span className="font-medium text-amber-700">
+                              {w.members_free} of {status.total} free (best fit — no window works for everyone)
+                            </span>
+                          ) : (
+                            "everyone free"
+                          )}
+                        </p>
                       </div>
                     </div>
                     {i === 0 && (

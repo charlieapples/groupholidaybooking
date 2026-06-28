@@ -115,6 +115,40 @@ class SubmissionStatusResponse(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
+def _windows_at_threshold(
+    search_start: date, search_end: date, busy_by_date: dict,
+    member_ids: set, min_days: int, threshold: int,
+) -> list[FreeWindow]:
+    """Contiguous stretches where AT LEAST `threshold` members are free."""
+    total = len(member_ids)
+    windows: list[FreeWindow] = []
+    window_start: Optional[date] = None
+    d = search_start
+    while d <= search_end:
+        free_here = total - len(busy_by_date.get(d, set()) & member_ids)
+        if free_here >= threshold:
+            if window_start is None:
+                window_start = d
+        else:
+            if window_start is not None:
+                length = (d - window_start).days
+                if length >= min_days:
+                    windows.append(FreeWindow(
+                        start_date=window_start, end_date=d - timedelta(days=1),
+                        days=length, members_free=threshold,
+                    ))
+                window_start = None
+        d += timedelta(days=1)
+    if window_start is not None:
+        length = (search_end - window_start).days + 1
+        if length >= min_days:
+            windows.append(FreeWindow(
+                start_date=window_start, end_date=search_end,
+                days=length, members_free=threshold,
+            ))
+    return windows
+
+
 def _compute_free_windows(
     search_start: date,
     search_end: date,
@@ -123,56 +157,25 @@ def _compute_free_windows(
     min_days: int,
     top_n: int,
 ) -> list[FreeWindow]:
-    """Find contiguous stretches where NO member is busy."""
-    # Never count days in the past — you can't book a holiday that's already
-    # started, so the free window begins today at the earliest.
+    """Windows that work for EVERYONE; if none, fall back to the windows where the
+    MOST people are free (relax one member at a time until something fits)."""
+    # Never count days in the past — you can't book a holiday that's already started.
     today = date.today()
     if search_start < today:
         search_start = today
     if search_end < search_start:
         return []   # the whole window is in the past
 
+    total = len(member_ids)
     windows: list[FreeWindow] = []
-    window_start: Optional[date] = None
+    # Prefer everyone-free; only relax (most-people-free) if nothing reaches min_days.
+    for threshold in range(total, 0, -1):
+        windows = _windows_at_threshold(search_start, search_end, busy_by_date, member_ids, min_days, threshold)
+        if windows:
+            break
 
-    d = search_start
-    while d <= search_end:
-        busy = busy_by_date.get(d, set())
-        anyone_busy = bool(busy & member_ids)
-
-        if not anyone_busy:
-            if window_start is None:
-                window_start = d
-        else:
-            if window_start is not None:
-                length = (d - window_start).days
-                if length >= min_days:
-                    windows.append(
-                        FreeWindow(
-                            start_date=window_start,
-                            end_date=d - timedelta(days=1),
-                            days=length,
-                            members_free=len(member_ids),
-                        )
-                    )
-                window_start = None
-        d += timedelta(days=1)
-
-    # Handle window that extends to search_end
-    if window_start is not None:
-        length = (search_end - window_start).days + 1
-        if length >= min_days:
-            windows.append(
-                FreeWindow(
-                    start_date=window_start,
-                    end_date=search_end,
-                    days=length,
-                    members_free=len(member_ids),
-                )
-            )
-
-    # Sort: longest first, then soonest
-    windows.sort(key=lambda w: (-w.days, w.start_date))
+    # Sort: most members free, then longest, then soonest.
+    windows.sort(key=lambda w: (-w.members_free, -w.days, w.start_date))
     return windows[:top_n]
 
 
