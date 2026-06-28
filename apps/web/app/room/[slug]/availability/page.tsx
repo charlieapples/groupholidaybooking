@@ -93,7 +93,7 @@ function MonthGrid({
   });
 
   return (
-    <div className="rounded-xl border bg-white p-5 shadow-sm">
+    <div className="rounded-xl border bg-white p-3 shadow-sm sm:p-5">
       <h3 className="mb-4 text-center font-semibold text-gray-900">{monthLabel}</h3>
 
       {/* Day headers */}
@@ -600,7 +600,7 @@ function ImportPanel({
       <Script src="https://alcdn.msauth.net/browser/2.38.4/js/msal-browser.min.js" strategy="afterInteractive" />
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-6 py-4 text-left"
+        className="flex w-full items-center justify-between px-4 py-4 text-left sm:px-6"
       >
         <div className="flex items-center gap-3">
           <span className="text-xl">📲</span>
@@ -613,7 +613,7 @@ function ImportPanel({
       </button>
 
       {open && (
-        <div className="border-t px-6 pb-6">
+        <div className="border-t px-4 pb-6 sm:px-6">
           {/* Merge reassurance */}
           <div className="mt-4 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-800">
             🔁 Syncing <strong>adds to</strong> the busy days you&apos;ve already marked — it never erases them.
@@ -1262,9 +1262,9 @@ export default function AvailabilityPage() {
   );
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen overflow-x-hidden bg-gray-50">
       {/* Nav */}
-      <nav className="border-b bg-white px-6 py-4">
+      <nav className="border-b bg-white px-4 py-4 sm:px-6">
         <div className="mx-auto flex max-w-3xl items-center justify-between">
           <button
             onClick={() => router.push(`/room/${slug}`)}
@@ -1286,7 +1286,7 @@ export default function AvailabilityPage() {
       </nav>
       <StepBar slug={slug} currentStep={room?.current_step} activeRoute="availability" />
 
-      <div className="mx-auto max-w-3xl space-y-6 px-6 py-10">
+      <div className="mx-auto max-w-3xl space-y-6 px-4 py-10 sm:px-6">
 
         {/* Step already done banner — show if room has moved past availability */}
         {room?.agreed_start && (
@@ -1390,7 +1390,7 @@ export default function AvailabilityPage() {
             )}
 
             {/* Sticky submit bar */}
-            <div className="sticky bottom-6 flex items-center justify-between rounded-2xl border bg-white px-6 py-4 shadow-lg">
+            <div className="sticky bottom-6 flex items-center justify-between gap-2 rounded-2xl border bg-white px-4 py-4 shadow-lg sm:px-6">
               <p className="text-sm text-gray-600">
                 {busyDates.size === 0
                   ? "No busy days marked — you're free the whole window!"
