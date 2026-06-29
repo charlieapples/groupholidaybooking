@@ -82,7 +82,18 @@ export default function StepBar({
                   <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-blue-500" title="Group is here" />
                 )}
               </button>
-              {i < STEPS.length - 1 && <span className="px-0.5 text-gray-300">›</span>}
+              {/* The first three steps are independent (do in any order → "·").
+                  Flights and booking depend on them (→). */}
+              {i < STEPS.length - 1 && (
+                <span
+                  className="px-0.5 text-gray-300"
+                  title={STEPS[i + 1].key === "flights" || STEPS[i + 1].key === "booking"
+                    ? "depends on the earlier steps"
+                    : "either order"}
+                >
+                  {STEPS[i + 1].key === "flights" || STEPS[i + 1].key === "booking" ? "→" : "·"}
+                </span>
+              )}
             </div>
           );
         })}

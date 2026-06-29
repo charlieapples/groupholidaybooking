@@ -48,6 +48,67 @@ const STEP_ROUTES: Record<string, string> = {
   booking: "booking",
 };
 
+// Precedence network (from decision maths): the three "input" tasks are
+// INDEPENDENT — the group can tackle them in any order, in parallel. Flights
+// can only be worked out once all three are set; booking follows flights.
+// `lin` is the position in the linear back-end step pointer, used to derive
+// done/current state from the group's single `current_step`.
+const NET_INDEPENDENT = [
+  { key: "availability", label: "Availability", icon: "📅", route: "availability", lin: 0, blurb: "When everyone's free" },
+  { key: "duration", label: "Duration & Budget", icon: "🗓️", route: "preferences", lin: 1, blurb: "How long & how much" },
+  { key: "destination", label: "Destination", icon: "🗺️", route: "destinations", lin: 3, blurb: "Where to go" },
+];
+const NET_FLIGHTS = { key: "flights", label: "Flights", icon: "✈️", route: "flights", lin: 4 };
+const NET_BOOKING = { key: "booking", label: "Booking", icon: "🎫", route: "booking", lin: 5 };
+
+type NetStatus = "done" | "current" | "available" | "locked";
+
+// Work out a node's state from the group's linear step index (`stepIdx`).
+// Independent nodes are NEVER "locked" — they can be started at any time.
+function netStatus(key: string, lin: number, stepIdx: number): NetStatus {
+  if (key === "duration") {
+    // Merged node spans the back-end "duration" (1) and "budget" (2) steps.
+    if (stepIdx > 2) return "done";
+    if (stepIdx === 1 || stepIdx === 2) return "current";
+    return "available";
+  }
+  const independent = key === "availability" || key === "destination";
+  if (stepIdx > lin) return "done";
+  if (stepIdx === lin) return "current";
+  return independent ? "available" : "locked";
+}
+
+function NetNode({
+  icon, label, blurb, status, onClick,
+}: {
+  icon: string; label: string; blurb?: string; status: NetStatus; onClick: () => void;
+}) {
+  const styles: Record<NetStatus, string> = {
+    done: "border-green-300 bg-green-50 text-green-800 hover:bg-green-100",
+    current: "border-blue-500 bg-blue-600 text-white shadow-sm ring-2 ring-blue-200",
+    available: "border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50",
+    locked: "border-gray-200 bg-gray-50 text-gray-400 hover:bg-gray-100",
+  };
+  const tag =
+    status === "done" ? "✓ done" :
+    status === "current" ? "you're here" :
+    status === "available" ? "open now" : "🔒 locked";
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      className={`flex w-full flex-col items-center gap-0.5 rounded-xl border px-2 py-3 text-center transition-colors ${styles[status]}`}
+    >
+      <span className="text-xl leading-none">{icon}</span>
+      <span className="text-xs font-semibold leading-tight">{label}</span>
+      {blurb && (
+        <span className={`text-[10px] leading-tight ${status === "current" ? "text-blue-100" : "opacity-70"}`}>{blurb}</span>
+      )}
+      <span className="mt-0.5 text-[10px] font-medium">{tag}</span>
+    </button>
+  );
+}
+
 export default function RoomPage() {
   const { slug } = useParams<{ slug: string }>();
   const router = useRouter();
@@ -495,52 +556,52 @@ export default function RoomPage() {
       <div className="mx-auto max-w-5xl px-6 py-10 space-y-8">
         {/* Step progress */}
         <div className="rounded-xl border bg-white p-6 shadow-sm">
-          <div className="flex items-center gap-2 overflow-x-auto pb-2">
-            {STEPS.map((step, i) => {
-              // All steps are clickable — users can jump anywhere in the flow
-              const isPast = i < stepIdx;
-              const isCurrent = i === stepIdx;
-              const isFuture = i > stepIdx;
-              const route = STEP_ROUTES[step.key];
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-gray-500">
+              Most steps are independent — start with whichever you like. ✈️ Flights &amp; 🎫 booking come together once those are set.
+            </p>
 
-              const pill = (
-                <div
-                  className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
-                    isCurrent
-                      ? "bg-blue-600 text-white"
-                      : isPast
-                      ? "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer"
-                      : "bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600 cursor-pointer"
-                  }`}
-                >
-                  <span>{step.icon}</span>
-                  <span>{step.label}</span>
-                  {isFuture && <span className="text-xs opacity-60">🔒</span>}
-                </div>
-              );
+            {/* The three independent input tasks — any order, in parallel */}
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                Do these in any order
+              </p>
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                {NET_INDEPENDENT.map((n) => (
+                  <NetNode
+                    key={n.key}
+                    icon={n.icon}
+                    label={n.label}
+                    blurb={n.blurb}
+                    status={netStatus(n.key, n.lin, stepIdx)}
+                    onClick={() => router.push(`/room/${slug}/${n.route}`)}
+                  />
+                ))}
+              </div>
+            </div>
 
-              return (
-                <div key={step.key} className="flex items-center">
-                  {route ? (
-                    <button
-                      onClick={() => router.push(`/room/${slug}/${route}`)}
-                      title={
-                        isPast ? `Revisit ${step.label}` :
-                        isCurrent ? step.label :
-                        `Jump to ${step.label} (admin may need to unlock first)`
-                      }
-                    >
-                      {pill}
-                    </button>
-                  ) : (
-                    pill
-                  )}
-                  {i < STEPS.length - 1 && (
-                    <div className={`mx-1 h-0.5 w-6 ${i < stepIdx ? "bg-green-400" : "bg-gray-200"}`} />
-                  )}
-                </div>
-              );
-            })}
+            {/* All three converge into Flights */}
+            <p className="text-center text-[10px] font-medium text-gray-400">all three feed into ↓</p>
+            <div className="mx-auto max-w-xs">
+              <NetNode
+                icon={NET_FLIGHTS.icon}
+                label={NET_FLIGHTS.label}
+                blurb="Cheapest way to get everyone there"
+                status={netStatus(NET_FLIGHTS.key, NET_FLIGHTS.lin, stepIdx)}
+                onClick={() => router.push(`/room/${slug}/${NET_FLIGHTS.route}`)}
+              />
+            </div>
+
+            <p className="text-center text-sm text-gray-300 leading-none">↓</p>
+            <div className="mx-auto max-w-xs">
+              <NetNode
+                icon={NET_BOOKING.icon}
+                label={NET_BOOKING.label}
+                blurb="Lock it in"
+                status={netStatus(NET_BOOKING.key, NET_BOOKING.lin, stepIdx)}
+                onClick={() => router.push(`/room/${slug}/${NET_BOOKING.route}`)}
+              />
+            </div>
           </div>
           {/* Admin: undo an over-advance. The step is a shared group pointer the
               admin moves forward — this lets them move it back without losing data. */}
