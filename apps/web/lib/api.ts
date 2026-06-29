@@ -143,6 +143,8 @@ export interface Room {
   rough_window: string | null;
   member_count: number;
   is_admin: boolean;
+  // 'holiday' (full flow) or 'meetup' (lighter local get-together).
+  trip_type?: "holiday" | "meetup";
   // Optional room settings (populated after later steps)
   search_start?: string | null;
   search_end?: string | null;
@@ -165,7 +167,7 @@ export interface Room {
 
 export function createRoom(
   token: string,
-  body: { name: string; rough_window?: string; home_postcode?: string }
+  body: { name: string; rough_window?: string; home_postcode?: string; trip_type?: "holiday" | "meetup" }
 ) {
   return apiFetch<Room>("/rooms", token, {
     method: "POST",

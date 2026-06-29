@@ -31,6 +31,7 @@ class CreateRoomRequest(BaseModel):
     name: str
     rough_window: Optional[str] = None    # e.g. "September 2026"
     home_postcode: Optional[str] = None   # creator's postcode, stored on membership
+    trip_type: str = "holiday"            # 'holiday' (default) or 'meetup' (local get-together)
 
 
 class RoomResponse(BaseModel):
@@ -41,6 +42,8 @@ class RoomResponse(BaseModel):
     rough_window: Optional[str] = None
     member_count: int = 0
     is_admin: bool = False
+    # 'holiday' (full flow) or 'meetup' (lighter local get-together).
+    trip_type: str = "holiday"
     # Optional room settings
     search_start: Optional[str] = None
     search_end: Optional[str] = None
@@ -174,6 +177,7 @@ def _room_with_member_count(db, room: dict, user_id: str) -> RoomResponse:
         rough_window=room.get("rough_window"),
         member_count=member_count,
         is_admin=is_admin,
+        trip_type=room.get("trip_type", "holiday"),
         search_start=room.get("search_start"),
         search_end=room.get("search_end"),
         agreed_start=room.get("agreed_start"),
@@ -240,6 +244,7 @@ def list_rooms(user: UserInfo = Depends(current_user)):
             rough_window=room.get("rough_window"),
             member_count=count_by_room.get(room["id"], 0),
             is_admin=admin_map.get(room["id"], False),
+            trip_type=room.get("trip_type", "holiday"),
             search_start=room.get("search_start"),
             search_end=room.get("search_end"),
             agreed_start=room.get("agreed_start"),
@@ -313,6 +318,7 @@ def create_room(
                 "name": body.name,
                 "created_by": user.id,
                 "rough_window": body.rough_window,
+                "trip_type": body.trip_type if body.trip_type in ("holiday", "meetup") else "holiday",
             }
         )
         .execute()
@@ -337,6 +343,7 @@ def create_room(
         rough_window=room.get("rough_window"),
         member_count=1,
         is_admin=True,
+        trip_type=room.get("trip_type", "holiday"),
         search_start=None, search_end=None,
         agreed_start=None, agreed_end=None,
         min_nights=None, max_nights=None,

@@ -36,6 +36,8 @@ export default function Dashboard() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPostcode, setNewPostcode] = useState("");
+  // 'holiday' = full flow (flights abroad); 'meetup' = lighter local get-together.
+  const [tripType, setTripType] = useState<"holiday" | "meetup">("holiday");
 
   // Time window pickers
   const [windowMode, setWindowMode] = useState<"month" | "date">("month");
@@ -177,10 +179,11 @@ export default function Dashboard() {
         name: newName,
         rough_window: buildWindow(),
         home_postcode: normalisedPostcode,
+        trip_type: tripType,
       });
       setRooms((prev) => [room, ...prev]);
       setShowCreate(false);
-      setNewName(""); setNewPostcode("");
+      setNewName(""); setNewPostcode(""); setTripType("holiday");
       resetWindow();
       router.push(`/room/${room.slug}`);
     } catch (e: unknown) {
@@ -381,7 +384,14 @@ export default function Dashboard() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h2 className="font-semibold text-gray-900 truncate">{room.name}</h2>
+                      <div className="flex items-center gap-1.5">
+                        <h2 className="font-semibold text-gray-900 truncate">{room.name}</h2>
+                        {room.trip_type === "meetup" && (
+                          <span className="shrink-0 rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700">
+                            📍 Meet-up
+                          </span>
+                        )}
+                      </div>
                       {room.rough_window && (
                         <p className="text-sm text-gray-500 truncate">{prettyWindow(room.rough_window)}</p>
                       )}
@@ -477,16 +487,53 @@ export default function Dashboard() {
             className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="mb-6 text-xl font-bold text-gray-900">Plan a Holiday</h2>
+            <h2 className="mb-1 text-xl font-bold text-gray-900">
+              {tripType === "meetup" ? "Plan a meet-up" : "Plan a Holiday"}
+            </h2>
+            <p className="mb-5 text-sm text-gray-500">
+              {tripType === "meetup"
+                ? "A lighter local get-together — find a day & time that suits everyone."
+                : "The full trip flow — dates, destination, cheapest flights, booking."}
+            </p>
             <div className="space-y-4">
+              {/* What kind of plan is this? */}
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">What are you planning?</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTripType("holiday")}
+                    className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                      tripType === "holiday"
+                        ? "border-blue-500 bg-blue-50 ring-1 ring-blue-200"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold text-gray-900">🏖️ Holiday</span>
+                    <span className="block text-xs text-gray-500">Trip away, usually flights</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTripType("meetup")}
+                    className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                      tripType === "meetup"
+                        ? "border-blue-500 bg-blue-50 ring-1 ring-blue-200"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold text-gray-900">📍 Local meet-up</span>
+                    <span className="block text-xs text-gray-500">Within the UK, often a day</span>
+                  </button>
+                </div>
+              </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  Holiday name *
+                  {tripType === "meetup" ? "Meet-up name *" : "Holiday name *"}
                 </label>
                 <input
                   ref={nameInputRef}
                   type="text"
-                  placeholder="e.g. Lads Summer 2026"
+                  placeholder={tripType === "meetup" ? "e.g. Manchester catch-up" : "e.g. Lads Summer 2026"}
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") handleCreateRoom(); if (e.key === "Escape") setShowCreate(false); }}
