@@ -40,6 +40,11 @@ export interface Profile {
   avatar_url: string | null;
   default_home_postcode: string | null;
   currency?: string;
+  // Remembered trip preferences, pre-filled on future holidays.
+  default_min_nights?: number | null;
+  default_max_nights?: number | null;
+  default_budget_gbp?: number | null;
+  remember_trip_prefs?: boolean;
 }
 
 export function getMyProfile(token: string) {
@@ -48,7 +53,11 @@ export function getMyProfile(token: string) {
 
 export function updateMyProfile(
   token: string,
-  body: { default_home_postcode?: string; display_name?: string; currency?: string }
+  body: {
+    default_home_postcode?: string; display_name?: string; currency?: string;
+    default_min_nights?: number; default_max_nights?: number;
+    default_budget_gbp?: number; remember_trip_prefs?: boolean;
+  }
 ) {
   return apiFetch<Profile>("/profile", token, {
     method: "PATCH",

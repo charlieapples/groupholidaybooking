@@ -25,12 +25,21 @@ class ProfileResponse(BaseModel):
     avatar_url: Optional[str] = None
     default_home_postcode: Optional[str] = None
     currency: str = "GBP"          # ISO 4217 code — which currency this person books in
+    # Remembered trip preferences, pre-filled on future holidays.
+    default_min_nights: Optional[int] = None
+    default_max_nights: Optional[int] = None
+    default_budget_gbp: Optional[float] = None
+    remember_trip_prefs: bool = False
 
 
 class ProfileUpdateRequest(BaseModel):
     default_home_postcode: Optional[str] = None
     display_name: Optional[str] = None
     currency: Optional[str] = None
+    default_min_nights: Optional[int] = None
+    default_max_nights: Optional[int] = None
+    default_budget_gbp: Optional[float] = None
+    remember_trip_prefs: Optional[bool] = None
 
 
 def _ensure_profile(db, user: UserInfo) -> dict:
@@ -69,6 +78,10 @@ def get_profile(user: UserInfo = Depends(current_user)):
         avatar_url=p.get("avatar_url"),
         default_home_postcode=p.get("default_home_postcode"),
         currency=(p.get("currency") or "GBP"),
+        default_min_nights=p.get("default_min_nights"),
+        default_max_nights=p.get("default_max_nights"),
+        default_budget_gbp=p.get("default_budget_gbp"),
+        remember_trip_prefs=bool(p.get("remember_trip_prefs")),
     )
 
 
@@ -104,4 +117,8 @@ def update_profile(
         avatar_url=p.get("avatar_url"),
         default_home_postcode=p.get("default_home_postcode"),
         currency=(p.get("currency") or "GBP"),
+        default_min_nights=p.get("default_min_nights"),
+        default_max_nights=p.get("default_max_nights"),
+        default_budget_gbp=p.get("default_budget_gbp"),
+        remember_trip_prefs=bool(p.get("remember_trip_prefs")),
     )

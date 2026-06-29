@@ -7,6 +7,8 @@ import {
   submitDurationBudget,
   updateRoom,
   advanceStep,
+  getMyProfile,
+  updateMyProfile,
   type Room,
   type DurationBudgetAggregate,
 } from "@/lib/api";
@@ -53,6 +55,8 @@ export default function PreferencesPage() {
   // 0 = cheapest regardless of distance; 50 = strongly prefer nearby airports.
   const [timeValue, setTimeValue] = useState(0);
   const [advancing, setAdvancing] = useState(false);
+  // "Remember these for my future holidays" — saved to the profile and pre-filled next time.
+  const [rememberPrefs, setRememberPrefs] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: s }) => {
@@ -82,6 +86,21 @@ export default function PreferencesPage() {
           if (mine.flight_earliest) setFlightEarliest(mine.flight_earliest);
           if (mine.flight_latest) setFlightLatest(mine.flight_latest);
           if (mine.time_value_per_hour != null) setMyTimeValue(String(mine.time_value_per_hour));
+        } else {
+          // No answer yet this trip — pre-fill from the member's saved defaults
+          // (if they ticked "remember" on a previous holiday).
+          try {
+            const prof = await getMyProfile(t);
+            if (prof.remember_trip_prefs) {
+              setRememberPrefs(true);
+              if (prof.default_min_nights || prof.default_max_nights) {
+                setAnyDuration(false);
+                if (prof.default_min_nights) setMinNights(String(prof.default_min_nights));
+                if (prof.default_max_nights) setMaxNights(String(prof.default_max_nights));
+              }
+              if (prof.default_budget_gbp) { setBudget(String(prof.default_budget_gbp)); setBudgetMode("cap"); }
+            }
+          } catch { /* defaults are a nicety — ignore if unavailable */ }
         }
       } catch {
         router.replace("/dashboard");
@@ -169,6 +188,19 @@ export default function PreferencesPage() {
       if (maxNights) body.max_nights = Number(maxNights);
       if (budget) body.budget_gbp = Number(budget);
       await submitDurationBudget(token, slug, body);
+      // Optionally remember these as personal defaults for future holidays.
+      try {
+        await updateMyProfile(token, {
+          remember_trip_prefs: rememberPrefs,
+          ...(rememberPrefs
+            ? {
+                default_min_nights: minNights ? Number(minNights) : undefined,
+                default_max_nights: maxNights ? Number(maxNights) : undefined,
+                default_budget_gbp: budget ? Number(budget) : undefined,
+              }
+            : {}),
+        });
+      } catch { /* saving defaults is best-effort — don't block the main save */ }
       const d = await getDurationBudget(token, slug);
       setData(d);
       setSaved(true);
@@ -420,6 +452,22 @@ export default function PreferencesPage() {
             </div>
             <p className="mt-1 text-xs text-gray-400">Higher = the group will prefer nearer airports over the very cheapest. £0 / blank = cheapest regardless of travel time.</p>
           </div>
+
+          {/* Remember across holidays */}
+          <label className="flex items-start gap-2 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={rememberPrefs}
+              onChange={(e) => setRememberPrefs(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-700">
+              💾 <span className="font-medium">Remember these for my future holidays</span>
+              <span className="block text-xs text-gray-500">
+                We&apos;ll pre-fill your duration and budget next time you join a new trip. You can always change them.
+              </span>
+            </span>
+          </label>
 
           <button
             onClick={handleSave}
