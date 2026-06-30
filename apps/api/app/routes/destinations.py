@@ -816,11 +816,43 @@ def vote(
 # ── Blind reveal for voting ───────────────────────────────────────────────────
 
 
+def _prefs_submitted_count(db, room_id: str) -> int:
+    """How many members have actually filled in their destination preferences
+    (the questionnaire). A row that exists but is entirely blank does NOT count,
+    so the admin only sees "everyone's in" once people have really answered.
+    """
+    import json as _json
+    res = (
+        db.table("trip_preferences")
+        .select("pref_destination_answers")
+        .eq("room_id", room_id)
+        .execute()
+    )
+    n = 0
+    for row in res.data or []:
+        raw = row.get("pref_destination_answers")
+        if not raw:
+            continue
+        data = raw
+        if isinstance(raw, str):
+            try:
+                data = _json.loads(raw)
+            except Exception:
+                continue
+        if isinstance(data, dict) and any(bool(v) for v in data.values()):
+            n += 1
+    return n
+
+
 class VoteStatus(BaseModel):
     votes_revealed: bool      # True once every current member has locked in
     voters_done: int          # how many current members have locked in
     voters_total: int         # current member count
     i_submitted: bool         # has the caller locked in their votes
+    # How many members have filled in their destination preferences (questionnaire).
+    # Denominator is voters_total (same members). Lets the UI tell the admin when
+    # the "AI pick for everyone" button is ready to use.
+    prefs_submitted: int = 0
 
 
 @router.get("/vote-status", response_model=VoteStatus)
@@ -831,7 +863,8 @@ def get_vote_status(slug: str, user: UserInfo = Depends(current_user)):
     _assert_member(db, room["id"], user.id)
     revealed, done, total, i_sub = _vote_reveal_state(db, room["id"], user.id)
     return VoteStatus(
-        votes_revealed=revealed, voters_done=done, voters_total=total, i_submitted=i_sub
+        votes_revealed=revealed, voters_done=done, voters_total=total, i_submitted=i_sub,
+        prefs_submitted=_prefs_submitted_count(db, room["id"]),
     )
 
 
@@ -847,7 +880,8 @@ def lock_votes(slug: str, user: UserInfo = Depends(current_user)):
     ).execute()
     revealed, done, total, i_sub = _vote_reveal_state(db, room["id"], user.id)
     return VoteStatus(
-        votes_revealed=revealed, voters_done=done, voters_total=total, i_submitted=i_sub
+        votes_revealed=revealed, voters_done=done, voters_total=total, i_submitted=i_sub,
+        prefs_submitted=_prefs_submitted_count(db, room["id"]),
     )
 
 
@@ -865,7 +899,8 @@ def unlock_votes(slug: str, user: UserInfo = Depends(current_user)):
     ).eq("user_id", user.id).execute()
     revealed, done, total, i_sub = _vote_reveal_state(db, room["id"], user.id)
     return VoteStatus(
-        votes_revealed=revealed, voters_done=done, voters_total=total, i_submitted=i_sub
+        votes_revealed=revealed, voters_done=done, voters_total=total, i_submitted=i_sub,
+        prefs_submitted=_prefs_submitted_count(db, room["id"]),
     )
 
 
@@ -931,7 +966,8 @@ def submit_ranking(
 
     revealed, done, total, i_sub = _vote_reveal_state(db, room["id"], user.id)
     return VoteStatus(
-        votes_revealed=revealed, voters_done=done, voters_total=total, i_submitted=i_sub
+        votes_revealed=revealed, voters_done=done, voters_total=total, i_submitted=i_sub,
+        prefs_submitted=_prefs_submitted_count(db, room["id"]),
     )
 
 

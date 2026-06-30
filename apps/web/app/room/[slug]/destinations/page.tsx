@@ -188,6 +188,9 @@ export default function DestinationsPage() {
       // Proposals (someone putting a destination forward / removing one) — so the
       // candidate list updates live for everyone, not just on a manual refresh.
       .on("postgres_changes", { event: "*", schema: "public", table: "destination_candidates" }, refresh)
+      // Preferences saved by members — so the "everyone's in" readiness message
+      // for the AI-pick button updates live, not just on the 12s poll.
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_preferences" }, refresh)
       .subscribe();
 
     // Safety net: if realtime isn't enabled for a table, poll every 12s so the
@@ -884,9 +887,20 @@ export default function DestinationsPage() {
                   {loadingRec ? "Thinking…" : "🌍 AI pick for everyone"}
                 </button>
               </div>
-              <p className="text-[11px] text-gray-400">
-                🌍 weighs <em>everyone&apos;s</em> preferences — best once all members have submitted theirs (it&apos;ll tell you how many have).
-              </p>
+              {(() => {
+                const total = voteStatus?.voters_total ?? 0;
+                const done = voteStatus?.prefs_submitted ?? 0;
+                const allIn = total > 0 && done >= total;
+                return allIn ? (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                    ✅ <strong>Everyone&apos;s preferences are in ({done}/{total}).</strong> The 🌍 <strong>AI pick for everyone</strong> button is ready — it&apos;ll weigh all your answers and suggest one place for the whole group.
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-gray-500">
+                    🌍 <strong>{done} of {total}</strong> {done === 1 ? "member has" : "members have"} saved their preferences so far. <strong>AI pick for everyone</strong> works best once everyone&apos;s in — you can still run it now, just with fewer answers.
+                  </p>
+                );
+              })()}
               {groupRec?.iata_code && (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">

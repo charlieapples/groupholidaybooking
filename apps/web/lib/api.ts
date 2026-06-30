@@ -471,6 +471,8 @@ export interface VoteStatus {
   voters_done: number;
   voters_total: number;
   i_submitted: boolean;
+  // How many members have filled in their destination preferences (questionnaire).
+  prefs_submitted: number;
 }
 
 export function getVoteStatus(token: string, slug: string) {
