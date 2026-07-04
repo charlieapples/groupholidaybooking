@@ -582,8 +582,8 @@ export default function FlightsPage() {
             <h2 className="text-lg font-bold text-amber-900">😬 No fares found for these dates</h2>
             <p className="text-sm text-amber-800">
               <strong>What happened:</strong> the flight price source (Travelpayouts) returned no
-              fares from any of your group&apos;s home airports
-              {allPeople.length > 0 ? ` (${allPeople.join(", ")})` : ""} for{" "}
+              fares from your group&apos;s home airports — for any member
+              {allPeople.length > 0 ? ` (${allPeople.join(", ")})` : ""} — for{" "}
               {results[0]?.shared_out_date ? "the chosen dates" : "these dates"}. This is a gap in the
               fare data for those specific regional airports + dates — it is <strong>not</strong> a
               budget issue (over-budget flights would still be shown).
