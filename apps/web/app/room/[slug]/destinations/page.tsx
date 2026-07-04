@@ -287,6 +287,13 @@ export default function DestinationsPage() {
   // The candidate THIS member proposed (ranked mode = their one pick).
   const myPick = candidates.find((c) => c.proposed_by === myUserId) || null;
 
+  // "AI pick for everyone" only makes sense once EVERY member has filled in
+  // their preferences — otherwise it's guessing on behalf of people who
+  // haven't spoken. Gate the admin button on this.
+  const prefsTotal = voteStatus?.voters_total ?? 0;
+  const prefsDone = voteStatus?.prefs_submitted ?? 0;
+  const prefsAllIn = prefsTotal > 0 && prefsDone >= prefsTotal;
+
   // Trip length range for the "total pp" estimate (lower & upper bounds).
   const minNights = room?.min_nights ?? null;
   const maxNights = room?.max_nights ?? null;
@@ -886,28 +893,31 @@ export default function DestinationsPage() {
                 {room?.is_admin && (
                   <button
                     onClick={handleGroupRecommendation}
-                    disabled={loadingRec}
-                    title="Admin: weighs everyone's preferences and suggests ONE place for the whole group. Best once everyone has submitted their preferences."
-                    className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                    disabled={loadingRec || !prefsAllIn}
+                    title={prefsAllIn
+                      ? "Admin: weighs everyone's preferences and suggests ONE place for the whole group."
+                      : `Locked until everyone's preferences are in (${prefsDone}/${prefsTotal} so far).`}
+                    className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {loadingRec ? "Thinking…" : "🌍 AI pick for everyone (admin)"}
+                    {loadingRec
+                      ? "Thinking…"
+                      : prefsAllIn
+                      ? "🌍 AI pick for everyone (admin)"
+                      : `🔒 AI pick for everyone — ${prefsDone}/${prefsTotal} in`}
                   </button>
                 )}
               </div>
-              {room?.is_admin && (() => {
-                const total = voteStatus?.voters_total ?? 0;
-                const done = voteStatus?.prefs_submitted ?? 0;
-                const allIn = total > 0 && done >= total;
-                return allIn ? (
+              {room?.is_admin && (
+                prefsAllIn ? (
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
-                    ✅ <strong>Everyone&apos;s preferences are in ({done}/{total}).</strong> The 🌍 <strong>AI pick for everyone</strong> button is ready — it&apos;ll weigh all your answers and suggest one place for the whole group.
+                    ✅ <strong>Everyone&apos;s preferences are in ({prefsDone}/{prefsTotal}).</strong> The 🌍 <strong>AI pick for everyone</strong> button is now unlocked — it weighs all {prefsTotal} sets of answers and suggests the one place most of the group will enjoy.
                   </div>
                 ) : (
                   <p className="text-[11px] text-gray-500">
-                    🌍 <strong>{done} of {total}</strong> {done === 1 ? "member has" : "members have"} saved their preferences so far. <strong>AI pick for everyone</strong> works best once everyone&apos;s in — you can still run it now, just with fewer answers.
+                    🔒 <strong>{prefsDone} of {prefsTotal}</strong> {prefsDone === 1 ? "member has" : "members have"} saved their preferences. The <strong>AI pick for everyone</strong> unlocks once all {prefsTotal || "the"} are in — so it&apos;s deciding with everyone&apos;s answers, not guessing for people who haven&apos;t chosen yet.
                   </p>
-                );
-              })()}
+                )
+              )}
               {groupRec?.iata_code && (
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
