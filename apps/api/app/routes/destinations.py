@@ -1180,7 +1180,11 @@ def recommend_for_group(slug: str, user: UserInfo = Depends(current_user)):
     """
     db = get_client()
     room = _get_room_by_slug(db, slug)
-    _assert_member(db, room["id"], user.id)
+    membership = _assert_member(db, room["id"], user.id)
+    # The group-wide pick is an admin decision (members get personal AI ideas
+    # via /ideas). Enforce here so it's not just hidden in the UI.
+    if not membership.get("is_admin"):
+        raise HTTPException(403, "Only an admin can run the group-wide AI pick.")
 
     members_total = (
         db.table("room_members").select("user_id", count="exact").eq("room_id", room["id"]).execute().count or 0

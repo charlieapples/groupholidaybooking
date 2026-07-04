@@ -881,16 +881,20 @@ export default function DestinationsPage() {
                 >
                   {loadingIdeas ? "Asking Gemini…" : "✨ Give me AI ideas to pick from"}
                 </button>
-                <button
-                  onClick={handleGroupRecommendation}
-                  disabled={loadingRec}
-                  title="Weighs everyone's preferences and suggests ONE place for the whole group. Best once everyone has submitted their preferences."
-                  className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                >
-                  {loadingRec ? "Thinking…" : "🌍 AI pick for everyone"}
-                </button>
+                {/* The group-wide AI pick is an admin decision (it suggests ONE place
+                    for everyone) — members still get personal AI ideas above. */}
+                {room?.is_admin && (
+                  <button
+                    onClick={handleGroupRecommendation}
+                    disabled={loadingRec}
+                    title="Admin: weighs everyone's preferences and suggests ONE place for the whole group. Best once everyone has submitted their preferences."
+                    className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                  >
+                    {loadingRec ? "Thinking…" : "🌍 AI pick for everyone (admin)"}
+                  </button>
+                )}
               </div>
-              {(() => {
+              {room?.is_admin && (() => {
                 const total = voteStatus?.voters_total ?? 0;
                 const done = voteStatus?.prefs_submitted ?? 0;
                 const allIn = total > 0 && done >= total;
