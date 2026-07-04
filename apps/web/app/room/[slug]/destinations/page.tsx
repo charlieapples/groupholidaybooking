@@ -520,11 +520,14 @@ export default function DestinationsPage() {
     if (!window.confirm(`Remove ${name} from the candidates?`)) return;
     // Optimistic remove
     const prev = candidates;
+    const prevOrder = rankOrder;
     setCandidates((cs) => cs.filter((c) => c.id !== candidateId));
+    setRankOrder((order) => order.filter((id) => id !== candidateId));
     try {
       await deleteDestinationCandidate(token, slug, candidateId);
     } catch (e: unknown) {
       setCandidates(prev);
+      setRankOrder(prevOrder);
       toast.error(errorMessage(e, "Failed to remove candidate"));
     }
   }
@@ -1161,26 +1164,38 @@ export default function DestinationsPage() {
                           <CostLine c={c} />
                         </div>
                       </div>
-                      {!locked && (
-                        <div className="flex flex-col gap-0.5 shrink-0">
+                      <div className="flex items-center gap-1 shrink-0">
+                        {!locked && (
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              onClick={() => moveRank(id, -1)}
+                              disabled={i === 0}
+                              aria-label="Move up"
+                              className="rounded px-2 text-gray-500 hover:bg-gray-200 disabled:opacity-30"
+                            >
+                              ▲
+                            </button>
+                            <button
+                              onClick={() => moveRank(id, 1)}
+                              disabled={i === rankOrder.length - 1}
+                              aria-label="Move down"
+                              className="rounded px-2 text-gray-500 hover:bg-gray-200 disabled:opacity-30"
+                            >
+                              ▼
+                            </button>
+                          </div>
+                        )}
+                        {/* Withdraw a pick — the proposer or an admin can remove it. */}
+                        {(c.proposed_by === myUserId || room?.is_admin) && (
                           <button
-                            onClick={() => moveRank(id, -1)}
-                            disabled={i === 0}
-                            aria-label="Move up"
-                            className="rounded px-2 text-gray-500 hover:bg-gray-200 disabled:opacity-30"
+                            onClick={() => handleDeleteCandidate(c.id, c.name)}
+                            title={c.proposed_by === myUserId ? "Withdraw my pick" : "Remove candidate (admin)"}
+                            className="rounded-full p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors"
                           >
-                            ▲
+                            🗑️
                           </button>
-                          <button
-                            onClick={() => moveRank(id, 1)}
-                            disabled={i === rankOrder.length - 1}
-                            aria-label="Move down"
-                            className="rounded px-2 text-gray-500 hover:bg-gray-200 disabled:opacity-30"
-                          >
-                            ▼
-                          </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   );
                 })}
