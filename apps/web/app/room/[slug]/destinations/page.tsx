@@ -638,7 +638,7 @@ export default function DestinationsPage() {
           </div>
         </div>
       </nav>
-      <StepBar slug={slug} currentStep={room.current_step} activeRoute="destinations" />
+      <StepBar slug={slug} currentStep={room.current_step} activeRoute="destinations" tripType={room.trip_type} />
 
       <div className="mx-auto max-w-3xl px-6 py-10 space-y-8">
 

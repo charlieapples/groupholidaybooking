@@ -297,7 +297,7 @@ export default function BookingPage() {
           </div>
         </div>
       </nav>
-      <StepBar slug={slug} currentStep={room.current_step} activeRoute="booking" />
+      <StepBar slug={slug} currentStep={room.current_step} activeRoute="booking" tripType={room.trip_type} />
 
       <div className="mx-auto max-w-3xl px-6 py-10 space-y-8">
 

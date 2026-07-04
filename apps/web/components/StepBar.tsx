@@ -23,22 +23,28 @@ export default function StepBar({
   slug,
   currentStep,
   activeRoute,
+  tripType,
 }: {
   slug: string;
   currentStep?: string;          // the group's current step (for the "you are here" dot)
   activeRoute?: string;          // the route of THIS page, so it highlights correctly
+  tripType?: string;             // 'meetup' drops the flights & booking steps
 }) {
   const router = useRouter();
+  // Local meet-ups have no flights or booking — only show when & where.
+  const steps = tripType === "meetup"
+    ? STEPS.filter((s) => s.key !== "flights" && s.key !== "booking")
+    : STEPS;
   // The group's step can be "budget" (a back-end step) which now lives under the
   // merged "Duration & Budget" tab — map it so the "you are here" dot still shows.
   const normalizedStep = currentStep === "budget" ? "duration" : currentStep;
-  const currentIdx = STEPS.findIndex((s) => s.key === normalizedStep);
+  const currentIdx = steps.findIndex((s) => s.key === normalizedStep);
 
   // Left/Right arrow keys move between stages (Availability ⇄ Booking). Ignored
   // while typing in a field, or with modifier keys, so normal input still works.
   useEffect(() => {
     // Unique page routes in order (duration+budget are the same page).
-    const routes = [...new Set(STEPS.map((s) => s.route))];
+    const routes = [...new Set(steps.map((s) => s.route))];
     const idx = routes.indexOf(activeRoute ?? "");
     if (idx < 0) return;
     function onKey(e: KeyboardEvent) {
@@ -54,12 +60,12 @@ export default function StepBar({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [slug, activeRoute, router]);
+  }, [slug, activeRoute, router, tripType]);
 
   return (
     <div className="border-b bg-white">
       <div className="mx-auto flex max-w-5xl items-center gap-1 overflow-x-auto px-4 py-2">
-        {STEPS.map((step, i) => {
+        {steps.map((step, i) => {
           const isActivePage = activeRoute === step.route;
           const isGroupHere = i === currentIdx;
           const isPast = currentIdx >= 0 && i < currentIdx;
@@ -84,14 +90,14 @@ export default function StepBar({
               </button>
               {/* The first three steps are independent (do in any order → "·").
                   Flights and booking depend on them (→). */}
-              {i < STEPS.length - 1 && (
+              {i < steps.length - 1 && (
                 <span
                   className="px-0.5 text-gray-300"
-                  title={STEPS[i + 1].key === "flights" || STEPS[i + 1].key === "booking"
+                  title={steps[i + 1].key === "flights" || steps[i + 1].key === "booking"
                     ? "depends on the earlier steps"
                     : "either order"}
                 >
-                  {STEPS[i + 1].key === "flights" || STEPS[i + 1].key === "booking" ? "→" : "·"}
+                  {steps[i + 1].key === "flights" || steps[i + 1].key === "booking" ? "→" : "·"}
                 </span>
               )}
             </div>

@@ -1284,7 +1284,7 @@ export default function AvailabilityPage() {
           </div>
         </div>
       </nav>
-      <StepBar slug={slug} currentStep={room?.current_step} activeRoute="availability" />
+      <StepBar slug={slug} currentStep={room?.current_step} activeRoute="availability" tripType={room?.trip_type} />
 
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-10 sm:px-6">
 

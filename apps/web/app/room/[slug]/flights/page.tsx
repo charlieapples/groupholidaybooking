@@ -215,7 +215,7 @@ export default function FlightsPage() {
           </div>
         </div>
       </nav>
-      <StepBar slug={slug} currentStep={room.current_step} activeRoute="flights" />
+      <StepBar slug={slug} currentStep={room.current_step} activeRoute="flights" tripType={room.trip_type} />
 
       <div className="mx-auto max-w-4xl px-6 py-10 space-y-8">
 

@@ -69,6 +69,13 @@ class RoomResponse(BaseModel):
 
 
 STEP_ORDER = ["availability", "duration", "budget", "destination", "flights", "booking", "done"]
+# Local meet-ups have no flights or booking — advancing past "destination" finishes.
+MEETUP_STEP_ORDER = ["availability", "duration", "budget", "destination", "done"]
+
+
+def _step_order_for(room: dict) -> list[str]:
+    """The step sequence for this room, which depends on its trip type."""
+    return MEETUP_STEP_ORDER if room.get("trip_type") == "meetup" else STEP_ORDER
 
 
 class UpdateRoomRequest(BaseModel):
@@ -877,8 +884,9 @@ def advance_step(slug: str, user: UserInfo = Depends(current_user)):
         raise HTTPException(403, "Only room admins can advance the step.")
 
     current = room.get("current_step", "availability")
+    order = _step_order_for(room)
     try:
-        next_step = STEP_ORDER[STEP_ORDER.index(current) + 1]
+        next_step = order[order.index(current) + 1]
     except (ValueError, IndexError):
         raise HTTPException(400, "Room is already at the final step.")
 
@@ -937,13 +945,14 @@ def go_back_step(slug: str, user: UserInfo = Depends(current_user)):
         raise HTTPException(403, "Only room admins can change the step.")
 
     current = room.get("current_step", "availability")
+    order = _step_order_for(room)
     try:
-        idx = STEP_ORDER.index(current)
+        idx = order.index(current)
     except ValueError:
         idx = 0
     if idx <= 0:
         raise HTTPException(400, "Room is already at the first step.")
-    prev_step = STEP_ORDER[idx - 1]
+    prev_step = order[idx - 1]
 
     updated = (
         db.table("rooms")

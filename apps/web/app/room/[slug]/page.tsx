@@ -493,6 +493,8 @@ export default function RoomPage() {
   const stepIdx = STEPS.findIndex((s) => s.key === room.current_step);
   const activeStep = STEPS[stepIdx];
   const canAdvance = room.is_admin && room.current_step !== "done";
+  // Local meet-ups have no flights or booking — the plan is just when & where.
+  const isMeetup = room.trip_type === "meetup";
 
   // Availability-step copy
   const availabilityReady =
@@ -558,10 +560,12 @@ export default function RoomPage() {
         <div className="rounded-xl border bg-white p-6 shadow-sm">
           <div className="space-y-3">
             <p className="text-xs font-medium text-gray-500">
-              Most steps are independent — start with whichever you like. ✈️ Flights &amp; 🎫 booking come together once those are set.
+              {isMeetup
+                ? "Sort out when everyone's free and where to meet — do these in any order."
+                : "Most steps are independent — start with whichever you like. ✈️ Flights & 🎫 booking come together once those are set."}
             </p>
 
-            {/* The three independent input tasks — any order, in parallel */}
+            {/* The independent input tasks — any order, in parallel */}
             <div>
               <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                 Do these in any order
@@ -570,9 +574,9 @@ export default function RoomPage() {
                 {NET_INDEPENDENT.map((n) => (
                   <NetNode
                     key={n.key}
-                    icon={n.icon}
-                    label={n.label}
-                    blurb={n.blurb}
+                    icon={isMeetup && n.key === "destination" ? "📍" : n.icon}
+                    label={isMeetup && n.key === "destination" ? "Place" : n.label}
+                    blurb={isMeetup && n.key === "destination" ? "Where to meet" : n.blurb}
                     status={netStatus(n.key, n.lin, stepIdx)}
                     onClick={() => router.push(`/room/${slug}/${n.route}`)}
                   />
@@ -580,28 +584,37 @@ export default function RoomPage() {
               </div>
             </div>
 
-            {/* All three converge into Flights */}
-            <p className="text-center text-[10px] font-medium text-gray-400">all three feed into ↓</p>
-            <div className="mx-auto max-w-xs">
-              <NetNode
-                icon={NET_FLIGHTS.icon}
-                label={NET_FLIGHTS.label}
-                blurb="Cheapest way to get everyone there"
-                status={netStatus(NET_FLIGHTS.key, NET_FLIGHTS.lin, stepIdx)}
-                onClick={() => router.push(`/room/${slug}/${NET_FLIGHTS.route}`)}
-              />
-            </div>
+            {/* Holidays only: the inputs converge into Flights, then Booking.
+                Meet-ups have neither — the plan is done once when & where are set. */}
+            {isMeetup ? (
+              <p className="text-center text-[11px] text-gray-400">
+                That&apos;s it for a meet-up — no flights or booking to sort. 🎉
+              </p>
+            ) : (
+              <>
+                <p className="text-center text-[10px] font-medium text-gray-400">all three feed into ↓</p>
+                <div className="mx-auto max-w-xs">
+                  <NetNode
+                    icon={NET_FLIGHTS.icon}
+                    label={NET_FLIGHTS.label}
+                    blurb="Cheapest way to get everyone there"
+                    status={netStatus(NET_FLIGHTS.key, NET_FLIGHTS.lin, stepIdx)}
+                    onClick={() => router.push(`/room/${slug}/${NET_FLIGHTS.route}`)}
+                  />
+                </div>
 
-            <p className="text-center text-sm text-gray-300 leading-none">↓</p>
-            <div className="mx-auto max-w-xs">
-              <NetNode
-                icon={NET_BOOKING.icon}
-                label={NET_BOOKING.label}
-                blurb="Lock it in"
-                status={netStatus(NET_BOOKING.key, NET_BOOKING.lin, stepIdx)}
-                onClick={() => router.push(`/room/${slug}/${NET_BOOKING.route}`)}
-              />
-            </div>
+                <p className="text-center text-sm text-gray-300 leading-none">↓</p>
+                <div className="mx-auto max-w-xs">
+                  <NetNode
+                    icon={NET_BOOKING.icon}
+                    label={NET_BOOKING.label}
+                    blurb="Lock it in"
+                    status={netStatus(NET_BOOKING.key, NET_BOOKING.lin, stepIdx)}
+                    onClick={() => router.push(`/room/${slug}/${NET_BOOKING.route}`)}
+                  />
+                </div>
+              </>
+            )}
           </div>
           {/* Admin: undo an over-advance. The step is a shared group pointer the
               admin moves forward — this lets them move it back without losing data. */}
