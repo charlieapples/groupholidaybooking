@@ -499,6 +499,19 @@ export interface DestinationPreferences {
   avoid?: string[];
   max_total_per_person_gbp?: number | null;
   free_text?: string | null;
+  no_preference?: boolean;   // "I don't mind where we go — decide for me"
+}
+
+/** Mark (or clear) "I don't have a destination preference" for the caller. */
+export function setDestinationNoPreference(
+  token: string,
+  slug: string,
+  no_preference: boolean
+) {
+  return apiFetch(`/rooms/${slug}/destinations/no-preference`, token, {
+    method: "POST",
+    body: JSON.stringify({ no_preference }),
+  });
 }
 
 export interface RandomPickResult {

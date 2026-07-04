@@ -10,6 +10,7 @@ import {
   deleteDestinationCandidate,
   submitDestinationPreferences,
   getMyDestinationPreferences,
+  setDestinationNoPreference,
   pickRandomDestination,
   advanceStep,
   getVoteStatus,
@@ -73,6 +74,10 @@ export default function DestinationsPage() {
   const [freeText, setFreeText] = useState("");
   const [questSaving, setQuestSaving] = useState(false);
   const [questSaved, setQuestSaved] = useState(false);
+  // "I don't mind where we go — decide for me." Counts the member as "in" for
+  // the all-preferences gate without feeding an empty answer to the AI.
+  const [noPref, setNoPref] = useState(false);
+  const [savingNoPref, setSavingNoPref] = useState(false);
   // Auto-save plumbing: a signature of the current answers + the last one we saved.
   const lastSavedSig = useRef<string | null>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -142,6 +147,7 @@ export default function DestinationsPage() {
         if (prefs.must_have && prefs.must_have.length) setMustHave(prefs.must_have);
         if (prefs.avoid && prefs.avoid.length) setAvoid(prefs.avoid);
         if (prefs.free_text) setFreeText(prefs.free_text);
+        setNoPref(!!prefs.no_preference);
       }
       // Record what's already saved so auto-save only fires on real changes.
       lastSavedSig.current = JSON.stringify({
@@ -422,6 +428,23 @@ export default function DestinationsPage() {
       toast.error(errorMessage(e, "Couldn't get AI ideas"));
     } finally {
       setLoadingIdeas(false);
+    }
+  }
+
+  async function handleToggleNoPreference() {
+    if (!token) return;
+    const next = !noPref;
+    setSavingNoPref(true);
+    setNoPref(next);
+    try {
+      await setDestinationNoPreference(token, slug, next);
+      // Refresh the readiness count so the admin's gate updates immediately.
+      getVoteStatus(token, slug).then(setVoteStatus).catch(() => {});
+    } catch (e: unknown) {
+      setNoPref(!next);
+      toast.error(errorMessage(e, "Couldn't update that"));
+    } finally {
+      setSavingNoPref(false);
     }
   }
 
@@ -728,6 +751,28 @@ export default function DestinationsPage() {
         <div className="rounded-xl border bg-white p-6 shadow-sm space-y-5">
           <h2 className="text-lg font-bold text-gray-900">Your destination preferences</h2>
           <p className="text-sm text-gray-500">Tell our AI what your perfect trip looks like — it weighs everyone&apos;s answers and suggests the best destinations for the whole group.</p>
+
+          {/* Escape hatch: a member who genuinely doesn't mind can opt out so the
+              group's "everyone's in" gate isn't stuck waiting on them. */}
+          <div className={`flex items-start gap-2 rounded-lg border px-3 py-2.5 ${
+            noPref ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-gray-50"
+          }`}>
+            <input
+              type="checkbox"
+              checked={noPref}
+              disabled={savingNoPref}
+              onChange={handleToggleNoPreference}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+            />
+            <label className="text-sm text-gray-700 cursor-pointer" onClick={handleToggleNoPreference}>
+              <span className="font-medium">🤷 I don&apos;t mind where we go — decide for me.</span>
+              <span className="block text-xs text-gray-500">
+                {noPref
+                  ? "You're marked as happy with anywhere — you still count as \"in\" so the group can get its AI pick. Untick if you change your mind."
+                  : "Tick this if you're easy either way. You'll count towards \"everyone's preferences are in\" without filling anything in."}
+              </span>
+            </label>
+          </div>
 
           {/* ✨ The star: free-text ideal holiday — this is where the AI shines, so it
               leads the page and the quick-pick options below are framed as optional. */}

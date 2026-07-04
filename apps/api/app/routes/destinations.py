@@ -215,6 +215,7 @@ class DestinationPreferences(BaseModel):
     avoid: list[str] = []                  # e.g. ['long flights']
     max_total_per_person_gbp: Optional[float] = None
     free_text: Optional[str] = None        # plain-text open preference from the user
+    no_preference: bool = False            # "I don't mind where we go — decide for me"
 
 
 class DestinationCandidate(BaseModel):
@@ -564,7 +565,7 @@ def get_my_preferences(slug: str, user: UserInfo = Depends(current_user)):
 
     res = (
         db.table("trip_preferences")
-        .select("pref_destination_answers, pref_budget_gbp")
+        .select("pref_destination_answers, pref_budget_gbp, dest_no_preference")
         .eq("room_id", room["id"])
         .eq("user_id", user.id)
         .execute()
@@ -589,6 +590,7 @@ def get_my_preferences(slug: str, user: UserInfo = Depends(current_user)):
         avoid=raw.get("avoid") or [],
         free_text=raw.get("free_text"),
         max_total_per_person_gbp=row.get("pref_budget_gbp"),
+        no_preference=bool(row.get("dest_no_preference")),
     )
 
 
@@ -610,24 +612,56 @@ def submit_preferences(
 
     import json as _json
 
+    payload = {
+        "room_id": room["id"],
+        "user_id": user.id,
+        "pref_budget_gbp": body.max_total_per_person_gbp,
+        # Store full questionnaire answers in the JSONB column
+        "pref_destination_answers": _json.dumps({
+            "climate": body.climate,
+            "setting": body.setting,
+            "activity_level": body.activity_level,
+            "must_have": body.must_have,
+            "avoid": body.avoid,
+            "free_text": body.free_text,
+        }),
+    }
+    # If they've actually written something, they clearly DO have a preference —
+    # clear any earlier "no preference". If the save is blank (auto-save on an
+    # empty form), leave the flag untouched so it isn't wiped by a blank save.
+    has_real = any([
+        body.climate, body.setting, body.activity_level,
+        body.must_have, body.avoid, (body.free_text or "").strip(),
+    ])
+    if has_real:
+        payload["dest_no_preference"] = False
+    db.table("trip_preferences").upsert(payload, on_conflict="room_id,user_id").execute()
+
+    return {"ok": True}
+
+
+class NoPreferenceRequest(BaseModel):
+    no_preference: bool = True
+
+
+@router.post("/no-preference")
+def set_no_preference(
+    slug: str,
+    body: NoPreferenceRequest,
+    user: UserInfo = Depends(current_user),
+):
+    """Mark (or unmark) "I don't have a destination preference" for this member.
+
+    Counts them as "in" for the all-preferences-submitted gate without feeding an
+    empty answer to the AI — so one apathetic member can't block the group's pick.
+    """
+    db = get_client()
+    room = _get_room_by_slug(db, slug)
+    _assert_member(db, room["id"], user.id)
     db.table("trip_preferences").upsert(
-        {
-            "room_id": room["id"],
-            "user_id": user.id,
-            "pref_budget_gbp": body.max_total_per_person_gbp,
-            # Store full questionnaire answers in the JSONB column
-            "pref_destination_answers": _json.dumps({
-                "climate": body.climate,
-                "setting": body.setting,
-                "activity_level": body.activity_level,
-                "must_have": body.must_have,
-                "avoid": body.avoid,
-                "free_text": body.free_text,
-            }),
-        },
+        {"room_id": room["id"], "user_id": user.id, "dest_no_preference": body.no_preference},
         on_conflict="room_id,user_id",
     ).execute()
-
     return {"ok": True}
 
 
@@ -817,19 +851,27 @@ def vote(
 
 
 def _prefs_submitted_count(db, room_id: str) -> int:
-    """How many members have actually filled in their destination preferences
-    (the questionnaire). A row that exists but is entirely blank does NOT count,
-    so the admin only sees "everyone's in" once people have really answered.
+    """How many members are "in" for the destination-preferences gate.
+
+    A member counts if they've EITHER filled in the questionnaire (at least one
+    non-blank answer) OR explicitly said "I don't have a preference"
+    (dest_no_preference). A row that merely exists but is blank does NOT count,
+    so the admin only sees "everyone's in" once people have really responded —
+    and the "no preference" escape hatch means one apathetic member can't stall
+    the group forever.
     """
     import json as _json
     res = (
         db.table("trip_preferences")
-        .select("pref_destination_answers")
+        .select("pref_destination_answers, dest_no_preference")
         .eq("room_id", room_id)
         .execute()
     )
     n = 0
     for row in res.data or []:
+        if row.get("dest_no_preference"):
+            n += 1
+            continue
         raw = row.get("pref_destination_answers")
         if not raw:
             continue
