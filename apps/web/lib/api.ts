@@ -491,6 +491,40 @@ export function unlockVotes(token: string, slug: string) {
   });
 }
 
+// ── Meet-up (by-the-minute) availability ──────────────────────────────────────
+export interface MeetupSlot {
+  start_min: number;   // minutes from midnight, inclusive
+  end_min: number;     // exclusive
+}
+export interface MeetupMemberSlots {
+  user_id: string;
+  display_name: string | null;
+  slots: MeetupSlot[];
+}
+export interface MeetupAvailability {
+  meet_date: string | null;
+  members_total: number;
+  members_responded: number;
+  per_member: MeetupMemberSlots[];
+  overlap: MeetupSlot[];        // when EVERYONE who responded is free
+  best_effort: MeetupSlot[];    // most-people-free fallback
+  best_effort_free: number;
+}
+export function getMeetupAvailability(token: string, slug: string) {
+  return apiFetch<MeetupAvailability>(`/rooms/${slug}/meetup`, token);
+}
+export function setMeetupSlots(
+  token: string,
+  slug: string,
+  meet_date: string,
+  slots: MeetupSlot[]
+) {
+  return apiFetch(`/rooms/${slug}/meetup`, token, {
+    method: "POST",
+    body: JSON.stringify({ meet_date, slots }),
+  });
+}
+
 export interface DestinationPreferences {
   climate?: string | null;
   setting?: string | null;

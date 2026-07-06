@@ -35,6 +35,7 @@ import FeedbackButton from "@/components/FeedbackButton";
 import NextStepButton from "@/components/NextStepButton";
 import AccountBadge from "@/components/AccountBadge";
 import StepBar from "@/components/StepBar";
+import MeetupAvailability from "@/components/MeetupAvailability";
 import ProviderIcon from "@/components/ProviderIcon";
 import Script from "next/script";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1260,6 +1261,34 @@ export default function AvailabilityPage() {
       <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
     </div>
   );
+
+  // Local meet-ups use by-the-minute time ranges, not whole-day calendars.
+  if (room && token && room.trip_type === "meetup") {
+    return (
+      <main className="min-h-screen overflow-x-hidden bg-gray-50">
+        <nav className="border-b bg-white px-4 py-4 sm:px-6">
+          <div className="mx-auto flex max-w-3xl items-center justify-between">
+            <button onClick={() => router.push(`/room/${slug}`)} className="text-sm text-gray-500 hover:text-gray-900">
+              ← Back to room
+            </button>
+            <span className="font-semibold text-gray-900">When can you meet?</span>
+            <div className="flex items-center gap-3">
+              <AccountBadge className="hidden sm:flex" />
+              <button onClick={() => router.push("/dashboard")} className="text-sm font-medium text-blue-600 hover:text-blue-800">
+                Dashboard →
+              </button>
+            </div>
+          </div>
+        </nav>
+        <StepBar slug={slug} currentStep={room.current_step} activeRoute="availability" tripType={room.trip_type} />
+        <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+          <MeetupAvailability token={token} slug={slug} room={room} />
+        </div>
+        <NextStepButton slug={slug} currentRoute="availability" />
+        {token && <FeedbackButton token={token} page="availability" roomSlug={slug} />}
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-gray-50">
