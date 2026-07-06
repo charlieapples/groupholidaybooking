@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { PageSpinner } from "@/components/Skeleton";
+import { useT } from "@/lib/i18n";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -20,6 +22,7 @@ function LandingPageContent() {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useT();
   const [loading, setLoading] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +169,9 @@ function LandingPageContent() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4 text-center">
+      <div className="fixed right-3 top-3 z-10">
+        <LanguageSwitcher />
+      </div>
       {/* Hero */}
       <div className="max-w-2xl space-y-6">
         {isInvite && (
@@ -185,21 +191,20 @@ function LandingPageContent() {
         </p>
 
         <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
-          Group holidays,{" "}
-          <span className="text-blue-600">sorted.</span>
+          {t("hero.title1")}{" "}
+          <span className="text-blue-600">{t("hero.title2")}</span>
         </h1>
 
         <p className="text-lg text-gray-600">
-          Everyone in different cities. Everyone with different budgets. One
-          holiday you all actually want to go on.
+          {t("hero.sub")}
         </p>
 
         <ul className="mx-auto max-w-md space-y-2 text-left text-gray-600">
           {[
-            "Find when everyone is free",
-            "Compare flights from every airport each member can reach",
-            "Vote on destinations together",
-            "Book at the lowest total group cost",
+            t("hero.feature.free"),
+            t("hero.feature.flights"),
+            t("hero.feature.vote"),
+            t("hero.feature.book"),
           ].map((item) => (
             <li key={item} className="flex items-center gap-2">
               <span className="text-green-500">✓</span>
@@ -233,7 +238,7 @@ function LandingPageContent() {
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
             </svg>
-            Continue with Google
+            {t("auth.google")}
           </button>
 
           <button
@@ -247,7 +252,7 @@ function LandingPageContent() {
               <path fill="#00A4EF" d="M1 12h10v10H1z" />
               <path fill="#FFB900" d="M12 12h10v10H12z" />
             </svg>
-            Continue with Microsoft
+            {t("auth.microsoft")}
           </button>
 
           {/* Divider */}
@@ -293,7 +298,7 @@ function LandingPageContent() {
               disabled={emailBusy}
               className="w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white shadow hover:bg-blue-700 disabled:opacity-60"
             >
-              {emailBusy ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
+              {emailBusy ? "Please wait…" : mode === "signup" ? t("auth.create") : t("auth.signin")}
             </button>
           </form>
 
