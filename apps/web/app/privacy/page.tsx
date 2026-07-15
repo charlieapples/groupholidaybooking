@@ -147,7 +147,44 @@ export default function PrivacyPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-gray-900">7. Your rights</h2>
+          <h2 className="text-xl font-semibold text-gray-900">7. Data protection &amp; security</h2>
+          <p className="text-gray-700 leading-relaxed">
+            We protect your personal data — including sensitive data such as calendar
+            access — with the following measures:
+          </p>
+          <ul className="list-disc space-y-1 pl-6 text-gray-700 leading-relaxed">
+            <li>
+              <strong>Encryption in transit:</strong> all traffic between your browser, our
+              app and our providers is served over HTTPS/TLS.
+            </li>
+            <li>
+              <strong>Encryption at rest:</strong> data is stored on encrypted infrastructure,
+              and calendar OAuth tokens are additionally encrypted by us before storage.
+            </li>
+            <li>
+              <strong>Data minimisation:</strong> for calendars we read only free/busy
+              information and store only the busy <em>dates</em> you submit for a trip — never
+              the titles, attendees, locations or contents of your events.
+            </li>
+            <li>
+              <strong>Access controls:</strong> database row-level security restricts each
+              room&apos;s data to its own members, and administrative access is limited to
+              authorised operators.
+            </li>
+            <li>
+              <strong>Trusted processors:</strong> we rely on reputable providers (Supabase,
+              Google, Microsoft, Vercel) that maintain their own security and compliance
+              programmes.
+            </li>
+            <li>
+              <strong>Deletion:</strong> unlinking a calendar deletes its stored token, and
+              deleting a room permanently removes its data.
+            </li>
+          </ul>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold text-gray-900">8. Your rights</h2>
           <p className="text-gray-700 leading-relaxed">
             Under UK GDPR you have the right to access, correct, port, or erase your
             personal data. To exercise these rights, email{" "}
@@ -157,7 +194,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-gray-900">8. Cookies</h2>
+          <h2 className="text-xl font-semibold text-gray-900">9. Cookies</h2>
           <p className="text-gray-700 leading-relaxed">
             We use strictly necessary cookies for authentication (Supabase session tokens).
             We do not use advertising or tracking cookies.
@@ -165,7 +202,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-gray-900">9. Changes</h2>
+          <h2 className="text-xl font-semibold text-gray-900">10. Changes</h2>
           <p className="text-gray-700 leading-relaxed">
             We may update this policy. Significant changes will be communicated via email
             to registered users. Continued use of the service after changes constitutes
@@ -174,7 +211,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-gray-900">10. Contact</h2>
+          <h2 className="text-xl font-semibold text-gray-900">11. Contact</h2>
           <p className="text-gray-700 leading-relaxed">
             Questions about this policy?{" "}
             <a href={`mailto:${CONTACT}`} className="text-blue-600 hover:underline">{CONTACT}</a>

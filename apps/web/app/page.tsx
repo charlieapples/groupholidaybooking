@@ -384,6 +384,10 @@ function LandingPageContent() {
 
       {/* Footer */}
       <footer className="mt-24 border-t py-8 text-center text-sm text-gray-400 w-full">
+        <Link href="/about" className="hover:text-gray-600">About</Link>
+        {" · "}
+        <Link href="/contact" className="hover:text-gray-600">Contact</Link>
+        {" · "}
         <Link href="/privacy" className="hover:text-gray-600">Privacy Policy</Link>
         {" · "}
         <Link href="/terms" className="hover:text-gray-600">Terms of Service</Link>
