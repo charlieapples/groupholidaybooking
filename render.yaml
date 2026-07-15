@@ -1,0 +1,67 @@
+# Render Blueprint — free replacement for Railway (backend API host).
+#
+# How to use:
+#   1. Push this file (done).
+#   2. On render.com → New → Blueprint → connect this GitHub repo.
+#   3. Render reads this file and creates the service. It will PROMPT you for
+#      every env var marked `sync: false` — paste the same values you have in
+#      Railway (Supabase keys, Gemini key, Travelpayouts, OAuth secrets, etc.).
+#   4. After it deploys you get a URL like https://group-holiday-api.onrender.com
+#      → set that as NEXT_PUBLIC_API_URL in Vercel, and add it to
+#      CORS_ALLOWED_ORIGINS / API_PUBLIC_URL below. Redeploy the frontend.
+#
+# Free tier note: the service sleeps after ~15 min idle (≈50s cold start on the
+# next hit). An UptimeRobot monitor on /healthz/db every ~10 min keeps it warm
+# AND keeps Supabase awake in one go.
+
+services:
+  - type: web
+    name: group-holiday-api
+    runtime: python
+    plan: free
+    rootDir: apps/api
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # Secrets — Render will prompt you to paste each one (copy from Railway):
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        sync: false
+      - key: TRAVELPAYOUTS_TOKEN
+        sync: false
+      - key: TRAVELPAYOUTS_MARKER
+        sync: false
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: API_PUBLIC_URL
+        sync: false
+      - key: CALENDAR_TOKEN_KEY
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: MS_OAUTH_CLIENT_ID
+        sync: false
+      - key: MS_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: BOOKING_AFFILIATE_ID
+        sync: false
+      - key: TRAINLINE_AWIN_ID
+        sync: false
