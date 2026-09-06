@@ -65,3 +65,8 @@ services:
         sync: false
       - key: TRAINLINE_AWIN_ID
         sync: false
+      # Optional — app falls back if blank (admin feedback inbox / live cost data):
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: COST_OF_LIVING_API_KEY
+        sync: false
