@@ -1,13 +1,15 @@
 import type { NextConfig } from "next";
 
-// Ensure the API URL always has a protocol (guards against env vars set without https://)
+// Ensure the API URL always has a protocol (guards against env vars set without
+// https://) and strip any trailing slash so we never build a broken `//api/...`.
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const apiUrl = rawApiUrl.startsWith("http") ? rawApiUrl : `https://${rawApiUrl}`;
+const withProto = rawApiUrl.startsWith("http") ? rawApiUrl : `https://${rawApiUrl}`;
+const apiUrl = withProto.replace(/\/+$/, "");
 
 const nextConfig: NextConfig = {
   async rewrites() {
     // In development, proxy /api/* to FastAPI running on localhost:8000
-    // In production, NEXT_PUBLIC_API_URL points to Railway
+    // In production, NEXT_PUBLIC_API_URL points to the backend (Render)
     return [
       {
         source: "/api/:path*",
